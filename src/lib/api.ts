@@ -1010,7 +1010,7 @@ export const adminApi = {
     return apiFetch<{ data: AdminStats }>('/api/v1/admin/stats');
   },
   getMonitoringTrends() {
-    return apiFetch<{ data: AdminMonitoringTrend[] }>('/api/v1/admin/stats/trends');
+    return apiFetch<{ data: { points: AdminMonitoringTrend[] } }>('/api/v1/admin/stats/trends');
   },
   getOperationsSummary() {
     return apiFetch<{ data: AdminOperationsSummary }>('/api/v1/admin/ops/summary');

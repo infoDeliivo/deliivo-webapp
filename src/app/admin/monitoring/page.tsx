@@ -44,16 +44,68 @@ export default function AdminMonitoringPage() {
     else setLoading(true);
     setError('');
     try {
-      const [statsRes, opsRes, trendsRes] = await Promise.all([
+      const [statsRes, opsRes, trendsRes] = await Promise.allSettled([
         adminApi.getStats(),
         adminApi.getOperationsSummary(),
         adminApi.getMonitoringTrends(),
       ]);
-      setStats(statsRes.data);
-      setOps(opsRes.data);
-      setTrends(trendsRes.data);
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Failed to load monitoring data'));
+
+      const nextStats =
+        statsRes.status === 'fulfilled'
+          ? statsRes.value.data
+          : {
+              totalUsers: 0,
+              totalRides: 0,
+              totalBookings: 0,
+              totalRevenue: 0,
+            };
+
+      const nextOps =
+        opsRes.status === 'fulfilled'
+          ? opsRes.value.data
+          : {
+              uptimeSeconds: 0,
+              checks: { database: false, redis: false },
+              configuration: {
+                stripeSecretConfigured: false,
+                stripeWebhookConfigured: false,
+                firebaseConfigured: false,
+              },
+              operations: {
+                openReconciliationIssues: 0,
+                payoutEligiblePayments: 0,
+                pendingPaymentRecords: 0,
+                webhookEvents24h: 0,
+              },
+              content: {
+                total: 0,
+                published: 0,
+                drafts: 0,
+                locales: [],
+                updatedAt: null,
+              },
+            };
+
+      const nextTrends =
+        trendsRes.status === 'fulfilled'
+          ? trendsRes.value.data.points || []
+          : [];
+
+      setStats(nextStats);
+      setOps(nextOps);
+      setTrends(nextTrends);
+
+      const messages = [
+        statsRes.status === 'rejected' ? getApiErrorMessage(statsRes.reason, 'Stats unavailable') : null,
+        opsRes.status === 'rejected' ? getApiErrorMessage(opsRes.reason, 'Operations summary unavailable') : null,
+        trendsRes.status === 'rejected' ? getApiErrorMessage(trendsRes.reason, 'Trend data unavailable') : null,
+      ].filter(Boolean);
+
+      if (messages.length === 3) {
+        setError(messages[0] || 'Failed to load monitoring data');
+      } else if (messages.length > 0) {
+        setError(messages.join(' | '));
+      }
     } finally {
       if (silent) setRefreshing(false);
       else setLoading(false);
@@ -68,7 +120,7 @@ export default function AdminMonitoringPage() {
     );
   }
 
-  if (error || !ops || !stats || !trends) {
+  if ((!ops || !stats || !trends) && error) {
     return (
       <LoadFailureCard
         title="Monitoring unavailable"
@@ -78,28 +130,58 @@ export default function AdminMonitoringPage() {
     );
   }
 
+  const safeStats = stats || {
+    totalUsers: 0,
+    totalRides: 0,
+    totalBookings: 0,
+    totalRevenue: 0,
+  };
+  const safeOps = ops || {
+    uptimeSeconds: 0,
+    checks: { database: false, redis: false },
+    configuration: {
+      stripeSecretConfigured: false,
+      stripeWebhookConfigured: false,
+      firebaseConfigured: false,
+    },
+    operations: {
+      openReconciliationIssues: 0,
+      payoutEligiblePayments: 0,
+      pendingPaymentRecords: 0,
+      webhookEvents24h: 0,
+    },
+    content: {
+      total: 0,
+      published: 0,
+      drafts: 0,
+      locales: [],
+      updatedAt: null,
+    },
+  };
+  const safeTrends = trends || [];
+
   const kpis = [
-    { label: 'Users', value: stats.totalUsers.toLocaleString(), tone: 'good' as const, copy: 'Marketplace identity footprint' },
-    { label: 'Rides', value: stats.totalRides.toLocaleString(), tone: 'good' as const, copy: 'Supply-side activity' },
-    { label: 'Bookings', value: stats.totalBookings.toLocaleString(), tone: 'good' as const, copy: 'Demand-side activity' },
-    { label: 'Revenue', value: `EUR ${stats.totalRevenue.toFixed(2)}`, tone: 'watch' as const, copy: 'Gross processed value' },
+    { label: 'Users', value: safeStats.totalUsers.toLocaleString(), tone: 'good' as const, copy: 'Marketplace identity footprint' },
+    { label: 'Rides', value: safeStats.totalRides.toLocaleString(), tone: 'good' as const, copy: 'Supply-side activity' },
+    { label: 'Bookings', value: safeStats.totalBookings.toLocaleString(), tone: 'good' as const, copy: 'Demand-side activity' },
+    { label: 'Revenue', value: `EUR ${safeStats.totalRevenue.toFixed(2)}`, tone: 'watch' as const, copy: 'Gross processed value' },
   ];
 
   const slas = [
     { label: 'Booking request creation', target: 'p95 < 2s', actual: 'Covered by API response monitoring', tone: 'good' as const },
     { label: 'Payment confirmation feedback', target: 'p95 < 5s', actual: 'Track card confirmation retries and direct Stripe fallback', tone: 'watch' as const },
-    { label: 'Driver booking notification', target: 'p95 < 10s', actual: `${ops.operations.webhookEvents24h} webhook events in 24h`, tone: 'good' as const },
-    { label: 'Ride-day actions', target: 'p95 < 2s', actual: 'Driver arrived, pickup, no-show, drop-off, completion', tone: ops.checks.database && ops.checks.redis ? 'good' as const : 'bad' as const },
-    { label: 'Reconciliation triage', target: '1 business day', actual: `${ops.operations.openReconciliationIssues} open issues`, tone: ops.operations.openReconciliationIssues === 0 ? 'good' as const : 'watch' as const },
+    { label: 'Driver booking notification', target: 'p95 < 10s', actual: `${safeOps.operations.webhookEvents24h} webhook events in 24h`, tone: 'good' as const },
+    { label: 'Ride-day actions', target: 'p95 < 2s', actual: 'Driver arrived, pickup, no-show, drop-off, completion', tone: safeOps.checks.database && safeOps.checks.redis ? 'good' as const : 'bad' as const },
+    { label: 'Reconciliation triage', target: '1 business day', actual: `${safeOps.operations.openReconciliationIssues} open issues`, tone: safeOps.operations.openReconciliationIssues === 0 ? 'good' as const : 'watch' as const },
     { label: 'Manual dispute resolution', target: '3 business days', actual: 'Tracked in admin disputes and revenue pages', tone: 'watch' as const },
   ];
 
   const signals = [
     { label: 'API error rate', icon: AlertTriangle, detail: 'Track per route, status code, and module in backend logs.', href: '/admin/settings', tone: 'watch' as const },
-    { label: 'Queue health', icon: MessageSquareWarning, detail: 'Monitor SMS, mail, push, expiry, payment, and reconciliation queues.', href: '/admin/settings', tone: ops.operations.pendingPaymentRecords > 0 ? 'watch' as const : 'good' as const },
-    { label: 'Webhook latency', icon: BellRing, detail: 'Stripe webhook duplicate count, failure count, and processing delay.', href: '/admin/revenue', tone: ops.configuration.stripeWebhookConfigured ? 'good' as const : 'bad' as const },
+    { label: 'Queue health', icon: MessageSquareWarning, detail: 'Monitor SMS, mail, push, expiry, payment, and reconciliation queues.', href: '/admin/settings', tone: safeOps.operations.pendingPaymentRecords > 0 ? 'watch' as const : 'good' as const },
+    { label: 'Webhook latency', icon: BellRing, detail: 'Stripe webhook duplicate count, failure count, and processing delay.', href: '/admin/revenue', tone: safeOps.configuration.stripeWebhookConfigured ? 'good' as const : 'bad' as const },
     { label: 'Ride lifecycle events', icon: Route, detail: 'Started rides, arrived events, OTP/pickup events, no-shows, completions.', href: '/admin/rides', tone: 'good' as const },
-    { label: 'Ledger imbalance', icon: CreditCard, detail: 'Open reconciliation issues, payout eligible records, and payment drift.', href: '/admin/revenue', tone: ops.operations.openReconciliationIssues === 0 ? 'good' as const : 'bad' as const },
+    { label: 'Ledger imbalance', icon: CreditCard, detail: 'Open reconciliation issues, payout eligible records, and payment drift.', href: '/admin/revenue', tone: safeOps.operations.openReconciliationIssues === 0 ? 'good' as const : 'bad' as const },
     { label: 'Booking transitions', icon: Search, detail: 'Invalid transitions and stale states should be logged with ride and booking IDs.', href: '/admin/rides', tone: 'watch' as const },
   ];
 
@@ -113,7 +195,7 @@ export default function AdminMonitoringPage() {
 
   const maxTrendValue = Math.max(
     1,
-    ...trends.flatMap((item) => [item.ridesPublished, item.bookingsCreated, item.webhookEvents, Math.round(item.revenue)]),
+    ...safeTrends.flatMap((item) => [item.ridesPublished, item.bookingsCreated, item.webhookEvents, Math.round(item.revenue)]),
   );
 
   const logs = [
@@ -174,7 +256,7 @@ export default function AdminMonitoringPage() {
               </tr>
             </thead>
             <tbody>
-              {trends.map((item) => (
+              {safeTrends.map((item) => (
                 <tr key={item.date} className="rounded-xl bg-gray-50 text-sm text-gray-700">
                   <td className="px-3 py-3 font-semibold text-gray-900">{item.date}</td>
                   <td className="px-3 py-3">
