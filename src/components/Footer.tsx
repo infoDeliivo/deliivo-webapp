@@ -58,11 +58,8 @@ export default function Footer() {
         <div className="grid grid-cols-2 gap-8 md:grid-cols-5">
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1">
-            <Link href="/" className="flex items-center gap-2 mb-4">
-              <BrandLogo size={32} className="h-8 w-8 rounded-md object-contain" />
-              <span className="text-lg font-bold text-white tracking-tight">
-                Deliivo
-              </span>
+            <Link href="/" className="mb-4 flex items-center">
+              <BrandLogo size={42} className="h-10 w-auto object-contain" />
             </Link>
             <p className="text-sm leading-relaxed text-gray-500">
               {t('footer.description')}

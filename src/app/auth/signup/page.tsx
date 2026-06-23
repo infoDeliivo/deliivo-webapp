@@ -73,9 +73,8 @@ export default function SignUpPage() {
     <div className="flex min-h-screen items-center justify-center bg-deliivo-cream px-4 py-12">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="mb-8 flex items-center gap-2">
-          <BrandLogo size={36} className="h-9 w-9 rounded-md object-contain shadow-md shadow-deliivo-orange/30" />
-          <span className="text-xl font-bold tracking-tight text-deliivo-dark">Deliivo</span>
+        <div className="mb-8 flex items-center">
+          <BrandLogo size={52} className="h-12 w-auto object-contain" />
         </div>
 
         <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-black/5">

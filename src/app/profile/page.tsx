@@ -28,6 +28,20 @@ import Navbar from '@/components/Navbar';
 import { showError, showSuccess } from '@/lib/app-feedback';
 import { useTranslation } from '@/lib/i18n-context';
 
+const MINIMUM_BOOKING_AGE_YEARS = 8;
+
+function getLatestAllowedDob() {
+  const now = new Date();
+  return new Date(now.getFullYear() - MINIMUM_BOOKING_AGE_YEARS, now.getMonth(), now.getDate())
+    .toISOString()
+    .slice(0, 10);
+}
+
+function formatDateInput(value?: string | null) {
+  if (!value) return '';
+  return value.slice(0, 10);
+}
+
 export default function ProfilePage() {
   return (
     <ProtectedRoute>
@@ -55,6 +69,7 @@ function ProfileContent() {
   const [profileSalutation, setProfileSalutation] = useState('');
   const [profileGender, setProfileGender] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
+  const maxDob = getLatestAllowedDob();
 
   // Avatar upload
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -86,7 +101,7 @@ function ProfileContent() {
     setEditingProfile(true);
     setProfileName(user?.name || '');
     setProfileNickName(user?.nickName || '');
-    setProfileDob('');
+    setProfileDob(formatDateInput(fullProfile?.dob || null));
     setProfileSalutation(user?.salutation || '');
     setProfileGender(user?.gender || '');
   }
@@ -94,6 +109,9 @@ function ProfileContent() {
   async function handleSaveProfile() {
     setProfileSaving(true);
     try {
+      if (profileDob && profileDob > maxDob) {
+        throw new Error(`Users must be at least ${MINIMUM_BOOKING_AGE_YEARS} years old.`);
+      }
       const data: Record<string, string> = {};
       if (profileName.trim()) data.name = profileName.trim();
       if (profileNickName.trim()) data.nickName = profileNickName.trim();
@@ -255,7 +273,7 @@ function ProfileContent() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-deliivo-gray">{t('profile.dob')}</label>
-                  <input type="date" value={profileDob} onChange={e => setProfileDob(e.target.value)} className="input-field" />
+                  <input type="date" value={profileDob} max={maxDob} onChange={e => setProfileDob(e.target.value)} className="input-field" />
                 </div>
                 <button onClick={handleSaveProfile} disabled={profileSaving} className="btn-primary py-2 px-4 text-sm disabled:opacity-50">
                   {profileSaving ? t('profile.saving') : t('profile.saveProfile')}

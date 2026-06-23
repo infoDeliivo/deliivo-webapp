@@ -59,6 +59,7 @@ function RideDetailContent() {
   const [showAddPaymentMethod, setShowAddPaymentMethod] = useState(false);
   const [tosAcceptedForBooking, setTosAcceptedForBooking] = useState(false);
   const [responseExpiryOption, setResponseExpiryOption] = useState<'ONE_HOUR' | 'THREE_HOURS' | 'SIX_HOURS' | 'TWELVE_HOURS' | 'TWENTY_FOUR_HOURS' | 'BEFORE_DEPARTURE'>('BEFORE_DEPARTURE');
+  const [requiresChildSeat, setRequiresChildSeat] = useState(false);
 
   // Rider's existing booking for this ride
   const [myBooking, setMyBooking] = useState<Booking | null>(null);
@@ -129,6 +130,31 @@ function RideDetailContent() {
   useEffect(() => {
     if (!id || !user) return;
 
+    const refresh = () => {
+      void loadRide();
+      void loadMyBooking();
+    };
+
+    const intervalId = window.setInterval(refresh, 20000);
+    const refreshOnFocus = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+
+    document.addEventListener('visibilitychange', refreshOnFocus);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', refreshOnFocus);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+    };
+  }, [id, user?.id, myBooking?.id]);
+
+  useEffect(() => {
+    if (!id || !user) return;
+
     const unsub = onSocketEvent<NotificationPayload>('notification:new', (payload) => {
       const rideId = payload.data.data?.rideId;
       const bookingId = payload.data.data?.bookingId;
@@ -159,6 +185,8 @@ function RideDetailContent() {
             }
           : prev
       );
+      void loadMyBooking();
+      void loadRide();
     });
 
     const unsubRide = onSocketEvent<RideUpdatedPayload>('ride:updated', (payload) => {
@@ -180,6 +208,8 @@ function RideDetailContent() {
             }
           : prev
       );
+      void loadRide();
+      void loadMyBooking();
     });
 
     return () => {
@@ -485,6 +515,7 @@ function RideDetailContent() {
       const res = await bookingsApi.pricePreview({
         rideId: ride.id,
         seatsBooked: seats,
+        requiresChildSeat,
         segmentId,
         pickupWaypointId: ride.bookingContext?.pickupWaypointId || undefined,
         dropoffWaypointId: ride.bookingContext?.dropoffWaypointId || undefined,
@@ -499,7 +530,7 @@ function RideDetailContent() {
 
   useEffect(() => {
     if (ride) loadPricePreview();
-  }, [ride, seats]);
+  }, [ride, seats, requiresChildSeat]);
 
   async function confirmStripeBookingPayment(targetBooking: Booking) {
     if (!targetBooking.payment?.clientSecret) return targetBooking;
@@ -553,6 +584,9 @@ function RideDetailContent() {
     setBookError('');
     setPaymentMessage('');
     try {
+      if (requiresChildSeat && !ride.childSeatAvailable) {
+        throw new Error('This ride does not offer a child seat.');
+      }
       if (needsTosAcceptance) {
         await authApi.acceptTos(TOS_VERSION, PRIVACY_VERSION);
         await refreshUser();
@@ -561,6 +595,7 @@ function RideDetailContent() {
         rideId: ride.id,
         segmentId,
         seatsBooked: seats,
+        requiresChildSeat,
         pickupWaypointId: ride.bookingContext?.pickupWaypointId || undefined,
         dropoffWaypointId: ride.bookingContext?.dropoffWaypointId || undefined,
         responseExpiryOption,
@@ -686,6 +721,7 @@ function RideDetailContent() {
   const rateableBookingStatuses = ['COMPLETED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP'];
   const disputeEligibleStatuses = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED', 'DISPUTED'];
   const openDispute = myDisputes.find((dispute) => ['OPEN', 'EVIDENCE_COLLECTED', 'NEEDS_MANUAL_REVIEW', 'WAITING_FOR_USER_RESPONSE', 'ESCALATED'].includes(dispute.status));
+  const isDriverConfirmedBooking = Boolean(myBooking && !['PENDING', 'PAYMENT_PENDING', 'DRIVER_PENDING', 'PAYMENT_FAILED', 'REJECTED', 'CANCELLED'].includes(myBooking.status));
 
   return (
     <div className="min-h-screen bg-deliivo-cream">
@@ -853,6 +889,23 @@ function RideDetailContent() {
                 ))}
               </select>
             </div>
+
+            <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <input
+                type="checkbox"
+                checked={requiresChildSeat}
+                onChange={(event) => setRequiresChildSeat(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-deliivo-orange focus:ring-deliivo-orange"
+              />
+              <span className="text-sm text-deliivo-dark">
+                Travelling with a child and need a child seat.
+                {!ride.childSeatAvailable && (
+                  <span className="mt-1 block text-xs text-red-600">
+                    This ride does not offer a child seat, so booking is blocked when this is selected.
+                  </span>
+                )}
+              </span>
+            </label>
 
             {isStripeConfigured() ? (
               <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
@@ -1363,65 +1416,69 @@ function RideDetailContent() {
           </div>
         )}
 
-        <SupportOverrideCard
-          title="Booking help and manual fallback"
-          copy="If payment, OTP, pickup arrival, or cancellation gets stuck, contact support with the booking and ride IDs. Support can review the canonical state and apply an admin override when justified."
-          identifiers={[
-            { label: 'Ride ID', value: ride.id },
-            { label: 'Booking ID', value: myBooking?.id || '' },
-          ]}
-        />
+        {isDriverConfirmedBooking && (
+          <>
+            <SupportOverrideCard
+              title="Booking help and manual fallback"
+              copy="If payment, OTP, pickup arrival, or cancellation gets stuck, contact support with the booking and ride IDs. Support can review the canonical state and apply an admin override when justified."
+              identifiers={[
+                { label: 'Ride ID', value: ride.id },
+                { label: 'Booking ID', value: myBooking?.id || '' },
+              ]}
+            />
 
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-amber-950">Manual recovery</h3>
-              <p className="mt-1 text-xs text-amber-900">
-                Use these when the booking is blocked but the ride should continue. Each action carries a reason into the dispute evidence.
-              </p>
-              {!allowManualOverride && (
-                <p className="mt-1 text-[11px] font-medium text-amber-800">
-                  Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
-                </p>
-              )}
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-950">Manual recovery</h3>
+                  <p className="mt-1 text-xs text-amber-900">
+                    Use these when the booking is blocked but the ride should continue. Each action carries a reason into the dispute evidence.
+                  </p>
+                  {!allowManualOverride && (
+                    <p className="mt-1 text-[11px] font-medium text-amber-800">
+                      Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleManualRideReview('OTP_ISSUE')}
+                  disabled={!allowManualOverride}
+                  className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                >
+                  Report OTP issue
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!myBooking) return;
+                    const reason = promptManualOverride(
+                      'Manual drop-off confirmation',
+                      'Use when the driver has finished the ride but the app cannot complete the normal confirmation path.'
+                    );
+                    if (reason === null) return;
+                    setRiderActionLoading(true);
+                    try {
+                      await rideOpsApi.riderConfirmDropoff(myBooking.id, reason || undefined);
+                      await loadMyBooking();
+                      await loadRide();
+                    } catch (err: unknown) {
+                      setBookError(getApiErrorMessage(err, t('rideDetail.failedConfirmDropoff')));
+                    } finally {
+                      setRiderActionLoading(false);
+                    }
+                  }}
+                  disabled={!allowManualOverride}
+                  className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                >
+                  Manual drop-off confirm
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => handleManualRideReview('OTP_ISSUE')}
-              disabled={!allowManualOverride}
-              className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
-            >
-              Report OTP issue
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                if (!myBooking) return;
-                const reason = promptManualOverride(
-                  'Manual drop-off confirmation',
-                  'Use when the driver has finished the ride but the app cannot complete the normal confirmation path.'
-                );
-                if (reason === null) return;
-                setRiderActionLoading(true);
-                try {
-                  await rideOpsApi.riderConfirmDropoff(myBooking.id, reason || undefined);
-                  await loadMyBooking();
-                  await loadRide();
-                } catch (err: unknown) {
-                  setBookError(getApiErrorMessage(err, t('rideDetail.failedConfirmDropoff')));
-                } finally {
-                  setRiderActionLoading(false);
-                }
-              }}
-              disabled={!allowManualOverride}
-              className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
-            >
-              Manual drop-off confirm
-            </button>
-          </div>
-        </div>
+          </>
+        )}
 
         {isOwnRide && (
           <div className="rounded-2xl bg-primary-50 border border-primary-100 p-5 text-center">

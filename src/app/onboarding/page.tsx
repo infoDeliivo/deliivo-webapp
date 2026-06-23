@@ -7,6 +7,15 @@ import { userApi } from '@/lib/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useTranslation } from '@/lib/i18n-context';
 
+const MINIMUM_BOOKING_AGE_YEARS = 8;
+
+function getLatestAllowedDob() {
+  const now = new Date();
+  return new Date(now.getFullYear() - MINIMUM_BOOKING_AGE_YEARS, now.getMonth(), now.getDate())
+    .toISOString()
+    .slice(0, 10);
+}
+
 export default function OnboardingPage() {
   return (
     <ProtectedRoute>
@@ -27,10 +36,19 @@ function OnboardingForm() {
   const [gender, setGender] = useState<'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER' | 'PREFER_NOT_TO_SAY' | ''>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const maxDob = getLatestAllowedDob();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!dob) {
+      setError(`Date of birth is required. Riders must be at least ${MINIMUM_BOOKING_AGE_YEARS} years old.`);
+      return;
+    }
+    if (dob > maxDob) {
+      setError(`Riders must be at least ${MINIMUM_BOOKING_AGE_YEARS} years old.`);
+      return;
+    }
     setLoading(true);
     try {
       await userApi.completeOnboarding({
@@ -142,6 +160,8 @@ function OnboardingForm() {
                 type="date"
                 value={dob}
                 onChange={(e) => setDob(e.target.value)}
+                max={maxDob}
+                required
                 className="input-field"
               />
             </div>
@@ -150,7 +170,7 @@ function OnboardingForm() {
               <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
             )}
 
-            <button type="submit" disabled={loading || !name.trim() || !salutation || !gender} className="btn-primary w-full py-3 text-base disabled:opacity-50">
+            <button type="submit" disabled={loading || !name.trim() || !salutation || !gender || !dob} className="btn-primary w-full py-3 text-base disabled:opacity-50">
               {loading ? t('onboarding.saving') : t('onboarding.complete')}
             </button>
           </form>

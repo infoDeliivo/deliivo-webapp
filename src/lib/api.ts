@@ -645,7 +645,7 @@ export const searchRidesApi = {
 
 // Bookings API
 export const bookingsApi = {
-  pricePreview(data: { rideId: string; seatsBooked: number; segmentId?: string; pickupWaypointId?: string; dropoffWaypointId?: string }) {
+  pricePreview(data: { rideId: string; seatsBooked: number; requiresChildSeat?: boolean; segmentId?: string; pickupWaypointId?: string; dropoffWaypointId?: string }) {
     return apiFetch<{ data: PricePreview }>('/api/v1/bookings/price-preview', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -1791,6 +1791,7 @@ export interface CreateBookingInput {
   segmentId?: string;
   seatsBooked: number;
   luggageCount?: number;
+  requiresChildSeat?: boolean;
   pickupWaypointId?: string;
   dropoffWaypointId?: string;
   notes?: string;
@@ -1887,6 +1888,10 @@ export interface RouteOption {
   durationSeconds: number;
   distanceText: string;
   durationText: string;
+  description?: string;
+  warnings?: string[];
+  isPublishable?: boolean;
+  blockedReason?: string;
 }
 
 export interface StopoverSuggestion {

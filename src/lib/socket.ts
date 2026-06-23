@@ -5,8 +5,30 @@ import { getTokens } from './api';
 
 let socket: Socket | null = null;
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+let lifecycleListenersAttached = false;
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || '';
+function resolveSocketUrl(): string {
+  if (process.env.NEXT_PUBLIC_SOCKET_URL) return process.env.NEXT_PUBLIC_SOCKET_URL;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return '';
+}
+
+function ensureLifecycleListeners() {
+  if (typeof window === 'undefined' || lifecycleListenersAttached) return;
+  lifecycleListenersAttached = true;
+
+  const reconnect = () => {
+    if (document.visibilityState === 'hidden') return;
+    const instance = getSocket();
+    if (instance && !instance.connected) {
+      instance.connect();
+    }
+  };
+
+  window.addEventListener('focus', reconnect);
+  window.addEventListener('online', reconnect);
+  document.addEventListener('visibilitychange', reconnect);
+}
 
 function startHeartbeat() {
   if (!socket || heartbeatInterval) return;
@@ -37,14 +59,19 @@ export function getSocket(): Socket | null {
   }
 
   const tokens = getTokens();
-  if (!tokens?.accessToken || !SOCKET_URL) return null;
+  const socketUrl = resolveSocketUrl();
+  if (!tokens?.accessToken || !socketUrl) return null;
 
-  socket = io(SOCKET_URL, {
+  ensureLifecycleListeners();
+
+  socket = io(socketUrl, {
     auth: { token: tokens.accessToken },
     transports: ['websocket', 'polling'],
     reconnection: true,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: Infinity,
     reconnectionDelay: 2000,
+    reconnectionDelayMax: 10000,
+    timeout: 10000,
   });
 
   socket.on('connect', () => {

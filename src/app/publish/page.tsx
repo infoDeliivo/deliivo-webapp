@@ -29,6 +29,7 @@ import {
 import StepIndicator from "@/components/StepIndicator";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import GoogleMap from "@/components/GoogleMap";
+import { useAuth } from "@/lib/auth-context";
 import {
   mapsApi,
   publishRideApi,
@@ -270,11 +271,17 @@ function StepRoute({
             <button
               key={route.index}
               type="button"
-              onClick={() => onChange({ selectedRouteIndex: route.index })}
+              onClick={() => {
+                if (route.isPublishable === false) return;
+                onChange({ selectedRouteIndex: route.index });
+              }}
+              disabled={route.isPublishable === false}
               className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-all ${
                 state.selectedRouteIndex === route.index
                   ? 'border-deliivo-orange bg-deliivo-orange-light'
-                  : 'border-gray-100 bg-white hover:border-primary-200'
+                  : route.isPublishable === false
+                    ? 'cursor-not-allowed border-red-100 bg-red-50 opacity-70'
+                    : 'border-gray-100 bg-white hover:border-primary-200'
               }`}
             >
               <div>
@@ -284,6 +291,11 @@ function StepRoute({
                 <p className="text-xs text-deliivo-gray">
                   {route.distanceText} &middot; {route.durationText}
                 </p>
+                {route.isPublishable === false && (
+                  <p className="mt-1 text-xs font-medium text-red-600">
+                    Ferry or water routes cannot be published
+                  </p>
+                )}
               </div>
               {state.selectedRouteIndex === route.index && (
                 <CheckCircle className="h-5 w-5 text-deliivo-orange" />
@@ -552,9 +564,11 @@ function StepDateTime({
 function StepSeats({
   state,
   onChange,
+  userGender,
 }: {
   state: WizardState;
   onChange: (patch: Partial<WizardState>) => void;
+  userGender?: string | null;
 }) {
   const { t, locale } = useTranslation();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -642,7 +656,15 @@ function StepSeats({
       )}
 
       <div className="space-y-3">
-        {toggle(t('publish.womenOnly'), state.femaleOnly, () => onChange({ femaleOnly: !state.femaleOnly }), t('publish.womenOnlyCopy'))}
+        {toggle(
+          t('publish.womenOnly'),
+          state.femaleOnly,
+          () => {
+            if (userGender !== 'FEMALE') return;
+            onChange({ femaleOnly: !state.femaleOnly });
+          },
+          userGender === 'FEMALE' ? t('publish.womenOnlyCopy') : 'Available only to female drivers with a female profile gender.'
+        )}
         {toggle(t('publish.noSmoking'), state.noSmoking, () => onChange({ noSmoking: !state.noSmoking }), t('publish.noSmokingCopy'))}
         {toggle(t('publish.noBicycles'), state.noBicycles, () => onChange({ noBicycles: !state.noBicycles }), t('publish.noBicyclesCopy'))}
         {toggle(t('publish.childSeatAvailable'), state.childSeatAvailable, () => onChange({ childSeatAvailable: !state.childSeatAvailable }), t('publish.childSeatAvailableCopy'))}
@@ -937,6 +959,7 @@ const INITIAL_STATE: WizardState = {
 
 function PublishRideWizard() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [state, setState] = useState<WizardState>(INITIAL_STATE);
   const [published, setPublished] = useState(false);
@@ -1057,10 +1080,11 @@ function PublishRideWizard() {
       // Step 3: Compute routes
       const res = await publishRideApi.computeRoutes();
       const routes = res.data.routes || [];
+      const firstPublishableRoute = routes.find((route) => route.isPublishable !== false);
       setState(prev => ({
         ...prev,
         routes,
-        selectedRouteIndex: routes.length > 0 ? 0 : null,
+        selectedRouteIndex: firstPublishableRoute?.index ?? null,
       }));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to compute routes';
@@ -1159,6 +1183,8 @@ function PublishRideWizard() {
       if (message.includes('TOS_NOT_ACCEPTED')) message = 'Please accept the Terms of Service to continue.';
       if (message.includes('DRIVER_NOT_VERIFIED')) message = 'Your driving license must be verified before publishing a ride.';
       if (message.includes('NO_STRIPE_ACCOUNT') || message.includes('PAYOUT')) message = 'Set up your payout details before publishing a ride.';
+      if (message.includes('FEMALE_ONLY_NOT_ALLOWED')) message = 'Only female drivers can publish women-only rides.';
+      if (message.includes('NON_ROAD_ROUTE_NOT_ALLOWED')) message = 'Ferry or water routes cannot be published.';
       setError(message);
     } finally {
       setLoading(false);
@@ -1251,7 +1277,7 @@ function PublishRideWizard() {
           {step === 1 && <StepRoute state={state} onChange={patch} error={error} />}
           {step === 2 && <StepStopovers state={state} onChange={patch} />}
           {step === 3 && <StepDateTime state={state} onChange={patch} />}
-          {step === 4 && <StepSeats state={state} onChange={patch} />}
+          {step === 4 && <StepSeats state={state} onChange={patch} userGender={user?.gender} />}
           {step === 5 && <StepPrice state={state} onChange={patch} loading={loading} />}
           {step === 6 && (
             <StepConfirm

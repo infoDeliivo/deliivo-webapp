@@ -37,11 +37,8 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 w-full bg-white shadow-sm">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 shrink-0">
-          <BrandLogo size={32} className="h-8 w-8 rounded-md object-contain" />
-          <span className="text-lg font-bold text-deliivo-dark tracking-tight">
-            Deliivo
-          </span>
+        <Link href="/" className="flex items-center shrink-0">
+          <BrandLogo size={42} className="h-10 w-auto object-contain" />
         </Link>
 
         {/* Desktop nav links */}
