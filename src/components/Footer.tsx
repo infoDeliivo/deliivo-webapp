@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useTranslation } from "@/lib/i18n-context";
+import BrandLogo from "@/components/BrandLogo";
 
 const socialLinks = [
   { label: "Twitter / X", href: "https://twitter.com", icon: "X" },
@@ -58,9 +59,7 @@ export default function Footer() {
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="flex items-center gap-2 mb-4">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-deliivo-orange text-white font-bold text-sm">
-                D
-              </span>
+              <BrandLogo size={32} className="h-8 w-8 rounded-md object-contain" />
               <span className="text-lg font-bold text-white tracking-tight">
                 Deliivo
               </span>

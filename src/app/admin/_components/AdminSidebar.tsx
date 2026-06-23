@@ -15,6 +15,7 @@ import {
   Siren,
   Activity,
 } from 'lucide-react'
+import BrandLogo from '@/components/BrandLogo'
 
 const navItems = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -36,7 +37,8 @@ export default function AdminSidebar() {
   return (
     <aside className="w-64 shrink-0 flex flex-col" style={{ background: '#1A1A2E' }}>
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-white/10">
+      <div className="px-6 py-5 border-b border-white/10 flex items-center gap-3">
+        <BrandLogo size={36} className="h-9 w-9 rounded-md object-contain" />
         <span className="text-2xl font-bold text-[#F97316]">Deliivo</span>
         <span className="ml-2 text-xs text-white/40 font-medium uppercase tracking-widest">
           Admin

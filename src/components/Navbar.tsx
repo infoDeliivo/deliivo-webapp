@@ -8,6 +8,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { featureFlags } from "@/lib/features";
 import { useTranslation } from "@/lib/i18n-context";
 import { useNotificationStore } from "@/lib/notification-store";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function Navbar() {
   const { user, loading, logout } = useAuth();
@@ -37,9 +38,7 @@ export default function Navbar() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-deliivo-orange text-white font-bold text-sm">
-            D
-          </span>
+          <BrandLogo size={32} className="h-8 w-8 rounded-md object-contain" />
           <span className="text-lg font-bold text-deliivo-dark tracking-tight">
             Deliivo
           </span>

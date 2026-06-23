@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import { FaGoogle, FaApple, FaPhone } from "react-icons/fa";
 import { authApi, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import BrandLogo from "@/components/BrandLogo";
 
 type Step = 'identifier' | 'otp';
 type Method = 'email' | 'phone';
@@ -127,9 +128,7 @@ export default function SignInPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-deliivo-orange text-white font-bold text-sm shadow-md shadow-deliivo-orange/30">
-            D
-          </div>
+          <BrandLogo size={36} className="h-9 w-9 rounded-md object-contain shadow-md shadow-deliivo-orange/30" />
           <span className="text-xl font-bold tracking-tight text-deliivo-dark">Deliivo</span>
         </div>
 
