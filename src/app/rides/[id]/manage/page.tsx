@@ -46,6 +46,7 @@ const [error, setError] = useState('');
   const [rejectTarget, setRejectTarget] = useState<DriverRideBooking | null>(null);
   const [rejectReasonPreset, setRejectReasonPreset] = useState('NO_SEATS');
   const [rejectCustomReason, setRejectCustomReason] = useState('');
+  const [confirmRideAction, setConfirmRideAction] = useState<null | 'start' | 'finish'>(null);
   const allowRideSimulation = process.env.NEXT_PUBLIC_ALLOW_RIDE_SIMULATION === 'true';
   const allowManualOverride = process.env.NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE === 'true';
   const [devBusy, setDevBusy] = useState<string | null>(null);
@@ -185,11 +186,7 @@ const [error, setError] = useState('');
     }
   }
 
-  async function handleStartRide() {
-    const overrideReason = allowManualOverride
-      ? promptManualOverride('Start ride manually', 'Use only when the ride should start but the normal guard is blocking progress.')
-      : undefined;
-    if (allowManualOverride && overrideReason === null) return;
+  async function performStartRide(overrideReason?: string) {
     setActionLoading('start');
     try {
       await rideOpsApi.startRide(id, overrideReason || undefined);
@@ -206,11 +203,7 @@ const [error, setError] = useState('');
     }
   }
 
-  async function handleFinishRide() {
-    const overrideReason = allowManualOverride
-      ? promptManualOverride('Finish ride manually', 'Use only when the ride is complete but the remaining state is blocking closure.')
-      : undefined;
-    if (allowManualOverride && overrideReason === null) return;
+  async function performFinishRide(overrideReason?: string) {
     setActionLoading('finish');
     try {
       await rideOpsApi.finishRide(id, overrideReason || undefined);
@@ -224,6 +217,38 @@ const [error, setError] = useState('');
       showError(t('manageRide.couldNotFinishRide'), message);
     } finally {
       setActionLoading('');
+    }
+  }
+
+  function handleStartRide() {
+    setConfirmRideAction('start');
+  }
+
+  function handleFinishRide() {
+    setConfirmRideAction('finish');
+  }
+
+  async function handleManualStartRide() {
+    const overrideReason = promptManualOverride('Start ride manually', 'Use only when the ride should start but the normal guard is blocking progress.');
+    if (overrideReason === null) return;
+    await performStartRide(overrideReason || undefined);
+  }
+
+  async function handleManualFinishRide() {
+    const overrideReason = promptManualOverride('Finish ride manually', 'Use only when the ride is complete but the remaining state is blocking closure.');
+    if (overrideReason === null) return;
+    await performFinishRide(overrideReason || undefined);
+  }
+
+  async function confirmRideLifecycleAction() {
+    if (confirmRideAction === 'start') {
+      setConfirmRideAction(null);
+      await performStartRide();
+      return;
+    }
+    if (confirmRideAction === 'finish') {
+      setConfirmRideAction(null);
+      await performFinishRide();
     }
   }
 
@@ -811,7 +836,7 @@ const [error, setError] = useState('');
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" onClick={handleStartRide} disabled={!allowManualOverride} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
+                <button type="button" onClick={handleManualStartRide} disabled={!allowManualOverride} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
                   Manual start ride
                 </button>
                 <button
@@ -852,9 +877,41 @@ const [error, setError] = useState('');
                 >
                   Manual drop-off
                 </button>
-                <button type="button" onClick={handleFinishRide} disabled={!allowManualOverride} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
+                <button type="button" onClick={handleManualFinishRide} disabled={!allowManualOverride} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
                   Manual finish ride
                 </button>
+              </div>
+            </div>
+          )}
+
+          {confirmRideAction && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+              <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+                <h3 className="text-base font-semibold text-deliivo-dark">
+                  {confirmRideAction === 'start' ? 'Start ride now?' : 'Finish ride now?'}
+                </h3>
+                <p className="mt-2 text-sm text-deliivo-gray">
+                  {confirmRideAction === 'start'
+                    ? 'This will move the ride into progress for all confirmed riders. Please confirm again to avoid starting it by accident.'
+                    : 'This will complete the ride for riders and close the live trip flow. Please confirm again to avoid finishing it by accident.'}
+                </p>
+                <div className="mt-5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmRideAction(null)}
+                    className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-deliivo-dark hover:bg-gray-50"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { void confirmRideLifecycleAction(); }}
+                    disabled={actionLoading === confirmRideAction}
+                    className="flex-1 rounded-xl bg-deliivo-orange px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+                  >
+                    {confirmRideAction === 'start' ? 'Yes, start ride' : 'Yes, finish ride'}
+                  </button>
+                </div>
               </div>
             </div>
           )}

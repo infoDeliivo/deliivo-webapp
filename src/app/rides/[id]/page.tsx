@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState, useEffect } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -88,6 +88,7 @@ function RideDetailContent() {
 
   // Live driver location (for passengers)
   const [driverLiveLocation, setDriverLiveLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const refreshInFlightRef = useRef(false);
   const requestExpiryOptions = [
     { value: 'ONE_HOUR', label: t('rideDetail.expiryOneHour') },
     { value: 'THREE_HOURS', label: t('rideDetail.expiryThreeHours') },
@@ -100,7 +101,7 @@ function RideDetailContent() {
 
   useEffect(() => {
     if (!id) return;
-    loadRide();
+    loadRide(true);
     loadMyBooking();
     loadPaymentMethods();
   }, [id]);
@@ -131,8 +132,7 @@ function RideDetailContent() {
     if (!id || !user) return;
 
     const refresh = () => {
-      void loadRide();
-      void loadMyBooking();
+      void refreshRideData();
     };
 
     const intervalId = window.setInterval(refresh, 20000);
@@ -160,8 +160,7 @@ function RideDetailContent() {
       const bookingId = payload.data.data?.bookingId;
 
       if (rideId === id || bookingId === myBooking?.id) {
-        loadRide();
-        loadMyBooking();
+        void refreshRideData();
       }
     });
 
@@ -185,8 +184,7 @@ function RideDetailContent() {
             }
           : prev
       );
-      void loadMyBooking();
-      void loadRide();
+      void refreshRideData();
     });
 
     const unsubRide = onSocketEvent<RideUpdatedPayload>('ride:updated', (payload) => {
@@ -208,8 +206,7 @@ function RideDetailContent() {
             }
           : prev
       );
-      void loadRide();
-      void loadMyBooking();
+      void refreshRideData();
     });
 
     return () => {
@@ -496,15 +493,25 @@ function RideDetailContent() {
     await handleCreateDispute(reason, `Manual recovery request: ${reason}`);
   }
 
-  async function loadRide() {
-    setLoading(true);
+  async function refreshRideData() {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    try {
+      await Promise.all([loadRide(false), loadMyBooking()]);
+    } finally {
+      refreshInFlightRef.current = false;
+    }
+  }
+
+  async function loadRide(showLoader = false) {
+    if (showLoader) setLoading(true);
     try {
       const res = await searchRidesApi.getDetails(id, segmentId);
       setRide(res.data);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, t('rideDetail.failedLoadRide')));
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   }
 
