@@ -38,7 +38,7 @@ export default function AdminSidebar() {
     <aside className="w-64 shrink-0 flex flex-col" style={{ background: '#1A1A2E' }}>
       {/* Logo */}
       <div className="px-6 py-5 border-b border-white/10 flex items-center gap-3">
-        <BrandLogo size={40} textClassName="text-[#F97316]" />
+        <BrandLogo size={46} className="h-11 w-auto object-contain" />
         <span className="ml-2 text-xs text-white/40 font-medium uppercase tracking-widest">
           Admin
         </span>
