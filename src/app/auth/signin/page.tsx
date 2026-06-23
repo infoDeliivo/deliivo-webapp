@@ -128,7 +128,7 @@ export default function SignInPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 flex items-center">
-          <BrandLogo size={52} className="h-12 w-auto object-contain" />
+          <BrandLogo size={48} />
         </div>
 
         <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-black/5">

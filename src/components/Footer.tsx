@@ -59,7 +59,7 @@ export default function Footer() {
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="mb-4 flex items-center">
-              <BrandLogo size={42} className="h-10 w-auto object-contain" />
+              <BrandLogo size={40} textClassName="text-white" />
             </Link>
             <p className="text-sm leading-relaxed text-gray-500">
               {t('footer.description')}
