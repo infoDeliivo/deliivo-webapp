@@ -8,9 +8,9 @@ type BrandLogoProps = {
 export default function BrandLogo({ size = 36, className = "" }: BrandLogoProps) {
   return (
     <Image
-      src="/logo.jpg"
+      src="/logo-wordmark.svg"
       alt="Deliivo"
-      width={Math.round(size * 1.97)}
+      width={Math.round(size * 2.33)}
       height={size}
       className={className}
       priority

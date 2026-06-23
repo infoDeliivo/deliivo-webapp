@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="120" viewBox="0 0 280 120" role="img" aria-labelledby="title">
+  <title>Deliivo</title>
+  <image href="/final-logo.png" x="0" y="0" width="120" height="120" preserveAspectRatio="xMidYMid meet" />
+  <text
+    x="108"
+    y="68"
+    fill="#111827"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="44"
+    font-weight="700"
+    letter-spacing="-1"
+  >
+    Deliivo
+  </text>
+</svg>
