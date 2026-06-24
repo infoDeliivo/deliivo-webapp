@@ -909,6 +909,32 @@ function RideDetailContent() {
             <div className="flex items-center gap-2"><Users size={16} className="text-deliivo-orange" /><span>{t('manageRide.availableSeats', { available: ride.availableSeats, total: ride.totalSeats })}</span></div>
             <div className="flex items-center gap-2"><span className="text-lg font-bold text-primary-500">{ride.currency} {price.toFixed(2)}</span><span className="text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></div>
           </div>
+          {ride.waypoints.length > 0 && (
+            <div className="pt-3 border-t border-gray-50 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('rideDetail.publishedRoutePoints')}</p>
+              <div className="space-y-2">
+                {ride.waypoints
+                  .slice()
+                  .sort((a, b) => a.orderIndex - b.orderIndex)
+                  .map((waypoint) => (
+                    <div key={waypoint.id} className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-deliivo-orange">
+                        <MapPin className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                          {pointKindLabel(toRiderPointKind(waypoint.waypointType))}
+                        </p>
+                        <p className="text-sm font-medium text-deliivo-dark">{waypoint.address}</p>
+                        {waypoint.estimatedArrivalTime && (
+                          <p className="text-xs text-deliivo-gray">{t('rideDetail.estimatedTime')}: {waypoint.estimatedArrivalTime}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
           {ride.notes && (
             <div className="pt-3 border-t border-gray-50">
               <p className="flex items-center gap-2 text-xs font-medium text-deliivo-gray mb-1"><MessageSquare size={12} /> {t('rideDetail.driverNotes')}</p>
