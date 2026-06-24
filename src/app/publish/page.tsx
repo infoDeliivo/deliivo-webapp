@@ -92,6 +92,7 @@ const LOCAL_DRAFT_KEY = 'deliivo_publish_wizard_snapshot_v1';
 const MAX_ROUTE_PICKUP_POINTS = 3;
 const MAX_ORIGIN_PICKUPS = 3;
 const MAX_DESTINATION_DROPOFFS = 3;
+const MAX_STOPOVERS = 3;
 
 // ─── Helper: calendar grid ────────────────────────────────────────────────────
 
@@ -428,11 +429,40 @@ function StepStopovers({
     );
   }
 
+  function renderStepHeader(
+    stepNumber: string,
+    title: string,
+    helper: string,
+    countLabel: string,
+  ) {
+    return (
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-deliivo-orange">
+            {stepNumber}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-deliivo-dark">{title}</p>
+            <p className="text-xs text-deliivo-gray">{helper}</p>
+          </div>
+        </div>
+        <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-deliivo-orange">
+          {countLabel}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-deliivo-dark">{t('publish.addRoutePoints')}</h2>
         <p className="mt-1 text-sm text-deliivo-gray">{t('publish.routePointsCopy')}</p>
+      </div>
+
+      <div className="rounded-2xl border border-primary-100 bg-primary-50 p-4">
+        <p className="text-sm font-semibold text-deliivo-dark">{t('publish.routePointFlowTitle')}</p>
+        <p className="mt-1 text-xs leading-5 text-deliivo-gray">{t('publish.routePointFlowCopy')}</p>
       </div>
 
       {selectedPolyline && (
@@ -451,10 +481,12 @@ function StepStopovers({
 
       <div className="space-y-6">
         <section className="space-y-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.originPickupPoints')}</p>
-            <p className="text-xs text-deliivo-gray">{t('publish.originPickupSearchCopy', { count: MAX_ORIGIN_PICKUPS })}</p>
-          </div>
+          {renderStepHeader(
+            '1',
+            t('publish.originPickupPoints'),
+            t('publish.originPickupSearchCopy', { count: MAX_ORIGIN_PICKUPS }),
+            t('publish.selectedCount', { count: state.pickups.length, max: MAX_ORIGIN_PICKUPS }),
+          )}
           {state.pickups.length < MAX_ORIGIN_PICKUPS && (
             <div className="space-y-3">
               <PlaceInput
@@ -481,10 +513,12 @@ function StepStopovers({
         </section>
 
         <section className="space-y-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.stopoverPoint')}</p>
-            <p className="text-xs text-deliivo-gray">{t('publish.stopoverSearchCopy')}</p>
-          </div>
+          {renderStepHeader(
+            '2',
+            t('publish.stopoverPoints'),
+            t('publish.stopoverSearchCopy', { count: MAX_STOPOVERS }),
+            t('publish.selectedCount', { count: state.stopovers.length, max: MAX_STOPOVERS }),
+          )}
           {loadingStopoverSuggestions ? (
             <div className="flex items-center gap-2 py-2 text-sm text-deliivo-gray">
               <Loader2 className="h-4 w-4 animate-spin text-deliivo-orange" />
@@ -492,7 +526,10 @@ function StepStopovers({
             </div>
           ) : stopoverSuggestions.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.suggestedStopovers')}</p>
+              <div className="rounded-xl border border-dashed border-primary-200 bg-primary-50/70 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.suggestedStopovers')}</p>
+                <p className="mt-1 text-xs text-deliivo-gray">{t('publish.chooseStopoverBeforeSearch')}</p>
+              </div>
               {stopoverSuggestions.map((suggestion) => {
                 const selected = selectedStopoverSuggestion?.placeId === suggestion.placeId;
                 return (
@@ -521,7 +558,7 @@ function StepStopovers({
           ) : (
             <p className="text-xs text-deliivo-gray">{t('publish.noSuggestedStopovers')}</p>
           )}
-          {state.stopovers.length < 1 && (
+          {state.stopovers.length < MAX_STOPOVERS && (
             <div className="space-y-3">
               {selectedStopoverSuggestion && (
                 <div className="rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-sm text-deliivo-dark">
@@ -537,9 +574,10 @@ function StepStopovers({
               />
               <button
                 type="button"
-                onClick={() => addSelection('stopovers', stopoverDraft, 1, () => {
+                onClick={() => addSelection('stopovers', stopoverDraft, MAX_STOPOVERS, () => {
                   setStopoverDraft(null);
                   setStopoverInputKey((value) => value + 1);
+                  setSelectedStopoverSuggestion(null);
                 })}
                 disabled={!stopoverDraft || !selectedStopoverSuggestion}
                 className="btn-secondary w-full justify-center py-3 disabled:opacity-50"
@@ -552,10 +590,12 @@ function StepStopovers({
         </section>
 
         <section className="space-y-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.destinationDropoffPoints')}</p>
-            <p className="text-xs text-deliivo-gray">{t('publish.destinationDropoffSearchCopy', { count: MAX_DESTINATION_DROPOFFS })}</p>
-          </div>
+          {renderStepHeader(
+            '3',
+            t('publish.destinationDropoffPoints'),
+            t('publish.destinationDropoffSearchCopy', { count: MAX_DESTINATION_DROPOFFS }),
+            t('publish.selectedCount', { count: state.dropoffs.length, max: MAX_DESTINATION_DROPOFFS }),
+          )}
           {state.dropoffs.length < MAX_DESTINATION_DROPOFFS && (
             <div className="space-y-3">
               <PlaceInput
@@ -584,7 +624,7 @@ function StepStopovers({
 
       {(state.pickups.length > 0 || state.stopovers.length > 0 || state.dropoffs.length > 0) && (
         <div className="rounded-2xl border border-primary-100 bg-primary-50 p-4">
-          <p className="text-xs font-semibold text-deliivo-dark mb-2">{t('publish.selectedRoutePoints')}</p>
+          <p className="text-sm font-semibold text-deliivo-dark mb-2">{t('publish.selectedRoutePoints')}</p>
           {state.pickups.map((item, index) => (
             <div key={`pickup-${item.placeId}`} className="flex items-center gap-2 text-sm text-deliivo-dark">
               <span className="text-xs font-bold text-deliivo-orange">{index + 1}.</span>
