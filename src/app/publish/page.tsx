@@ -40,6 +40,7 @@ import {
   RouteOption,
   PriceRecommendation,
   LocationInput,
+  StopoverSuggestion,
   Vehicle,
   ConnectStatus,
 } from "@/lib/api";
@@ -334,11 +335,28 @@ function StepStopovers({
   const [pickupDraft, setPickupDraft] = useState<PlaceSelection | null>(null);
   const [dropoffDraft, setDropoffDraft] = useState<PlaceSelection | null>(null);
   const [stopoverDraft, setStopoverDraft] = useState<PlaceSelection | null>(null);
+  const [stopoverSuggestions, setStopoverSuggestions] = useState<StopoverSuggestion[]>([]);
+  const [selectedStopoverSuggestion, setSelectedStopoverSuggestion] = useState<StopoverSuggestion | null>(null);
+  const [loadingStopoverSuggestions, setLoadingStopoverSuggestions] = useState(false);
+  const [loadedStopoverSuggestions, setLoadedStopoverSuggestions] = useState(false);
   const [pickupInputKey, setPickupInputKey] = useState(0);
   const [dropoffInputKey, setDropoffInputKey] = useState(0);
   const [stopoverInputKey, setStopoverInputKey] = useState(0);
 
   const selectedPolyline = state.selectedRouteIndex !== null ? state.routes[state.selectedRouteIndex]?.polyline : undefined;
+
+  useEffect(() => {
+    if (!loadedStopoverSuggestions) {
+      setLoadingStopoverSuggestions(true);
+      publishRideApi.getStopoverSuggestions()
+        .then((res) => { setStopoverSuggestions(res.data.suggestions || []); })
+        .catch(() => { setStopoverSuggestions([]); })
+        .finally(() => {
+          setLoadingStopoverSuggestions(false);
+          setLoadedStopoverSuggestions(true);
+        });
+    }
+  }, [loadedStopoverSuggestions]);
 
   function toLocationInput(place: PlaceSelection): LocationInput {
     return {
@@ -467,8 +485,49 @@ function StepStopovers({
             <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.stopoverPoint')}</p>
             <p className="text-xs text-deliivo-gray">{t('publish.stopoverSearchCopy')}</p>
           </div>
+          {loadingStopoverSuggestions ? (
+            <div className="flex items-center gap-2 py-2 text-sm text-deliivo-gray">
+              <Loader2 className="h-4 w-4 animate-spin text-deliivo-orange" />
+              <span>{t('publish.loadingStopovers')}</span>
+            </div>
+          ) : stopoverSuggestions.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.suggestedStopovers')}</p>
+              {stopoverSuggestions.map((suggestion) => {
+                const selected = selectedStopoverSuggestion?.placeId === suggestion.placeId;
+                return (
+                  <button
+                    key={suggestion.placeId}
+                    type="button"
+                    onClick={() => setSelectedStopoverSuggestion(suggestion)}
+                    className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
+                      selected
+                        ? 'border-deliivo-orange bg-deliivo-orange-light'
+                        : 'border-gray-100 bg-white hover:border-primary-200'
+                    }`}
+                  >
+                    <div className={`flex h-8 w-8 items-center justify-center rounded-full shrink-0 ${selected ? 'bg-deliivo-orange text-white' : 'bg-gray-100 text-deliivo-gray'}`}>
+                      <MapPin className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-deliivo-dark">{suggestion.name}</p>
+                      <p className="truncate text-xs text-deliivo-gray">{suggestion.address}</p>
+                    </div>
+                    {selected && <CheckCircle className="h-5 w-5 text-deliivo-orange shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-deliivo-gray">{t('publish.noSuggestedStopovers')}</p>
+          )}
           {state.stopovers.length < 1 && (
             <div className="space-y-3">
+              {selectedStopoverSuggestion && (
+                <div className="rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-sm text-deliivo-dark">
+                  <span className="font-semibold">{t('publish.selectedStopoverCity')}:</span> {selectedStopoverSuggestion.address}
+                </div>
+              )}
               <PlaceInput
                 key={`stopover-${stopoverInputKey}`}
                 value={stopoverDraft}
@@ -482,7 +541,7 @@ function StepStopovers({
                   setStopoverDraft(null);
                   setStopoverInputKey((value) => value + 1);
                 })}
-                disabled={!stopoverDraft}
+                disabled={!stopoverDraft || !selectedStopoverSuggestion}
                 className="btn-secondary w-full justify-center py-3 disabled:opacity-50"
               >
                 <Plus className="h-4 w-4" /> {t('publish.addStopover')}
