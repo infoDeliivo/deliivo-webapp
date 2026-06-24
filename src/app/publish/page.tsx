@@ -1400,6 +1400,25 @@ function PublishRideWizard() {
         await authApi.acceptTos('1.0', '1.0');
       }
 
+      if (state.selectedRouteIndex !== null) {
+        await publishRideApi.selectRoute(state.selectedRouteIndex);
+      }
+
+      await publishRideApi.updatePickups(state.pickups);
+      await publishRideApi.updateDropoffs(state.dropoffs);
+      await publishRideApi.updateStopovers(state.stopovers);
+
+      if (state.date) {
+        const departureTime = `${String(state.hour).padStart(2, "0")}:${String(state.minute).padStart(2, "0")}`;
+        await publishRideApi.updateSchedule(state.date, departureTime);
+      }
+
+      await publishRideApi.updateCapacity(state.seats, state.maxLuggage, false, {
+        noSmoking: state.noSmoking,
+        noBicycles: state.noBicycles,
+        childSeatAvailable: state.childSeatAvailable,
+      });
+
       // Save pricing
       await publishRideApi.updatePricing(state.basePricePerSeat);
 
