@@ -66,7 +66,7 @@ export default function BlogPage() {
                   </div>
                   <h2 className="mt-5 text-xl font-semibold text-deliivo-dark">{post.title}</h2>
                   <p className="mt-3 text-sm leading-6 text-deliivo-gray">{post.excerpt}</p>
-                  <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-deliivo-gray">
+                  <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-deliivo-gray line-clamp-4">
                     {post.body}
                   </div>
                   <div className="mt-5 flex items-center justify-between text-xs text-gray-500">
@@ -74,10 +74,10 @@ export default function BlogPage() {
                     <span>{post.readTime}</span>
                   </div>
                   <Link
-                    href="/contact"
+                    href={`/blog/${post.slug}`}
                     className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-deliivo-orange hover:text-orange-700"
                   >
-                    {t('blog.askSupport')}
+                    Read article
                     <ArrowRight size={15} />
                   </Link>
                 </article>

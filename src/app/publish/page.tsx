@@ -41,6 +41,7 @@ import {
   PriceRecommendation,
   LocationInput,
   StopoverSuggestion,
+  RouteLocationSuggestionsResult,
   Vehicle,
   ConnectStatus,
 } from "@/lib/api";
@@ -61,6 +62,8 @@ interface WizardState {
   // Routes computed
   routes: RouteOption[];
   selectedRouteIndex: number | null;
+  pickups: LocationInput[];
+  dropoffs: LocationInput[];
   // Stopovers
   stopovers: LocationInput[];
   // Step 2 — Date / Time
@@ -87,6 +90,9 @@ interface WizardState {
 
 const TOTAL_STEPS = 6;
 const LOCAL_DRAFT_KEY = 'deliivo_publish_wizard_snapshot_v1';
+const MAX_ROUTE_PICKUP_POINTS = 3;
+const MAX_ORIGIN_PICKUPS = 3;
+const MAX_DESTINATION_DROPOFFS = 3;
 
 // ─── Helper: calendar grid ────────────────────────────────────────────────────
 
@@ -227,6 +233,8 @@ function StepRoute({
           markers={[
             ...(state.origin ? [{ lat: state.origin.lat, lng: state.origin.lng, color: 'green' as const }] : []),
             ...(state.destination ? [{ lat: state.destination.lat, lng: state.destination.lng, color: 'red' as const }] : []),
+            ...state.pickups.map(s => ({ lat: s.lat, lng: s.lng, color: 'green' as const })),
+            ...state.dropoffs.map(s => ({ lat: s.lat, lng: s.lng, color: 'red' as const })),
             ...state.stopovers.map(s => ({ lat: s.lat, lng: s.lng, color: 'blue' as const })),
           ]}
           className="h-56 w-full rounded-2xl"
@@ -324,16 +332,16 @@ function StepStopovers({
   state: WizardState;
   onChange: (patch: Partial<WizardState>) => void;
 }) {
-  const { t, locale } = useTranslation();
-  const [suggestions, setSuggestions] = useState<StopoverSuggestion[]>([]);
+  const { t } = useTranslation();
+  const [suggestions, setSuggestions] = useState<RouteLocationSuggestionsResult | null>(null);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!loaded) {
       setLoadingSuggestions(true);
-      publishRideApi.getStopoverSuggestions()
-        .then(res => { setSuggestions(res.data.suggestions || []); })
+      publishRideApi.getLocationSuggestions()
+        .then(res => { setSuggestions(res.data); })
         .catch(() => {})
         .finally(() => { setLoadingSuggestions(false); setLoaded(true); });
     }
@@ -341,29 +349,87 @@ function StepStopovers({
 
   const selectedPolyline = state.selectedRouteIndex !== null ? state.routes[state.selectedRouteIndex]?.polyline : undefined;
 
-  function toggleStopover(suggestion: StopoverSuggestion) {
-    const exists = state.stopovers.find(s => s.placeId === suggestion.placeId);
+  function toLocationInput(suggestion: StopoverSuggestion): LocationInput {
+    return {
+      placeId: suggestion.placeId,
+      address: suggestion.address,
+      lat: suggestion.lat,
+      lng: suggestion.lng,
+      estimatedArrivalTime: suggestion.estimatedArrivalTime,
+    };
+  }
+
+  function toggleSelection(
+    key: 'pickups' | 'dropoffs' | 'stopovers',
+    suggestion: StopoverSuggestion,
+    maxSelections?: number,
+  ) {
+    const selected = state[key];
+    const exists = selected.some((item) => item.placeId === suggestion.placeId);
     if (exists) {
-      onChange({ stopovers: state.stopovers.filter(s => s.placeId !== suggestion.placeId) });
-    } else {
-      onChange({ stopovers: [...state.stopovers, { placeId: suggestion.placeId, address: suggestion.address, lat: suggestion.lat, lng: suggestion.lng }] });
+      onChange({ [key]: selected.filter((item) => item.placeId !== suggestion.placeId) } as Partial<WizardState>);
+      return;
     }
+
+    if (maxSelections && selected.length >= maxSelections) {
+      return;
+    }
+
+    onChange({ [key]: [...selected, toLocationInput(suggestion)] } as Partial<WizardState>);
+  }
+
+  const pickupLimitReached = state.pickups.length >= MAX_ORIGIN_PICKUPS;
+  const dropoffLimitReached = state.dropoffs.length >= MAX_DESTINATION_DROPOFFS;
+
+  function renderSuggestionButton(
+    suggestion: StopoverSuggestion,
+    selected: boolean,
+    disabled: boolean,
+    onToggle: () => void,
+    subtitle: string,
+  ) {
+    return (
+      <button
+        key={suggestion.placeId}
+        type="button"
+        onClick={onToggle}
+        disabled={disabled}
+        className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
+          selected
+            ? 'border-deliivo-orange bg-deliivo-orange-light'
+            : disabled
+              ? 'cursor-not-allowed border-gray-100 bg-gray-50 opacity-60'
+              : 'border-gray-100 bg-white hover:border-primary-200'
+        }`}
+      >
+        <div className={`flex h-8 w-8 items-center justify-center rounded-full shrink-0 ${selected ? 'bg-deliivo-orange text-white' : 'bg-gray-100 text-deliivo-gray'}`}>
+          <MapPin className="h-4 w-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-deliivo-dark truncate">{suggestion.name}</p>
+          <p className="text-xs text-deliivo-gray truncate">{suggestion.address}</p>
+          <p className="text-xs text-deliivo-gray">{subtitle}</p>
+        </div>
+        {selected && <CheckCircle className="h-5 w-5 text-deliivo-orange shrink-0" />}
+      </button>
+    );
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-deliivo-dark">{t('publish.addStopovers')}</h2>
-        <p className="mt-1 text-sm text-deliivo-gray">{t('publish.stopoversCopy')}</p>
+        <h2 className="text-xl font-bold text-deliivo-dark">{t('publish.addRouteBoardingPoints')}</h2>
+        <p className="mt-1 text-sm text-deliivo-gray">{t('publish.routeBoardingPointsCopy')}</p>
       </div>
 
-      {/* Map with route + stopovers */}
       {selectedPolyline && (
         <GoogleMap
           polyline={selectedPolyline}
           markers={[
             ...(state.origin ? [{ lat: state.origin.lat, lng: state.origin.lng, color: 'green' as const }] : []),
             ...(state.destination ? [{ lat: state.destination.lat, lng: state.destination.lng, color: 'red' as const }] : []),
+            ...state.pickups.map(s => ({ lat: s.lat, lng: s.lng, color: 'green' as const })),
+            ...state.dropoffs.map(s => ({ lat: s.lat, lng: s.lng, color: 'red' as const })),
             ...state.stopovers.map(s => ({ lat: s.lat, lng: s.lng, color: 'blue' as const })),
           ]}
           className="h-48 w-full rounded-2xl"
@@ -375,50 +441,114 @@ function StepStopovers({
           <Loader2 className="h-6 w-6 animate-spin text-deliivo-orange" />
           <span className="ml-2 text-sm text-deliivo-gray">{t('publish.findingPlaces')}</span>
         </div>
-      ) : suggestions.length === 0 ? (
+      ) : !suggestions || (
+        suggestions.originPickupSuggestions.length === 0 &&
+        suggestions.destinationDropoffSuggestions.length === 0 &&
+        suggestions.stopoverGroups.length === 0
+      ) ? (
         <div className="rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-sm">
           <MapPin className="h-8 w-8 text-gray-200 mx-auto mb-2" />
-          <p className="text-sm text-deliivo-gray">{t('publish.noStopovers')}</p>
+          <p className="text-sm text-deliivo-gray">{t('publish.noRouteBoardingPoints')}</p>
           <p className="text-xs text-deliivo-gray mt-1">{t('publish.skipStep')}</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-            {t('publish.suggestedStops', { count: suggestions.length })}
-          </p>
-          {suggestions.map(s => {
-            const selected = state.stopovers.some(st => st.placeId === s.placeId);
-            return (
-              <button
-                key={s.placeId}
-                type="button"
-                onClick={() => toggleStopover(s)}
-                className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
-                  selected ? 'border-deliivo-orange bg-deliivo-orange-light' : 'border-gray-100 bg-white hover:border-primary-200'
-                }`}
-              >
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full shrink-0 ${selected ? 'bg-deliivo-orange text-white' : 'bg-gray-100 text-deliivo-gray'}`}>
-                  <MapPin className="h-4 w-4" />
+        <div className="space-y-6">
+          <section className="space-y-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.originPickupPoints')}</p>
+              <p className="text-xs text-deliivo-gray">{t('publish.originPickupPointsCopy', { count: MAX_ORIGIN_PICKUPS })}</p>
+            </div>
+            {suggestions?.originPickupSuggestions.map((suggestion) => {
+              const selected = state.pickups.some((item) => item.placeId === suggestion.placeId);
+              const disabled = !selected && pickupLimitReached;
+              return renderSuggestionButton(
+                suggestion,
+                selected,
+                disabled,
+                () => toggleSelection('pickups', suggestion, MAX_ORIGIN_PICKUPS),
+                `${suggestion.distanceFromOriginKm.toFixed(1)} km from route origin`,
+              );
+            })}
+          </section>
+
+          <section className="space-y-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.stopoverBoardingPoints')}</p>
+              <p className="text-xs text-deliivo-gray">
+                {suggestions?.routeMode === 'INTRACITY'
+                  ? t('publish.stopoverDirectSelectionCopy')
+                  : t('publish.stopoverNestedSelectionCopy')}
+              </p>
+            </div>
+            {suggestions?.stopoverGroups.map((group) => (
+              <div key={group.stopover.placeId} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <p className="text-sm font-semibold text-deliivo-dark">{group.stopover.name}</p>
+                <p className="text-xs text-deliivo-gray">{group.stopover.address}</p>
+                <div className="mt-3 space-y-2">
+                  {group.directSelectable ? (
+                    renderSuggestionButton(
+                      group.stopover,
+                      state.stopovers.some((item) => item.placeId === group.stopover.placeId),
+                      false,
+                      () => toggleSelection('stopovers', group.stopover),
+                      `${group.stopover.distanceFromOriginKm.toFixed(1)} km from route origin`,
+                    )
+                  ) : (
+                    group.pointSuggestions.map((suggestion) => {
+                      const selected = state.stopovers.some((item) => item.placeId === suggestion.placeId);
+                      return renderSuggestionButton(
+                        suggestion,
+                        selected,
+                        false,
+                        () => toggleSelection('stopovers', suggestion),
+                        `${suggestion.distanceFromOriginKm.toFixed(1)} km from route origin`,
+                      );
+                    })
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-deliivo-dark truncate">{s.name}</p>
-                  <p className="text-xs text-deliivo-gray truncate">{s.address}</p>
-                  <p className="text-xs text-deliivo-gray">{s.distanceFromOriginKm.toFixed(1)} km from origin</p>
-                </div>
-                {selected && <CheckCircle className="h-5 w-5 text-deliivo-orange shrink-0" />}
-              </button>
-            );
-          })}
+              </div>
+            ))}
+          </section>
+
+          <section className="space-y-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.destinationDropoffPoints')}</p>
+              <p className="text-xs text-deliivo-gray">{t('publish.destinationDropoffPointsCopy', { count: MAX_DESTINATION_DROPOFFS })}</p>
+            </div>
+            {suggestions?.destinationDropoffSuggestions.map((suggestion) => {
+              const selected = state.dropoffs.some((item) => item.placeId === suggestion.placeId);
+              const disabled = !selected && dropoffLimitReached;
+              return renderSuggestionButton(
+                suggestion,
+                selected,
+                disabled,
+                () => toggleSelection('dropoffs', suggestion, MAX_DESTINATION_DROPOFFS),
+                `${suggestion.distanceFromOriginKm.toFixed(1)} km from route origin`,
+              );
+            })}
+          </section>
         </div>
       )}
 
-      {state.stopovers.length > 0 && (
+      {(state.pickups.length > 0 || state.stopovers.length > 0 || state.dropoffs.length > 0) && (
         <div className="rounded-2xl border border-primary-100 bg-primary-50 p-4">
-          <p className="text-xs font-semibold text-deliivo-dark mb-2">{t('publish.selectedStopovers', { count: state.stopovers.length })}</p>
-          {state.stopovers.map((s, i) => (
-            <div key={s.placeId} className="flex items-center gap-2 text-sm text-deliivo-dark">
-              <span className="text-xs font-bold text-deliivo-orange">{i + 1}.</span>
-              <span className="truncate">{s.address}</span>
+          <p className="text-xs font-semibold text-deliivo-dark mb-2">{t('publish.selectedRouteBoardingPoints')}</p>
+          {state.pickups.map((item, index) => (
+            <div key={`pickup-${item.placeId}`} className="flex items-center gap-2 text-sm text-deliivo-dark">
+              <span className="text-xs font-bold text-deliivo-orange">{index + 1}.</span>
+              <span className="truncate">{t('publish.pickup')}: {item.address}</span>
+            </div>
+          ))}
+          {state.stopovers.map((item, index) => (
+            <div key={`stopover-${item.placeId}`} className="flex items-center gap-2 text-sm text-deliivo-dark">
+              <span className="text-xs font-bold text-deliivo-orange">{index + 1}.</span>
+              <span className="truncate">{t('publish.stopover')}: {item.address}</span>
+            </div>
+          ))}
+          {state.dropoffs.map((item, index) => (
+            <div key={`dropoff-${item.placeId}`} className="flex items-center gap-2 text-sm text-deliivo-dark">
+              <span className="text-xs font-bold text-deliivo-orange">{index + 1}.</span>
+              <span className="truncate">{t('publish.dropoff')}: {item.address}</span>
             </div>
           ))}
         </div>
@@ -940,6 +1070,8 @@ const INITIAL_STATE: WizardState = {
   destination: null,
   routes: [],
   selectedRouteIndex: null,
+  pickups: [],
+  dropoffs: [],
   stopovers: [],
   date: "",
   hour: 8,
@@ -990,6 +1122,8 @@ function PublishRideWizard() {
           ...INITIAL_STATE,
           ...snapshot.state,
           routes: snapshot.state.routes || [],
+          pickups: snapshot.state.pickups || [],
+          dropoffs: snapshot.state.dropoffs || [],
           stopovers: snapshot.state.stopovers || [],
         });
       }
@@ -1059,7 +1193,14 @@ function PublishRideWizard() {
     setLoading(true);
     setError('');
     // Clear previous routes so map updates
-    setState(prev => ({ ...prev, routes: [], selectedRouteIndex: null }));
+    setState(prev => ({
+      ...prev,
+      routes: [],
+      selectedRouteIndex: null,
+      pickups: [],
+      dropoffs: [],
+      stopovers: [],
+    }));
     try {
       // Step 1: Create draft with origin
       await publishRideApi.createWithOrigin({
@@ -1107,9 +1248,9 @@ function PublishRideWizard() {
         }
       } else if (step === 2) {
         // Save stopovers to backend (even if empty — clears previous)
-        if (state.stopovers.length > 0) {
-          await publishRideApi.updateStopovers(state.stopovers);
-        }
+        await publishRideApi.updatePickups(state.pickups);
+        await publishRideApi.updateDropoffs(state.dropoffs);
+        await publishRideApi.updateStopovers(state.stopovers);
       } else if (step === 3) {
         // Save schedule to backend
         const departureTime = `${String(state.hour).padStart(2, "0")}:${String(state.minute).padStart(2, "0")}`;

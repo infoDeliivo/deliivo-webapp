@@ -518,6 +518,26 @@ export const publishRideApi = {
     );
   },
 
+  getLocationSuggestions() {
+    return apiFetch<{ data: RouteLocationSuggestionsResult }>(
+      '/api/v1/publish-ride/draft/location-suggestions'
+    );
+  },
+
+  updatePickups(pickups: LocationInput[]) {
+    return apiFetch<{ data: DraftRide }>('/api/v1/publish-ride/draft/pickups', {
+      method: 'PUT',
+      body: JSON.stringify({ pickups }),
+    });
+  },
+
+  updateDropoffs(dropoffs: LocationInput[]) {
+    return apiFetch<{ data: DraftRide }>('/api/v1/publish-ride/draft/dropoffs', {
+      method: 'PUT',
+      body: JSON.stringify({ dropoffs }),
+    });
+  },
+
   // Step 6: Set stopovers
   updateStopovers(stopovers: LocationInput[]) {
     return apiFetch<{ data: DraftRide }>('/api/v1/publish-ride/draft/stopovers', {
@@ -1149,6 +1169,12 @@ export const contentApi = {
     if (locale) query.set('locale', locale);
     const suffix = query.toString() ? `?${query}` : '';
     return apiFetch<{ data: ContentPost[] }>(`/api/v1/content/posts${suffix}`);
+  },
+  getPublishedBySlug(slug: string, locale?: string) {
+    const query = new URLSearchParams();
+    if (locale) query.set('locale', locale);
+    const suffix = query.toString() ? `?${query}` : '';
+    return apiFetch<{ data: ContentPost }>(`/api/v1/content/posts/${encodeURIComponent(slug)}${suffix}`);
   },
   listAdminPosts() {
     return apiFetch<{ data: ContentPost[] }>('/api/v1/admin/content/posts');
@@ -1901,8 +1927,25 @@ export interface StopoverSuggestion {
   lat: number;
   lng: number;
   distanceFromOriginKm: number;
+  distanceFromOriginMeters?: number;
+  types?: string[];
   pricePerSeat?: number;
   estimatedArrivalTime?: string;
+}
+
+export interface StopoverPointGroup {
+  stopover: StopoverSuggestion;
+  directSelectable: boolean;
+  pointSuggestions: StopoverSuggestion[];
+}
+
+export interface RouteLocationSuggestionsResult {
+  routeMode: 'INTRACITY' | 'INTERCITY';
+  originPickupSuggestions: StopoverSuggestion[];
+  destinationDropoffSuggestions: StopoverSuggestion[];
+  stopoverGroups: StopoverPointGroup[];
+  routeDistanceKm: number;
+  basePricePerSeat: number | null;
 }
 
 export interface LocationInput {
@@ -1936,6 +1979,8 @@ export interface DraftRide {
   routePolyline?: string;
   routeDistanceMeters?: number;
   routeDurationSeconds?: number;
+  pickups?: LocationInput[];
+  dropoffs?: LocationInput[];
   stopovers?: LocationInput[];
   completionPercentage?: number;
 }
