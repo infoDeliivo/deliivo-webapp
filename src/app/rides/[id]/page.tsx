@@ -34,6 +34,50 @@ import { useTranslation } from '@/lib/i18n-context';
 const TOS_VERSION = '1.0';
 const PRIVACY_VERSION = '1.0';
 
+type RiderPointKind = 'origin' | 'pickup' | 'stopover' | 'dropoff' | 'destination';
+
+type RiderPointOption = {
+  value: string;
+  address: string;
+  kind: RiderPointKind;
+  position: number;
+  estimatedArrivalTime?: string | null;
+};
+
+function toRiderPointKind(waypointType: string): RiderPointKind {
+  if (waypointType === 'PICKUP') return 'pickup';
+  if (waypointType === 'DROPOFF') return 'dropoff';
+  return 'stopover';
+}
+
+function buildRiderPointOptions(ride: RideDetails): RiderPointOption[] {
+  const waypoints = [...(ride.waypoints || [])].sort((a, b) => a.orderIndex - b.orderIndex);
+
+  return [
+    {
+      value: 'origin',
+      address: ride.originAddress,
+      kind: 'origin',
+      position: 0,
+      estimatedArrivalTime: ride.departureTime,
+    },
+    ...waypoints.map((waypoint, index) => ({
+      value: waypoint.id,
+      address: waypoint.address,
+      kind: toRiderPointKind(waypoint.waypointType),
+      position: index + 1,
+      estimatedArrivalTime: waypoint.estimatedArrivalTime ?? null,
+    })),
+    {
+      value: 'destination',
+      address: ride.destinationAddress,
+      kind: 'destination',
+      position: waypoints.length + 1,
+      estimatedArrivalTime: null,
+    },
+  ];
+}
+
 function RideDetailContent() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -60,6 +104,8 @@ function RideDetailContent() {
   const [tosAcceptedForBooking, setTosAcceptedForBooking] = useState(false);
   const [responseExpiryOption, setResponseExpiryOption] = useState<'ONE_HOUR' | 'THREE_HOURS' | 'SIX_HOURS' | 'TWELVE_HOURS' | 'TWENTY_FOUR_HOURS' | 'BEFORE_DEPARTURE'>('BEFORE_DEPARTURE');
   const [requiresChildSeat, setRequiresChildSeat] = useState(false);
+  const [selectedPickupValue, setSelectedPickupValue] = useState('origin');
+  const [selectedDropoffValue, setSelectedDropoffValue] = useState('destination');
 
   // Rider's existing booking for this ride
   const [myBooking, setMyBooking] = useState<Booking | null>(null);
@@ -98,6 +144,12 @@ function RideDetailContent() {
     { value: 'BEFORE_DEPARTURE', label: t('rideDetail.expiryBeforeDeparture') },
   ] as const;
   const allowManualOverride = process.env.NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE === 'true';
+
+  useEffect(() => {
+    if (!ride) return;
+    setSelectedPickupValue(myBooking?.pickupWaypointId || ride.bookingContext?.pickupWaypointId || 'origin');
+    setSelectedDropoffValue(myBooking?.dropoffWaypointId || ride.bookingContext?.dropoffWaypointId || 'destination');
+  }, [ride?.id, ride?.bookingContext?.pickupWaypointId, ride?.bookingContext?.dropoffWaypointId, myBooking?.id, myBooking?.pickupWaypointId, myBooking?.dropoffWaypointId]);
 
   useEffect(() => {
     if (!id) return;
@@ -519,13 +571,14 @@ function RideDetailContent() {
     if (!ride) return;
     setPreviewLoading(true);
     try {
+      const pickupWaypointId = selectedPickupValue !== 'origin' ? selectedPickupValue : undefined;
+      const dropoffWaypointId = selectedDropoffValue !== 'destination' ? selectedDropoffValue : undefined;
       const res = await bookingsApi.pricePreview({
         rideId: ride.id,
         seatsBooked: seats,
         requiresChildSeat,
-        segmentId,
-        pickupWaypointId: ride.bookingContext?.pickupWaypointId || undefined,
-        dropoffWaypointId: ride.bookingContext?.dropoffWaypointId || undefined,
+        pickupWaypointId,
+        dropoffWaypointId,
       });
       setPreview(res.data);
     } catch {
@@ -537,7 +590,7 @@ function RideDetailContent() {
 
   useEffect(() => {
     if (ride) loadPricePreview();
-  }, [ride, seats, requiresChildSeat]);
+  }, [ride, seats, requiresChildSeat, selectedPickupValue, selectedDropoffValue]);
 
   async function confirmStripeBookingPayment(targetBooking: Booking) {
     if (!targetBooking.payment?.clientSecret) return targetBooking;
@@ -600,11 +653,10 @@ function RideDetailContent() {
       }
       const res = await bookingsApi.create({
         rideId: ride.id,
-        segmentId,
         seatsBooked: seats,
         requiresChildSeat,
-        pickupWaypointId: ride.bookingContext?.pickupWaypointId || undefined,
-        dropoffWaypointId: ride.bookingContext?.dropoffWaypointId || undefined,
+        pickupWaypointId: selectedPickupValue !== 'origin' ? selectedPickupValue : undefined,
+        dropoffWaypointId: selectedDropoffValue !== 'destination' ? selectedDropoffValue : undefined,
         responseExpiryOption,
       });
       const createdBooking = res.data;
@@ -719,6 +771,14 @@ function RideDetailContent() {
   const price = ride.segment?.segmentFare ?? ride.basePricePerSeat;
   const previewBreakdown = preview?.priceBreakdown;
   const bookedBreakdown = myBooking?.priceBreakdown;
+  const riderPointOptions = buildRiderPointOptions(ride);
+  const riderPointByValue = new Map(riderPointOptions.map((option) => [option.value, option] as const));
+  const selectedPickupOption = riderPointByValue.get(selectedPickupValue) ?? riderPointOptions[0];
+  const selectedDropoffOption = riderPointByValue.get(selectedDropoffValue) ?? riderPointOptions[riderPointOptions.length - 1];
+  const pickupOptions = riderPointOptions.filter((option) => ['origin', 'pickup', 'stopover'].includes(option.kind));
+  const dropoffOptions = riderPointOptions.filter((option) => ['stopover', 'dropoff', 'destination'].includes(option.kind));
+  const filteredPickupOptions = pickupOptions.filter((option) => option.position < selectedDropoffOption.position);
+  const filteredDropoffOptions = dropoffOptions.filter((option) => option.position > selectedPickupOption.position);
   const isOwnRide = user?.id === ride.driverId;
   const needsTosAcceptance = !user?.tosAcceptedAt || !user?.privacyAcceptedAt;
   const allowRideSimulation = process.env.NEXT_PUBLIC_ALLOW_RIDE_SIMULATION === 'true';
@@ -729,6 +789,40 @@ function RideDetailContent() {
   const disputeEligibleStatuses = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED', 'DISPUTED'];
   const openDispute = myDisputes.find((dispute) => ['OPEN', 'EVIDENCE_COLLECTED', 'NEEDS_MANUAL_REVIEW', 'WAITING_FOR_USER_RESPONSE', 'ESCALATED'].includes(dispute.status));
   const isDriverConfirmedBooking = Boolean(myBooking && !['PENDING', 'PAYMENT_PENDING', 'DRIVER_PENDING', 'PAYMENT_FAILED', 'REJECTED', 'CANCELLED'].includes(myBooking.status));
+
+  function pointKindLabel(kind: RiderPointKind) {
+    if (kind === 'origin') return t('rideDetail.mainDeparture');
+    if (kind === 'pickup') return t('rideDetail.pickupPointType');
+    if (kind === 'stopover') return t('rideDetail.stopoverPointType');
+    if (kind === 'dropoff') return t('rideDetail.dropoffPointType');
+    return t('rideDetail.mainDestination');
+  }
+
+  function handlePickupChange(nextValue: string) {
+    const nextPickup = riderPointByValue.get(nextValue);
+    if (!nextPickup) return;
+    setSelectedPickupValue(nextValue);
+
+    if (selectedDropoffOption.position <= nextPickup.position) {
+      const nextValidDropoff = dropoffOptions.find((option) => option.position > nextPickup.position);
+      if (nextValidDropoff) {
+        setSelectedDropoffValue(nextValidDropoff.value);
+      }
+    }
+  }
+
+  function handleDropoffChange(nextValue: string) {
+    const nextDropoff = riderPointByValue.get(nextValue);
+    if (!nextDropoff) return;
+    setSelectedDropoffValue(nextValue);
+
+    if (selectedPickupOption.position >= nextDropoff.position) {
+      const nextValidPickup = [...pickupOptions].reverse().find((option) => option.position < nextDropoff.position);
+      if (nextValidPickup) {
+        setSelectedPickupValue(nextValidPickup.value);
+      }
+    }
+  }
 
   return (
     <div className="min-h-screen bg-deliivo-cream">
@@ -851,6 +945,56 @@ function RideDetailContent() {
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && (
           <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
             <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
+
+            <div className="rounded-2xl border border-primary-100 bg-primary-50 p-4 space-y-4">
+              <div>
+                <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.yourTripOnThisRide')}</p>
+                <p className="mt-1 text-xs text-deliivo-gray">{t('rideDetail.choosePickupDropoffCopy')}</p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('rideDetail.pickupChoice')}</span>
+                  <select
+                    value={selectedPickupValue}
+                    onChange={(event) => handlePickupChange(event.target.value)}
+                    className="w-full rounded-xl border border-primary-200 bg-white px-3 py-3 text-sm text-deliivo-dark focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
+                  >
+                    {filteredPickupOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {pointKindLabel(option.kind)} - {option.address}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('rideDetail.dropoffChoice')}</span>
+                  <select
+                    value={selectedDropoffValue}
+                    onChange={(event) => handleDropoffChange(event.target.value)}
+                    className="w-full rounded-xl border border-primary-200 bg-white px-3 py-3 text-sm text-deliivo-dark focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
+                  >
+                    {filteredDropoffOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {pointKindLabel(option.kind)} - {option.address}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="rounded-xl border border-primary-100 bg-white px-4 py-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('rideDetail.tripSummary')}</p>
+                <p className="text-sm font-semibold text-deliivo-dark">
+                  {selectedPickupOption.address} - {selectedDropoffOption.address}
+                </p>
+                <div className="grid gap-2 text-xs text-deliivo-gray sm:grid-cols-2">
+                  <p>{t('rideDetail.estimatedPickup')}: {selectedPickupOption.estimatedArrivalTime || ride.departureTime}</p>
+                  <p>{t('rideDetail.estimatedDropoff')}: {selectedDropoffOption.estimatedArrivalTime || t('rideDetail.atDestination')}</p>
+                </div>
+              </div>
+            </div>
 
             {needsTosAcceptance && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
