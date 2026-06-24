@@ -1314,6 +1314,9 @@ function PublishRideWizard() {
       const res = await publishRideApi.computeRoutes();
       const routes = res.data.routes || [];
       const firstPublishableRoute = routes.find((route) => route.isPublishable !== false);
+      if (firstPublishableRoute) {
+        await publishRideApi.selectRoute(firstPublishableRoute.index);
+      }
       setState(prev => ({
         ...prev,
         routes,
