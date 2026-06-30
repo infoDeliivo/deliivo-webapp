@@ -196,6 +196,32 @@ export default function AdminReportsPage() {
 
               <div className="rounded-xl bg-gray-50 p-4">
                 <p className="text-xs font-semibold text-gray-500">Evidence checklist</p>
+                {selectedDispute.evidenceJson && (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <EvidenceSummaryCard
+                      title="Booking timestamps"
+                      rows={[
+                        { label: 'Driver arrived', value: formatEvidenceDate((selectedDispute.evidenceJson as any)?.bookingSnapshot?.driverArrivedAt) },
+                        { label: 'Pickup OTP verified', value: formatEvidenceDate((selectedDispute.evidenceJson as any)?.bookingSnapshot?.pickupOtpVerifiedAt) },
+                        { label: 'Onboarded', value: formatEvidenceDate((selectedDispute.evidenceJson as any)?.bookingSnapshot?.onboardedAt) },
+                        { label: 'Driver drop-off', value: formatEvidenceDate((selectedDispute.evidenceJson as any)?.bookingSnapshot?.dropoffConfirmedAt) },
+                        { label: 'Rider drop-off', value: formatEvidenceDate((selectedDispute.evidenceJson as any)?.bookingSnapshot?.riderDropoffConfirmedAt) },
+                        { label: 'No-show marked', value: formatEvidenceDate((selectedDispute.evidenceJson as any)?.bookingSnapshot?.noShowMarkedAt) },
+                      ]}
+                    />
+                    <EvidenceSummaryCard
+                      title="GPS summary"
+                      rows={[
+                        { label: 'Driver latest', value: formatGpsSummary((selectedDispute.evidenceJson as any)?.driverGps?.latestPosition) },
+                        { label: 'Rider latest', value: formatGpsSummary((selectedDispute.evidenceJson as any)?.riderGps?.latestPosition) },
+                        { label: 'Driver GPS count', value: String((selectedDispute.evidenceJson as any)?.driverGps?.count ?? 0) },
+                        { label: 'Rider GPS count', value: String((selectedDispute.evidenceJson as any)?.riderGps?.count ?? 0) },
+                        { label: 'Ride events', value: String((selectedDispute.evidenceJson as any)?.rideEvents?.length ?? 0) },
+                        { label: 'Manual overrides', value: String((selectedDispute.evidenceJson as any)?.manualOverrides?.count ?? 0) },
+                      ]}
+                    />
+                  </div>
+                )}
                 <div className="mt-3 space-y-2">
                   {renderEvidenceItem('Booking snapshot', Boolean(selectedDispute.evidenceJson), 'Captured booking status, timestamps, and passenger state.')}
                   {renderEvidenceItem('Ride snapshot', Boolean(selectedDispute.evidenceJson), 'Captured ride state, start/end timestamps, and route context.')}
@@ -205,6 +231,20 @@ export default function AdminReportsPage() {
                     (selectedDispute.evidenceJson as any)?.locationHistory?.count > 0
                       ? `${(selectedDispute.evidenceJson as any).locationHistory.count} GPS updates available.`
                       : 'No GPS updates were found.',
+                  )}
+                  {renderEvidenceItem(
+                    'Driver GPS',
+                    Boolean((selectedDispute.evidenceJson as any)?.driverGps?.count > 0),
+                    (selectedDispute.evidenceJson as any)?.driverGps?.count > 0
+                      ? `${(selectedDispute.evidenceJson as any).driverGps.count} driver GPS points captured.`
+                      : 'No driver GPS points were captured.',
+                  )}
+                  {renderEvidenceItem(
+                    'Rider GPS',
+                    Boolean((selectedDispute.evidenceJson as any)?.riderGps?.count > 0),
+                    (selectedDispute.evidenceJson as any)?.riderGps?.count > 0
+                      ? `${(selectedDispute.evidenceJson as any).riderGps.count} rider GPS points captured.`
+                      : 'No rider GPS points were captured.',
                   )}
                   {renderEvidenceItem(
                     'Ride events',
@@ -241,6 +281,20 @@ export default function AdminReportsPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+                {((selectedDispute.evidenceJson as any)?.driverGps || (selectedDispute.evidenceJson as any)?.riderGps) && (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <GpsEvidenceCard
+                      title="Driver GPS trace"
+                      tone="blue"
+                      evidence={(selectedDispute.evidenceJson as any)?.driverGps}
+                    />
+                    <GpsEvidenceCard
+                      title="Rider GPS trace"
+                      tone="green"
+                      evidence={(selectedDispute.evidenceJson as any)?.riderGps}
+                    />
                   </div>
                 )}
                 {Array.isArray((selectedDispute.evidenceJson as any)?.rideEvents) && (selectedDispute.evidenceJson as any).rideEvents.length > 0 && (
@@ -507,6 +561,53 @@ function TimelineStep({
   );
 }
 
+function GpsEvidenceCard({
+  title,
+  tone,
+  evidence,
+}: {
+  title: string;
+  tone: 'blue' | 'green';
+  evidence?: { count?: number; firstUpdate?: { timestamp?: string }; lastUpdate?: { timestamp?: string }; latestPosition?: { lat?: number; lng?: number; timestamp?: string } } | null;
+}) {
+  const palette = tone === 'green'
+    ? {
+        shell: 'border-green-200 bg-green-50',
+        badge: 'bg-green-100 text-green-800',
+        copy: 'text-green-900',
+        meta: 'text-green-700',
+      }
+    : {
+        shell: 'border-blue-200 bg-blue-50',
+        badge: 'bg-blue-100 text-blue-800',
+        copy: 'text-blue-900',
+        meta: 'text-blue-700',
+      };
+
+  const latest = evidence?.latestPosition;
+
+  return (
+    <div className={`rounded-xl border p-3 ${palette.shell}`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className={`text-xs font-semibold ${palette.copy}`}>{title}</p>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${palette.badge}`}>
+          {evidence?.count ?? 0} points
+        </span>
+      </div>
+      <div className={`mt-2 space-y-1 text-[11px] ${palette.meta}`}>
+        <p>First update: {evidence?.firstUpdate?.timestamp ? new Date(evidence.firstUpdate.timestamp).toLocaleString() : 'Not captured'}</p>
+        <p>Last update: {evidence?.lastUpdate?.timestamp ? new Date(evidence.lastUpdate.timestamp).toLocaleString() : 'Not captured'}</p>
+        <p>
+          Latest position:{' '}
+          {latest?.lat != null && latest?.lng != null
+            ? `${Number(latest.lat).toFixed(5)}, ${Number(latest.lng).toFixed(5)}`
+            : 'No coordinates'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function renderEvidenceItem(title: string, success: boolean, description: string) {
   return (
     <div className={`flex items-start gap-3 rounded-xl border px-3 py-2 ${success ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
@@ -517,4 +618,38 @@ function renderEvidenceItem(title: string, success: boolean, description: string
       </div>
     </div>
   );
+}
+
+function EvidenceSummaryCard({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: Array<{ label: string; value: string }>;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-3">
+      <p className="text-xs font-semibold text-gray-700">{title}</p>
+      <div className="mt-2 space-y-2">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-start justify-between gap-3 text-[11px]">
+            <span className="text-gray-500">{row.label}</span>
+            <span className="max-w-[60%] text-right font-medium text-gray-800">{row.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatEvidenceDate(value?: string | null) {
+  if (!value) return 'Not recorded';
+  return new Date(value).toLocaleString();
+}
+
+function formatGpsSummary(position?: { lat?: number; lng?: number; timestamp?: string | null } | null) {
+  if (!position || position.lat == null || position.lng == null) return 'Not recorded';
+  const coords = `${Number(position.lat).toFixed(5)}, ${Number(position.lng).toFixed(5)}`;
+  const time = position.timestamp ? new Date(position.timestamp).toLocaleString() : 'time unknown';
+  return `${coords} at ${time}`;
 }

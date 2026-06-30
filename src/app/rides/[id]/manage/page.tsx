@@ -17,6 +17,7 @@ import {
   KeyRound,
   UserCheck,
   Navigation,
+  Star,
   Trash2,
   TestTube2,
   Sparkles,
@@ -25,11 +26,13 @@ import {
 import ProtectedRoute from '@/components/ProtectedRoute';
 import EmergencySosButton from '@/components/EmergencySosButton';
 import SupportOverrideCard from '@/components/SupportOverrideCard';
-import { driverBookingApi, rideOpsApi, publishRideApi, disputesApi, DriverPublishedRide, DriverRideBooking, getApiErrorMessage } from '@/lib/api';
+import { driverBookingApi, rideOpsApi, publishRideApi, disputesApi, ratingsApi, DriverPublishedRide, DriverRideBooking, getApiErrorMessage } from '@/lib/api';
 import { getSocket, emitSocketEvent, onSocketEvent, LocationUpdate, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
 import { useAuth } from '@/lib/auth-context';
 import { showError, showSuccess } from '@/lib/app-feedback';
 import { useTranslation } from '@/lib/i18n-context';
+import { getRideStatusLabel } from '@/lib/ride-status';
+import { enqueueRecoveryAction, isRecoverableServerFailure } from '@/lib/recovery-outbox';
 
 type RidePhase = 'loading' | 'published' | 'in_progress' | 'completed' | 'cancelled' | 'error';
 
@@ -47,9 +50,15 @@ const [error, setError] = useState('');
   const [rejectReasonPreset, setRejectReasonPreset] = useState('NO_SEATS');
   const [rejectCustomReason, setRejectCustomReason] = useState('');
   const [confirmRideAction, setConfirmRideAction] = useState<null | 'start' | 'finish'>(null);
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const allowRideSimulation = process.env.NEXT_PUBLIC_ALLOW_RIDE_SIMULATION === 'true';
   const allowManualOverride = process.env.NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE === 'true';
   const [devBusy, setDevBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Live location tracking
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -195,6 +204,13 @@ const [error, setError] = useState('');
       await loadData();
       showSuccess(t('manageRide.rideStarted'), t('manageRide.rideStartedCopy'));
     } catch (err: unknown) {
+      if (overrideReason && isRecoverableServerFailure(err)) {
+        enqueueRecoveryAction({ eventType: 'MANUAL_START_RIDE', rideId: id, overrideReason });
+        setPhase('in_progress');
+        setRide((current) => current ? { ...current, status: 'IN_PROGRESS' } : current);
+        showSuccess('Saved offline', 'The manual start is saved on this device and will be reconciled when the server is available.');
+        return;
+      }
       const message = getApiErrorMessage(err, t('manageRide.failedStartRide'));
       setError(message);
       showError(t('manageRide.couldNotStartRide'), message);
@@ -212,6 +228,13 @@ const [error, setError] = useState('');
       await loadData();
       showSuccess(t('manageRide.rideFinished'), t('manageRide.rideFinishedCopy'));
     } catch (err: unknown) {
+      if (overrideReason && isRecoverableServerFailure(err)) {
+        enqueueRecoveryAction({ eventType: 'MANUAL_FINISH_RIDE', rideId: id, overrideReason });
+        setPhase('completed');
+        setRide((current) => current ? { ...current, status: 'COMPLETED' } : current);
+        showSuccess('Saved offline', 'The manual finish is saved on this device and will be reconciled when the server is available.');
+        return;
+      }
       const message = getApiErrorMessage(err, t('manageRide.failedFinishRide'));
       setError(message);
       showError(t('manageRide.couldNotFinishRide'), message);
@@ -323,6 +346,13 @@ const [error, setError] = useState('');
       await loadData();
       showSuccess(t('manageRide.arrivalMarked'), t('manageRide.arrivalMarkedCopy'));
     } catch (err: unknown) {
+      if (overrideReason && isRecoverableServerFailure(err)) {
+        const location = driverLocation || getBookingPoint(booking, 'pickup');
+        enqueueRecoveryAction({ eventType: 'MANUAL_DRIVER_ARRIVED', rideId: id, bookingId, lat: location?.lat, lng: location?.lng, overrideReason });
+        setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'DRIVER_ARRIVED' } : b));
+        showSuccess('Saved offline', 'Driver arrival will be reconciled when the server is available.');
+        return;
+      }
       const message = getApiErrorMessage(err, t('manageRide.failedMarkArrival'));
       setError(message);
       showError(t('manageRide.couldNotMarkArrival'), message);
@@ -433,6 +463,13 @@ const [error, setError] = useState('');
       await loadData();
       showSuccess(t('manageRide.dropoffMarked'), t('manageRide.dropoffMarkedCopy'));
     } catch (err: unknown) {
+      if (overrideReason && isRecoverableServerFailure(err)) {
+        const point = getBookingPoint(booking, 'dropoff');
+        enqueueRecoveryAction({ eventType: 'MANUAL_CONFIRM_DROPOFF', rideId: id, bookingId, lat: point?.lat, lng: point?.lng, overrideReason });
+        setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'DROP_PENDING' } : b));
+        showSuccess('Saved offline', 'Drop-off confirmation will be reconciled when the server is available.');
+        return;
+      }
       const message = getApiErrorMessage(err, t('manageRide.failedConfirmDropoff'));
       setError(message);
       showError(t('manageRide.couldNotConfirmDropoff'), message);
@@ -481,6 +518,16 @@ const [error, setError] = useState('');
   const pickupOtpBookings = confirmedBookings.filter(b => ['WAITING_FOR_PICKUP', 'DRIVER_ARRIVED'].includes(b.status));
   const requestCount = pendingBookings.length;
   const passengerCount = confirmedBookings.length;
+  const departureDate = new Date(ride.departureDate);
+  const [departureHour, departureMinute] = ride.departureTime.split(':').map(Number);
+  const departureAt = Date.UTC(
+    departureDate.getUTCFullYear(),
+    departureDate.getUTCMonth(),
+    departureDate.getUTCDate(),
+    departureHour,
+    departureMinute,
+  );
+  const startWindowOpen = allowRideSimulation || clockNow >= departureAt - 10 * 60 * 1000;
 
   return (
     <div className="min-h-screen bg-deliivo-cream">
@@ -694,7 +741,7 @@ const [error, setError] = useState('');
               <button
                 type="button"
                 onClick={handleStartRide}
-                disabled={actionLoading === 'start'}
+                disabled={actionLoading === 'start' || !startWindowOpen}
                 className="btn-primary w-full py-3 text-base gap-2 disabled:opacity-60"
               >
                 {actionLoading === 'start' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-5 w-5" />}
@@ -710,6 +757,11 @@ const [error, setError] = useState('');
                 {t('manageRide.cancelRide')}
               </button>
             </div>
+            {!startWindowOpen && (
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Start becomes available 10 minutes before departure. Mock environments must set both `ALLOW_RIDE_SIMULATION=true` and `NEXT_PUBLIC_ALLOW_RIDE_SIMULATION=true`.
+              </p>
+            )}
           </div>
         )}
 
@@ -836,7 +888,7 @@ const [error, setError] = useState('');
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" onClick={handleManualStartRide} disabled={!allowManualOverride} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
+                <button type="button" onClick={handleManualStartRide} disabled={!allowManualOverride || !startWindowOpen} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
                   Manual start ride
                 </button>
                 <button
@@ -851,6 +903,12 @@ const [error, setError] = useState('');
                       await rideOpsApi.verifyPickupOtp(target.id, '000000', overrideReason || undefined);
                       await loadData();
                     } catch (err: unknown) {
+                      if (isRecoverableServerFailure(err)) {
+                        enqueueRecoveryAction({ eventType: 'MANUAL_PICKUP_APPROVAL', rideId: id, bookingId: target.id, overrideReason: overrideReason || 'Manual pickup approval' });
+                        setBookings(prev => prev.map(booking => booking.id === target.id ? { ...booking, status: 'ONBOARD' } : booking));
+                        showSuccess('Saved offline', 'Pickup approval will be reconciled when the server is available.');
+                        return;
+                      }
                       const message = getApiErrorMessage(err, t('manageRide.failedSimulatePickup'));
                       setError(message);
                       showError(t('manageRide.couldNotAcceptRequest'), message);
@@ -1018,7 +1076,7 @@ function BookingRequestCard({
   loading: boolean;
 }) {
   const { t } = useTranslation();
-  const statusLabel = booking.displayStatus || booking.status;
+  const statusLabel = getRideStatusLabel(booking.status, t);
   const deadlineLabel = booking.decisionDeadline && !booking.decisionDeadline.isExpired
     ? formatCountdown(booking.decisionDeadline.timeRemainingSeconds, t)
     : null;
@@ -1093,6 +1151,11 @@ function PassengerCard({
   dropoffLoading: boolean;
 }) {
   const { t } = useTranslation();
+  const [ratingStars, setRatingStars] = useState(0);
+  const [ratingText, setRatingText] = useState('');
+  const [ratingLoading, setRatingLoading] = useState(false);
+  const [ratingSubmitted, setRatingSubmitted] = useState(Boolean(booking.hasDriverRatedPassenger));
+  const canRatePassenger = ['COMPLETED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP'].includes(booking.status);
   const statusLabel: Record<string, string> = {
     CONFIRMED: t('rides.confirmed'),
     ACCEPTED: t('rides.accepted'),
@@ -1104,6 +1167,10 @@ function PassengerCard({
     DRIVER_MISSED_PICKUP: t('rides.missedPickup'),
     COMPLETED: t('rides.completed'),
   };
+
+  useEffect(() => {
+    setRatingSubmitted(Boolean(booking.hasDriverRatedPassenger));
+  }, [booking.hasDriverRatedPassenger]);
 
   return (
     <>
@@ -1182,6 +1249,62 @@ function PassengerCard({
           {reportLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertCircle className="h-3.5 w-3.5" />}
           {t('rideDetail.reportIssue')}
         </button>
+      </div>
+    )}
+
+    {canRatePassenger && (
+      <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
+        <p className="text-sm font-semibold text-deliivo-dark">Rate rider</p>
+        <p className="mt-1 text-xs text-deliivo-gray">
+          Share a driver-side rating for this rider after the ride outcome is known.
+        </p>
+        {ratingSubmitted ? (
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-700">
+            <CheckCircle className="h-4 w-4" />
+            Rider rating submitted.
+          </div>
+        ) : (
+          <>
+            <div className="mt-3 flex gap-1">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button key={value} type="button" onClick={() => setRatingStars(value)} aria-label={`Rate rider ${value} star${value > 1 ? 's' : ''}`}>
+                  <Star className={`h-6 w-6 ${value <= ratingStars ? 'fill-[#F97316] text-[#F97316]' : 'text-gray-300'}`} />
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={ratingText}
+              onChange={(event) => setRatingText(event.target.value)}
+              placeholder="Optional feedback for the rider"
+              rows={2}
+              className="mt-3 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20 resize-none"
+            />
+            <button
+              type="button"
+              disabled={ratingStars === 0 || ratingLoading}
+              onClick={async () => {
+                setRatingLoading(true);
+                try {
+                  await ratingsApi.submitRating(booking.id, ratingStars, ratingText.trim() || undefined);
+                  setRatingSubmitted(true);
+                  showSuccess('Rider rating submitted', 'The rider profile rating has been updated.');
+                } catch (err: unknown) {
+                  const message = getApiErrorMessage(err, 'Could not submit rider rating');
+                  if (message.toLowerCase().includes('already submitted')) {
+                    setRatingSubmitted(true);
+                  }
+                  showError('Rating failed', message);
+                } finally {
+                  setRatingLoading(false);
+                }
+              }}
+              className="mt-3 inline-flex items-center gap-2 rounded-full bg-deliivo-orange px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
+            >
+              {ratingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Star className="h-3.5 w-3.5" />}
+              Submit rider rating
+            </button>
+          </>
+        )}
       </div>
     )}
     </>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { BadgeDollarSign, Loader2, Plus, RefreshCw, Save, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Euro, Loader2, Plus, RefreshCw, Save, ToggleLeft, ToggleRight } from 'lucide-react';
 import LoadFailureCard from '@/components/LoadFailureCard';
 import { adminApi, AdminPricingConfig, getApiErrorMessage } from '@/lib/api';
 
@@ -187,7 +187,7 @@ export default function AdminPricingPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="xl:col-span-2 rounded-2xl bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2">
-            <BadgeDollarSign className="h-4 w-4 text-[#F97316]" />
+            <Euro className="h-4 w-4 text-[#F97316]" />
             <h2 className="text-sm font-semibold text-gray-900">Config list</h2>
           </div>
           <div className="mt-4 space-y-3">
@@ -240,7 +240,10 @@ export default function AdminPricingPage() {
           </div>
           <div className="mt-4 space-y-3">
             <Field label="Region code" value={form.regionCode} onChange={(value) => setForm((prev) => ({ ...prev, regionCode: value }))} />
-            <Field label="Currency" value={form.currency} onChange={(value) => setForm((prev) => ({ ...prev, currency: value }))} />
+            <div>
+              <p className="text-xs font-semibold text-gray-600">Currency</p>
+              <div className="mt-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700">EUR</div>
+            </div>
             <Field label="Min rate / km" type="number" value={form.minRatePerKm} onChange={(value) => setForm((prev) => ({ ...prev, minRatePerKm: value }))} />
             <Field label="Recommended rate / km" type="number" value={form.recommendedRatePerKm} onChange={(value) => setForm((prev) => ({ ...prev, recommendedRatePerKm: value }))} />
             <Field label="Max rate / km" type="number" value={form.maxRatePerKm} onChange={(value) => setForm((prev) => ({ ...prev, maxRatePerKm: value }))} />

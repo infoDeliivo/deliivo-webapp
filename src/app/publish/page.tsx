@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n-context";
 import {
   MapPin,
   Calendar,
   Users,
-  DollarSign,
+  Euro,
   CheckCircle,
   Plus,
   Minus,
@@ -24,7 +25,6 @@ import {
   ExternalLink,
   CigaretteOff,
   Bike,
-  Baby,
 } from "lucide-react";
 import StepIndicator from "@/components/StepIndicator";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -75,6 +75,7 @@ interface WizardState {
   backSeatOnly: boolean;
   femaleOnly: boolean;
   noSmoking: boolean;
+  alcoholFreeRide: boolean;
   noBicycles: boolean;
   childSeatAvailable: boolean;
   vehicleId: string;
@@ -88,11 +89,22 @@ interface WizardState {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const TOTAL_STEPS = 6;
-const LOCAL_DRAFT_KEY = 'deliivo_publish_wizard_snapshot_v1';
 const MAX_ROUTE_PICKUP_POINTS = 3;
 const MAX_ORIGIN_PICKUPS = 3;
 const MAX_DESTINATION_DROPOFFS = 3;
 const MAX_STOPOVERS = 3;
+const CITY_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_CITY_POINT_RADIUS_KM || '15');
+const STOPOVER_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_STOPOVER_POINT_RADIUS_KM || '5');
+
+function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const toRad = (value: number) => value * Math.PI / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const value = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
 
 // ─── Helper: calendar grid ────────────────────────────────────────────────────
 
@@ -343,6 +355,8 @@ function StepStopovers({
   const [pickupInputKey, setPickupInputKey] = useState(0);
   const [dropoffInputKey, setDropoffInputKey] = useState(0);
   const [stopoverInputKey, setStopoverInputKey] = useState(0);
+  const [activePointSection, setActivePointSection] = useState<'pickups' | 'stopovers' | 'dropoffs'>('pickups');
+  const [pointError, setPointError] = useState('');
 
   const selectedPolyline = state.selectedRouteIndex !== null ? state.routes[state.selectedRouteIndex]?.polyline : undefined;
 
@@ -359,12 +373,18 @@ function StepStopovers({
     }
   }, [loadedStopoverSuggestions]);
 
-  function toLocationInput(place: PlaceSelection): LocationInput {
+  function toLocationInput(place: PlaceSelection, parent?: PlaceSelection | StopoverSuggestion | null): LocationInput {
     return {
       placeId: place.placeId,
       address: place.address,
       lat: place.lat,
       lng: place.lng,
+      ...(parent ? {
+        parentPlaceId: parent.placeId,
+        parentAddress: parent.address,
+        parentLat: parent.lat,
+        parentLng: parent.lng,
+      } : {}),
     };
   }
 
@@ -375,6 +395,7 @@ function StepStopovers({
     clearDraft: () => void,
   ) {
     if (!place) return;
+    setPointError('');
     const selected = state[key];
     const exists = selected.some((item) => item.placeId === place.placeId);
     if (exists) {
@@ -386,7 +407,19 @@ function StepStopovers({
       return;
     }
 
-    onChange({ [key]: [...selected, toLocationInput(place)] } as Partial<WizardState>);
+    const parent = key === 'pickups' ? state.origin : key === 'dropoffs' ? state.destination : selectedStopoverSuggestion;
+    if (!parent) {
+      setPointError('Select the related city or stopover before adding this point.');
+      return;
+    }
+    const limitKm = key === 'stopovers' ? STOPOVER_POINT_RADIUS_KM : CITY_POINT_RADIUS_KM;
+    const selectedDistanceKm = distanceKm(parent, place);
+    if (selectedDistanceKm > limitKm) {
+      setPointError(`This point is ${selectedDistanceKm.toFixed(1)} km away. Choose a point within ${limitKm} km of ${parent.address.split(',')[0]}.`);
+      return;
+    }
+
+    onChange({ [key]: [...selected, toLocationInput(place, parent)] } as Partial<WizardState>);
     clearDraft();
   }
 
@@ -415,13 +448,16 @@ function StepStopovers({
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-deliivo-dark">{item.address}</p>
+              {item.parentAddress && (
+                <p className="truncate text-xs text-deliivo-gray">Near {item.parentAddress.split(',')[0]}</p>
+              )}
             </div>
             <button
               type="button"
               onClick={() => removeSelection(key, item.placeId)}
-              className="rounded-full p-1 text-deliivo-gray transition-colors hover:bg-red-50 hover:text-red-500"
+              className="rounded-full px-3 py-1 text-xs font-medium text-deliivo-gray transition-colors hover:bg-red-50 hover:text-red-600"
             >
-              <Minus className="h-4 w-4" />
+              Remove
             </button>
           </div>
         ))}
@@ -453,16 +489,89 @@ function StepStopovers({
     );
   }
 
+  const pointSections = [
+    { key: 'pickups' as const, label: t('publish.pickup'), count: state.pickups.length, max: MAX_ORIGIN_PICKUPS },
+    { key: 'stopovers' as const, label: t('publish.stopover'), count: state.stopovers.length, max: MAX_STOPOVERS },
+    { key: 'dropoffs' as const, label: t('publish.dropoff'), count: state.dropoffs.length, max: MAX_DESTINATION_DROPOFFS },
+  ];
+  const activeSectionIndex = pointSections.findIndex((section) => section.key === activePointSection);
+
+  function movePointSection(direction: -1 | 1) {
+    const nextIndex = Math.min(pointSections.length - 1, Math.max(0, activeSectionIndex + direction));
+    setActivePointSection(pointSections[nextIndex].key);
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
-        <h2 className="text-xl font-bold text-deliivo-dark">{t('publish.addRoutePoints')}</h2>
-        <p className="mt-1 text-sm text-deliivo-gray">{t('publish.routePointsCopy')}</p>
+        <h2 className="text-xl font-bold text-deliivo-dark">Choose rider meeting points</h2>
+        <p className="mt-1 text-sm text-deliivo-gray">Optional points riders can choose when booking.</p>
       </div>
 
-      <div className="rounded-2xl border border-primary-100 bg-primary-50 p-4">
+      <div className="hidden">
         <p className="text-sm font-semibold text-deliivo-dark">{t('publish.routePointFlowTitle')}</p>
         <p className="mt-1 text-xs leading-5 text-deliivo-gray">{t('publish.routePointFlowCopy')}</p>
+      </div>
+
+      <div className="hidden">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+            <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
+            Start area pickups
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+            <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+            In-route stopovers
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+            <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+            Destination drop-offs
+          </span>
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <div className="rounded-2xl bg-gray-50 px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">Route order</p>
+            <div className="mt-3 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700">1</div>
+                <div>
+                  <p className="text-sm font-semibold text-deliivo-dark">{t('publish.originPickupPoints')}</p>
+                  <p className="text-xs text-deliivo-gray">Choose where riders can join near the starting area.</p>
+                </div>
+              </div>
+              <div className="ml-3 h-6 w-0.5 bg-gray-200" />
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">2</div>
+                <div>
+                  <p className="text-sm font-semibold text-deliivo-dark">{t('publish.stopoverPoints')}</p>
+                  <p className="text-xs text-deliivo-gray">Add only route stops that sit between origin and destination.</p>
+                </div>
+              </div>
+              <div className="ml-3 h-6 w-0.5 bg-gray-200" />
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700">3</div>
+                <div>
+                  <p className="text-sm font-semibold text-deliivo-dark">{t('publish.destinationDropoffPoints')}</p>
+                  <p className="text-xs text-deliivo-gray">Finish with exact points where riders can leave near the destination.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">Current route structure</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-deliivo-dark">
+              <span className="rounded-full bg-green-50 px-3 py-1 font-medium">{state.origin?.address?.split(',')[0] || 'Origin'}</span>
+              <span className="text-deliivo-gray">→</span>
+              <span className="rounded-full bg-blue-50 px-3 py-1 font-medium">{state.stopovers.length > 0 ? `${state.stopovers.length} stopover point${state.stopovers.length === 1 ? '' : 's'}` : 'No stopover selected'}</span>
+              <span className="text-deliivo-gray">→</span>
+              <span className="rounded-full bg-red-50 px-3 py-1 font-medium">{state.destination?.address?.split(',')[0] || 'Destination'}</span>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-deliivo-gray">
+              Riders will see these points as structured boarding and drop-off choices, so keep them tied to the real route instead of adding unrelated places.
+            </p>
+          </div>
+        </div>
       </div>
 
       {selectedPolyline && (
@@ -475,18 +584,40 @@ function StepStopovers({
             ...state.dropoffs.map(s => ({ lat: s.lat, lng: s.lng, color: 'red' as const })),
             ...state.stopovers.map(s => ({ lat: s.lat, lng: s.lng, color: 'blue' as const })),
           ]}
-          className="h-48 w-full rounded-2xl"
+          className="h-40 w-full rounded-2xl"
         />
       )}
 
-      <div className="space-y-6">
-        <section className="space-y-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+      <div className="grid grid-cols-3 gap-2 rounded-2xl bg-gray-100 p-1.5">
+        {pointSections.map((section, index) => (
+          <button
+            key={section.key}
+            type="button"
+            onClick={() => setActivePointSection(section.key)}
+            className={`rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors ${activePointSection === section.key ? 'bg-white text-deliivo-dark shadow-sm' : 'text-deliivo-gray hover:text-deliivo-dark'}`}
+          >
+            <span className="block">{index + 1}. {section.label}</span>
+            <span className="mt-0.5 block text-[11px] font-medium text-deliivo-orange">{section.count}/{section.max}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+        {pointError && (
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {pointError}
+          </div>
+        )}
+        <section className={`${activePointSection === 'pickups' ? '' : 'hidden'} space-y-3`}>
           {renderStepHeader(
             '1',
             t('publish.originPickupPoints'),
             t('publish.originPickupSearchCopy', { count: MAX_ORIGIN_PICKUPS }),
             t('publish.selectedCount', { count: state.pickups.length, max: MAX_ORIGIN_PICKUPS }),
           )}
+          <div className="rounded-xl bg-green-50 px-3 py-2 text-xs text-green-800">
+            <span className="font-semibold">Origin:</span> {state.origin?.address || 'Not selected'} · within {CITY_POINT_RADIUS_KM} km
+          </div>
           {state.pickups.length < MAX_ORIGIN_PICKUPS && (
             <div className="space-y-3">
               <PlaceInput
@@ -505,20 +636,23 @@ function StepStopovers({
                 disabled={!pickupDraft}
                 className="btn-secondary w-full justify-center py-3 disabled:opacity-50"
               >
-                <Plus className="h-4 w-4" /> {t('publish.addPickup')}
+                {t('publish.addPickup')}
               </button>
             </div>
           )}
           {renderSelectedList(state.pickups, 'pickups', t('publish.noPickupPointsSelected'))}
         </section>
 
-        <section className="space-y-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+        <section className={`${activePointSection === 'stopovers' ? '' : 'hidden'} space-y-3`}>
           {renderStepHeader(
             '2',
             t('publish.stopoverPoints'),
             t('publish.stopoverSearchCopy', { count: MAX_STOPOVERS }),
             t('publish.selectedCount', { count: state.stopovers.length, max: MAX_STOPOVERS }),
           )}
+          <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-800">
+            <span className="font-semibold">Selected stopover:</span> {selectedStopoverSuggestion?.address || 'Choose a suggested stopover below'} · within {STOPOVER_POINT_RADIUS_KM} km
+          </div>
           {loadingStopoverSuggestions ? (
             <div className="flex items-center gap-2 py-2 text-sm text-deliivo-gray">
               <Loader2 className="h-4 w-4 animate-spin text-deliivo-orange" />
@@ -526,10 +660,10 @@ function StepStopovers({
             </div>
           ) : stopoverSuggestions.length > 0 ? (
             <div className="space-y-2">
-              <div className="rounded-xl border border-dashed border-primary-200 bg-primary-50/70 p-3">
+              <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.suggestedStopovers')}</p>
-                <p className="mt-1 text-xs text-deliivo-gray">{t('publish.chooseStopoverBeforeSearch')}</p>
               </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
               {stopoverSuggestions.map((suggestion) => {
                 const selected = selectedStopoverSuggestion?.placeId === suggestion.placeId;
                 return (
@@ -537,7 +671,7 @@ function StepStopovers({
                     key={suggestion.placeId}
                     type="button"
                     onClick={() => setSelectedStopoverSuggestion(suggestion)}
-                    className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
+                    className={`flex min-w-44 shrink-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${
                       selected
                         ? 'border-deliivo-orange bg-deliivo-orange-light'
                         : 'border-gray-100 bg-white hover:border-primary-200'
@@ -554,6 +688,7 @@ function StepStopovers({
                   </button>
                 );
               })}
+              </div>
             </div>
           ) : (
             <p className="text-xs text-deliivo-gray">{t('publish.noSuggestedStopovers')}</p>
@@ -582,20 +717,23 @@ function StepStopovers({
                 disabled={!stopoverDraft || !selectedStopoverSuggestion}
                 className="btn-secondary w-full justify-center py-3 disabled:opacity-50"
               >
-                <Plus className="h-4 w-4" /> {t('publish.addStopover')}
+                {t('publish.addStopover')}
               </button>
             </div>
           )}
           {renderSelectedList(state.stopovers, 'stopovers', t('publish.noStopoverSelected'))}
         </section>
 
-        <section className="space-y-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+        <section className={`${activePointSection === 'dropoffs' ? '' : 'hidden'} space-y-3`}>
           {renderStepHeader(
             '3',
             t('publish.destinationDropoffPoints'),
             t('publish.destinationDropoffSearchCopy', { count: MAX_DESTINATION_DROPOFFS }),
             t('publish.selectedCount', { count: state.dropoffs.length, max: MAX_DESTINATION_DROPOFFS }),
           )}
+          <div className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-800">
+            <span className="font-semibold">Destination:</span> {state.destination?.address || 'Not selected'} · within {CITY_POINT_RADIUS_KM} km
+          </div>
           {state.dropoffs.length < MAX_DESTINATION_DROPOFFS && (
             <div className="space-y-3">
               <PlaceInput
@@ -614,35 +752,62 @@ function StepStopovers({
                 disabled={!dropoffDraft}
                 className="btn-secondary w-full justify-center py-3 disabled:opacity-50"
               >
-                <Plus className="h-4 w-4" /> {t('publish.addDropoff')}
+                {t('publish.addDropoff')}
               </button>
             </div>
           )}
           {renderSelectedList(state.dropoffs, 'dropoffs', t('publish.noDropoffPointsSelected'))}
         </section>
+
+        <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
+          <button type="button" onClick={() => movePointSection(-1)} disabled={activeSectionIndex === 0} className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-deliivo-gray hover:bg-gray-50 disabled:opacity-30">
+            <ChevronLeft className="h-4 w-4" /> Previous
+          </button>
+          <span className="text-xs text-deliivo-gray">{activeSectionIndex + 1} of {pointSections.length}</span>
+          <button type="button" onClick={() => movePointSection(1)} disabled={activeSectionIndex === pointSections.length - 1} className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-deliivo-orange hover:bg-orange-50 disabled:opacity-30">
+            Next <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {(state.pickups.length > 0 || state.stopovers.length > 0 || state.dropoffs.length > 0) && (
-        <div className="rounded-2xl border border-primary-100 bg-primary-50 p-4">
-          <p className="text-sm font-semibold text-deliivo-dark mb-2">{t('publish.selectedRoutePoints')}</p>
-          {state.pickups.map((item, index) => (
-            <div key={`pickup-${item.placeId}`} className="flex items-center gap-2 text-sm text-deliivo-dark">
-              <span className="text-xs font-bold text-deliivo-orange">{index + 1}.</span>
-              <span className="truncate">{t('publish.pickup')}: {item.address}</span>
+        <div className="hidden">
+          <p className="text-sm font-semibold text-deliivo-dark mb-3">{t('publish.selectedRoutePoints')}</p>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl bg-white/80 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-green-700">{t('publish.originPickupPoints')}</p>
+              <div className="mt-2 space-y-2">
+                {state.pickups.length > 0 ? state.pickups.map((item, index) => (
+                  <div key={`pickup-${item.placeId}`} className="flex items-start gap-2 text-sm text-deliivo-dark">
+                    <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-[11px] font-bold text-green-700">{index + 1}</span>
+                    <span className="min-w-0 flex-1 break-words">{item.address}</span>
+                  </div>
+                )) : <p className="text-xs text-deliivo-gray">{t('publish.noPickupPointsSelected')}</p>}
+              </div>
             </div>
-          ))}
-          {state.stopovers.map((item, index) => (
-            <div key={`stopover-${item.placeId}`} className="flex items-center gap-2 text-sm text-deliivo-dark">
-              <span className="text-xs font-bold text-deliivo-orange">{index + 1}.</span>
-              <span className="truncate">{t('publish.stopover')}: {item.address}</span>
+            <div className="rounded-xl bg-white/80 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">{t('publish.stopoverPoints')}</p>
+              <div className="mt-2 space-y-2">
+                {state.stopovers.length > 0 ? state.stopovers.map((item, index) => (
+                  <div key={`stopover-${item.placeId}`} className="flex items-start gap-2 text-sm text-deliivo-dark">
+                    <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">{index + 1}</span>
+                    <span className="min-w-0 flex-1 break-words">{item.address}</span>
+                  </div>
+                )) : <p className="text-xs text-deliivo-gray">{t('publish.noStopoverSelected')}</p>}
+              </div>
             </div>
-          ))}
-          {state.dropoffs.map((item, index) => (
-            <div key={`dropoff-${item.placeId}`} className="flex items-center gap-2 text-sm text-deliivo-dark">
-              <span className="text-xs font-bold text-deliivo-orange">{index + 1}.</span>
-              <span className="truncate">{t('publish.dropoff')}: {item.address}</span>
+            <div className="rounded-xl bg-white/80 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-red-700">{t('publish.destinationDropoffPoints')}</p>
+              <div className="mt-2 space-y-2">
+                {state.dropoffs.length > 0 ? state.dropoffs.map((item, index) => (
+                  <div key={`dropoff-${item.placeId}`} className="flex items-start gap-2 text-sm text-deliivo-dark">
+                    <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-[11px] font-bold text-red-700">{index + 1}</span>
+                    <span className="min-w-0 flex-1 break-words">{item.address}</span>
+                  </div>
+                )) : <p className="text-xs text-deliivo-gray">{t('publish.noDropoffPointsSelected')}</p>}
+              </div>
             </div>
-          ))}
+          </div>
         </div>
       )}
     </div>
@@ -694,7 +859,7 @@ function StepDateTime({
   const todayYear = today.getFullYear();
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
-  const minutes = [0, 15, 30, 45];
+  const minutes = Array.from({ length: 60 }, (_, index) => index);
   const monthLabel = new Intl.DateTimeFormat(locale, { month: 'long' }).format(new Date(viewYear, viewMonth, 1));
   const dayFormatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
   const dayLabels = Array.from({ length: 7 }, (_, index) => {
@@ -844,52 +1009,74 @@ function StepSeats({
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="flex flex-col gap-6">
+      <div className="order-1">
         <h2 className="text-xl font-bold text-deliivo-dark">{t('publish.offerSeats')}</h2>
         <p className="mt-1 text-sm text-deliivo-gray">{t('publish.configureSeats')}</p>
       </div>
 
-      <div className="space-y-3">
+      <div className="order-3 space-y-3">
         {counter(t('publish.passengers'), state.seats, 1, 8, () => onChange({ seats: state.seats + 1 }), () => onChange({ seats: state.seats - 1 }), t('publish.seatsAvailableForRiders'))}
         {counter(t('publish.maxLuggage'), state.maxLuggage, 0, 3, () => onChange({ maxLuggage: state.maxLuggage + 1 }), () => onChange({ maxLuggage: state.maxLuggage - 1 }), luggageLabels[state.maxLuggage])}
       </div>
 
       {/* Vehicle display */}
+      <div className="order-2">
       {vehiclesLoading ? (
         <div className="flex items-center gap-2 text-sm text-deliivo-gray"><Loader2 className="h-4 w-4 animate-spin" /> {t('publish.loadingVehicles')}</div>
       ) : vehicles.length > 0 ? (
         <div>
-          <p className="text-sm font-semibold text-deliivo-dark mb-2">{t('publish.yourVehicle')}</p>
-          <div className="flex items-center gap-3 rounded-2xl border border-deliivo-orange bg-deliivo-orange-light px-4 py-3">
-            <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
-              {vehicles[0].imageUrl ? <img src={vehicles[0].imageUrl} alt="" className="w-10 h-10 rounded-xl object-cover" /> : <Luggage className="w-5 h-5 text-gray-400" />}
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-deliivo-dark">{t('publish.yourVehicle')}</p>
+            <Link href="/profile/vehicle" className="text-xs font-semibold text-deliivo-orange underline underline-offset-2 hover:text-deliivo-orange-dark">
+              Manage vehicles
+            </Link>
+          </div>
+          <div className="rounded-2xl border border-deliivo-orange bg-deliivo-orange-light px-4 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+                {vehicles[0].imageUrl ? <img src={vehicles[0].imageUrl} alt="" className="w-12 h-12 rounded-xl object-cover" /> : <Luggage className="w-5 h-5 text-gray-400" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-medium text-deliivo-dark">{[vehicles[0].brand, vehicles[0].model_name].filter(Boolean).join(' ') || t('publish.vehicleFallback')}</p>
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${vehicles[0].isVerified ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                    {vehicles[0].isVerified ? 'Verified vehicle' : 'Not verified yet'}
+                  </span>
+                </div>
+                <p className="text-xs text-deliivo-gray">{[vehicles[0].color, vehicles[0].year].filter(Boolean).join(' · ')}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-deliivo-dark">{[vehicles[0].brand, vehicles[0].model_name].filter(Boolean).join(' ') || t('publish.vehicleFallback')}</p>
-              <p className="text-xs text-deliivo-gray">{[vehicles[0].color, vehicles[0].year].filter(Boolean).join(' · ')}</p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-deliivo-gray">
+              <span className="rounded-full bg-white/80 px-3 py-1">{vehicles.length} saved vehicle{vehicles.length === 1 ? '' : 's'}</span>
+              <span className="rounded-full bg-white/80 px-3 py-1">Publish flow attaches your saved vehicle automatically</span>
             </div>
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3">
-          <p className="text-xs text-yellow-700">{t('publish.noVehicleFound')} <a href="/profile/vehicle" className="font-semibold underline">{t('publish.addOne')}</a> {t('publish.forBetterVisibility')}</p>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+          <p className="text-sm font-semibold text-amber-950">{t('publish.noVehicleFound')}</p>
+          <p className="mt-1 text-xs text-amber-800">Add a vehicle before setting seats and ride preferences.</p>
+          <Link href="/profile/vehicle" className="mt-3 inline-flex rounded-full bg-deliivo-orange px-4 py-2 text-sm font-semibold text-white hover:bg-deliivo-orange-dark">
+            {t('profile.addVehicle')}
+          </Link>
         </div>
       )}
+      </div>
 
-      <div className="space-y-3">
-        {toggle(
+      <div className="order-4 space-y-3">
+        {userGender === 'FEMALE' && toggle(
           t('publish.womenOnly'),
           state.femaleOnly,
           () => {
-            if (userGender !== 'FEMALE') return;
             onChange({ femaleOnly: !state.femaleOnly });
           },
-          userGender === 'FEMALE' ? t('publish.womenOnlyCopy') : 'Available only to female drivers with a female profile gender.'
+          t('publish.womenOnlyCopy')
         )}
         {toggle(t('publish.noSmoking'), state.noSmoking, () => onChange({ noSmoking: !state.noSmoking }), t('publish.noSmokingCopy'))}
-        {toggle(t('publish.noBicycles'), state.noBicycles, () => onChange({ noBicycles: !state.noBicycles }), t('publish.noBicyclesCopy'))}
+        {toggle(t('publish.alcoholFreeRide'), state.alcoholFreeRide, () => onChange({ alcoholFreeRide: !state.alcoholFreeRide }), t('publish.alcoholFreeRideCopy'))}
         {toggle(t('publish.childSeatAvailable'), state.childSeatAvailable, () => onChange({ childSeatAvailable: !state.childSeatAvailable }), t('publish.childSeatAvailableCopy'))}
+        {toggle(t('publish.noBicycles'), state.noBicycles, () => onChange({ noBicycles: !state.noBicycles }), t('publish.noBicyclesCopy'))}
       </div>
     </div>
   );
@@ -906,8 +1093,13 @@ function StepPrice({
   onChange: (patch: Partial<WizardState>) => void;
   loading: boolean;
 }) {
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
   const rec = state.recommendation;
+  const currency = rec?.currency || 'EUR';
+  const grossFullRideFare = state.basePricePerSeat * state.seats;
+  const recommendationAdjusted = Boolean(
+    rec && Math.abs(rec.breakdown.estimatedRouteCost - rec.recommendedPrice) >= 0.01
+  );
 
   return (
     <div className="space-y-6">
@@ -922,20 +1114,52 @@ function StepPrice({
           <span className="ml-2 text-sm text-deliivo-gray">{t('publish.calculatingRecommendedPrice')}</span>
         </div>
       ) : rec ? (
-        <div className="rounded-2xl bg-primary-50 border border-primary-100 p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-deliivo-orange" />
-            <span className="text-sm font-semibold text-deliivo-dark">{t('publish.recommended', { currency: rec.currency, price: rec.recommendedPrice.toFixed(2) })}</span>
+        <div className="overflow-hidden rounded-2xl border border-primary-100 bg-primary-50">
+          <div className="flex items-start justify-between gap-4 border-b border-primary-100 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Euro className="h-5 w-5 shrink-0 text-deliivo-orange" />
+              <div>
+                <p className="text-sm font-semibold text-deliivo-dark">{t('publish.distanceBasedRecommendation')}</p>
+                <p className="text-xs text-deliivo-gray">{t('publish.driverPricingGuidance')}</p>
+              </div>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-lg font-bold text-deliivo-orange">{rec.currency} {rec.recommendedPrice.toFixed(2)}</p>
+              <p className="text-xs text-deliivo-gray">{t('publish.perSeat')}</p>
+            </div>
           </div>
-          <p className="text-xs text-deliivo-gray">
-            {t('publish.basedOnDistance', { distance: rec.breakdown.distanceKm.toFixed(1), currency: rec.currency, minPrice: rec.minPrice.toFixed(2), maxPrice: rec.maxPrice.toFixed(2) })}
-          </p>
+          <div className="space-y-2 px-4 py-3 text-sm">
+            <div className="flex justify-between gap-4">
+              <span className="text-deliivo-gray">{t('publish.routeDistance')}</span>
+              <span className="font-medium text-deliivo-dark">{rec.breakdown.distanceKm.toFixed(1)} km</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-deliivo-gray">{t('publish.distanceRate')}</span>
+              <span className="font-medium text-deliivo-dark">{rec.currency} {rec.breakdown.pricePerKm.toFixed(2)}/km</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-deliivo-gray">{t('publish.distanceEstimate')}</span>
+              <span className="font-medium text-deliivo-dark">{rec.currency} {rec.breakdown.estimatedRouteCost.toFixed(2)}</span>
+            </div>
+            {recommendationAdjusted && (
+              <p className="rounded-lg bg-white/70 px-3 py-2 text-xs text-deliivo-gray">
+                {t('publish.pricingAdjustmentApplied')}
+              </p>
+            )}
+            <div className="flex justify-between gap-4 border-t border-primary-100 pt-2">
+              <span className="text-deliivo-gray">{t('publish.guidanceRange')}</span>
+              <span className="font-semibold text-deliivo-dark">{rec.currency} {rec.minPrice.toFixed(2)} - {rec.maxPrice.toFixed(2)}</span>
+            </div>
+            {rec.breakdown.pricingConfigFallback && (
+              <p className="text-xs text-amber-700">{t('publish.fallbackPricing')}</p>
+            )}
+          </div>
         </div>
       ) : null}
 
       {/* Price input */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-        <label className="mb-2 block text-sm font-semibold text-deliivo-dark">{t('publish.pricePerSeat', { currency: rec?.currency || 'EUR' })}</label>
+        <label className="mb-2 block text-sm font-semibold text-deliivo-dark">{t('publish.pricePerSeat', { currency })}</label>
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -960,6 +1184,17 @@ function StepPrice({
             <Plus className="h-4 w-4" />
           </button>
         </div>
+        <div className="mt-4 grid gap-2 border-t border-gray-100 pt-4 text-sm sm:grid-cols-2">
+          <div>
+            <p className="text-xs text-deliivo-gray">{t('publish.yourFarePerRider')}</p>
+            <p className="font-semibold text-deliivo-dark">{currency} {state.basePricePerSeat.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-deliivo-gray">{t('publish.allSeatsGrossFare', { seats: state.seats })}</p>
+            <p className="font-semibold text-deliivo-dark">{currency} {grossFullRideFare.toFixed(2)}</p>
+          </div>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-deliivo-gray">{t('publish.grossFareNotice')}</p>
       </div>
 
       {/* Notes */}
@@ -1019,7 +1254,7 @@ function StepConfirm({
     { icon: <Clock className="h-4 w-4 text-deliivo-orange" />, label: t('publish.time'), value: timeLabel },
     { icon: <Users className="h-4 w-4 text-deliivo-orange" />, label: t('publish.seats'), value: `${state.seats} ${t('publish.passengerWord', { count: state.seats })}` },
     { icon: <Luggage className="h-4 w-4 text-deliivo-orange" />, label: t('publish.luggage'), value: t('publish.maxLuggageValue', { max: state.maxLuggage }) },
-    { icon: <DollarSign className="h-4 w-4 text-deliivo-orange" />, label: t('publish.pricePerSeatLabel'), value: state.basePricePerSeat > 0 ? `${state.recommendation?.currency || 'EUR'} ${state.basePricePerSeat.toFixed(2)}` : t('publish.free') },
+    { icon: <Euro className="h-4 w-4 text-deliivo-orange" />, label: t('publish.pricePerSeatLabel'), value: state.basePricePerSeat > 0 ? `${state.recommendation?.currency || 'EUR'} ${state.basePricePerSeat.toFixed(2)}` : t('publish.free') },
   ];
 
   return (
@@ -1047,7 +1282,7 @@ function StepConfirm({
           ))}
         </ul>
 
-        {(state.femaleOnly || state.noSmoking || state.noBicycles || state.childSeatAvailable) && (
+        {(state.femaleOnly || state.noSmoking || state.alcoholFreeRide || state.childSeatAvailable || state.noBicycles) && (
           <div className="flex flex-wrap gap-2 px-5 py-3 border-t border-gray-50">
             {state.femaleOnly && (
               <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-600">
@@ -1059,14 +1294,19 @@ function StepConfirm({
                 <CigaretteOff className="h-3 w-3" /> {t('publish.noSmoking')}
               </span>
             )}
-            {state.noBicycles && (
+            {state.alcoholFreeRide && (
               <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold text-deliivo-orange">
-                <Bike className="h-3 w-3" /> {t('publish.noBicycles')}
+                <CheckCircle className="h-3 w-3" /> {t('publish.alcoholFreeRide')}
               </span>
             )}
             {state.childSeatAvailable && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-                <Baby className="h-3 w-3" /> {t('publish.childSeat')}
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                <CheckCircle className="h-3 w-3" /> {t('publish.childSeatAvailable')}
+              </span>
+            )}
+            {state.noBicycles && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold text-deliivo-orange">
+                <Bike className="h-3 w-3" /> {t('publish.noBicycles')}
               </span>
             )}
           </div>
@@ -1173,6 +1413,7 @@ const INITIAL_STATE: WizardState = {
   backSeatOnly: false,
   femaleOnly: false,
   noSmoking: true,
+  alcoholFreeRide: false,
   noBicycles: false,
   childSeatAvailable: false,
   vehicleId: '',
@@ -1184,10 +1425,10 @@ const INITIAL_STATE: WizardState = {
 function PublishRideWizard() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const router = useRouter();
   const [step, setStep] = useState(1);
   const [state, setState] = useState<WizardState>(INITIAL_STATE);
   const [published, setPublished] = useState(false);
-  const [recoveredDraft, setRecoveredDraft] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [payoutStatus, setPayoutStatus] = useState<ConnectStatus | null>(null);
@@ -1204,39 +1445,14 @@ function PublishRideWizard() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(LOCAL_DRAFT_KEY);
-      if (!raw) return;
-      const snapshot = JSON.parse(raw) as { step?: number; state?: WizardState };
-      if (snapshot.state) {
-        setState({
-          ...INITIAL_STATE,
-          ...snapshot.state,
-          routes: snapshot.state.routes || [],
-          pickups: snapshot.state.pickups || [],
-          dropoffs: snapshot.state.dropoffs || [],
-          stopovers: snapshot.state.stopovers || [],
-        });
-      }
-      if (snapshot.step && snapshot.step >= 1 && snapshot.step <= TOTAL_STEPS) {
-        setStep(snapshot.step);
-      }
-      setRecoveredDraft(true);
-    } catch {
-      window.localStorage.removeItem(LOCAL_DRAFT_KEY);
-    }
-  }, []);
+    if (!published) return;
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || published) return;
-    window.localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify({ step, state }));
-  }, [step, state, published]);
+    const timeoutId = window.setTimeout(() => {
+      router.push('/rides?published=1');
+    }, 1600);
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || !published) return;
-    window.localStorage.removeItem(LOCAL_DRAFT_KEY);
-  }, [published]);
+    return () => window.clearTimeout(timeoutId);
+  }, [published, router]);
 
   async function loadPayoutStatus() {
     setPayoutStatusLoading(true);
@@ -1354,6 +1570,7 @@ function PublishRideWizard() {
         // Save capacity to backend
         await publishRideApi.updateCapacity(state.seats, state.maxLuggage, false, {
           noSmoking: state.noSmoking,
+          alcoholFreeRide: state.alcoholFreeRide,
           noBicycles: state.noBicycles,
           childSeatAvailable: state.childSeatAvailable,
         });
@@ -1415,6 +1632,7 @@ function PublishRideWizard() {
 
       await publishRideApi.updateCapacity(state.seats, state.maxLuggage, false, {
         noSmoking: state.noSmoking,
+        alcoholFreeRide: state.alcoholFreeRide,
         noBicycles: state.noBicycles,
         childSeatAvailable: state.childSeatAvailable,
       });
@@ -1429,9 +1647,6 @@ function PublishRideWizard() {
 
       // Publish
       await publishRideApi.publish();
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem(LOCAL_DRAFT_KEY);
-      }
       setPublished(true);
     } catch (err: unknown) {
       let message = err instanceof Error ? err.message : 'Failed to publish ride';
@@ -1458,9 +1673,9 @@ function PublishRideWizard() {
           <p className="mb-8 text-deliivo-gray">{t('publish.publishedCopy')}</p>
           <div className="flex flex-col gap-3">
             <Link href="/rides" className="btn-primary w-full py-3 text-base">{t('publish.viewMyRides')}</Link>
-            <button
+          <button
               type="button"
-              onClick={() => { setState(INITIAL_STATE); setStep(1); setPublished(false); setRecoveredDraft(false); setError(''); }}
+              onClick={() => { setState(INITIAL_STATE); setStep(1); setPublished(false); setError(''); }}
               className="btn-outline w-full py-3 text-base"
             >
               {t('publish.publishAnotherRide')}
@@ -1505,7 +1720,7 @@ function PublishRideWizard() {
             { icon: <Route className="h-4 w-4" />, label: t('publish.stops') },
             { icon: <Calendar className="h-4 w-4" />, label: t('publish.date') },
             { icon: <Users className="h-4 w-4" />, label: t('publish.seats') },
-            { icon: <DollarSign className="h-4 w-4" />, label: t('publish.price') },
+            { icon: <Euro className="h-4 w-4" />, label: t('publish.price') },
             { icon: <CheckCircle className="h-4 w-4" />, label: t('publish.done') },
           ].map(({ icon, label }, i) => {
             const n = i + 1;
@@ -1524,11 +1739,6 @@ function PublishRideWizard() {
       {/* Main content */}
       <main className="flex-1 px-4 py-6">
         <div className="mx-auto max-w-lg">
-          {recoveredDraft && !published && (
-            <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900 shadow-sm">
-              Draft restored from this browser. You can continue from where you left off.
-            </div>
-          )}
           {step === 1 && <StepRoute state={state} onChange={patch} error={error} />}
           {step === 2 && <StepStopovers state={state} onChange={patch} />}
           {step === 3 && <StepDateTime state={state} onChange={patch} />}

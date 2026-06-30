@@ -559,7 +559,7 @@ export const publishRideApi = {
     totalSeats: number,
     maxLuggagePerPerson: number,
     backSeatOnly: boolean,
-    preferences?: { noSmoking?: boolean; noBicycles?: boolean; childSeatAvailable?: boolean }
+    preferences?: { noSmoking?: boolean; alcoholFreeRide?: boolean; noBicycles?: boolean; childSeatAvailable?: boolean }
   ) {
     return apiFetch<{ data: DraftRide }>('/api/v1/publish-ride/draft/capacity', {
       method: 'PUT',
@@ -665,7 +665,7 @@ export const searchRidesApi = {
 
 // Bookings API
 export const bookingsApi = {
-  pricePreview(data: { rideId: string; seatsBooked: number; requiresChildSeat?: boolean; segmentId?: string; pickupWaypointId?: string; dropoffWaypointId?: string }) {
+  pricePreview(data: { rideId: string; seatsBooked: number; requiresChildSeat?: boolean; travelingWithChildUnderTwo?: boolean; bringingOwnChildSeat?: boolean; segmentId?: string; pickupWaypointId?: string; dropoffWaypointId?: string }) {
     return apiFetch<{ data: PricePreview }>('/api/v1/bookings/price-preview', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -752,6 +752,11 @@ function createEventMetaWithLocation(lat?: number, lng?: number, overrides?: { o
 }
 
 export const rideOpsApi = {
+  syncOfflineActions(actions: Array<{ actionId: string; eventType: string; rideId: string; bookingId?: string; lat?: number; lng?: number; clientTimestamp: string; overrideReason: string }>) {
+    return apiFetch<{ data: { processed: number; duplicates: number; results: Array<{ actionId: string; status: 'processed' | 'duplicate' | 'error'; error?: string }> } }>('/api/v1/rides/offline-sync', {
+      method: 'POST', body: JSON.stringify({ actions }),
+    });
+  },
   startRide(rideId: string, overrideReason?: string) {
     return apiFetch<{ message: string }>(`/api/v1/rides/${rideId}/start`, {
       method: 'POST', body: JSON.stringify(createEventMeta({ overrideReason })),
@@ -882,6 +887,16 @@ export const notificationsApi = {
     return apiFetch<{ data: { markedCount: number } }>('/api/v1/notifications/mark-read', {
       method: 'POST',
       body: JSON.stringify({ notificationIds: [notificationId] }),
+    });
+  },
+  remove(notificationId: string) {
+    return apiFetch<{ data: { deletedCount: number } }>(`/api/v1/notifications/${notificationId}`, {
+      method: 'DELETE',
+    });
+  },
+  clearAll() {
+    return apiFetch<{ data: { deletedCount: number } }>('/api/v1/notifications', {
+      method: 'DELETE',
     });
   },
   registerDevice(platform: 'ios' | 'android' | 'web', token: string) {
@@ -1732,6 +1747,7 @@ export interface SearchRideResult {
   status: string;
   femaleOnly?: boolean;
   noSmoking?: boolean;
+  alcoholFreeRide?: boolean;
   noBicycles?: boolean;
   childSeatAvailable?: boolean;
   matchType?: string;
@@ -1818,6 +1834,8 @@ export interface CreateBookingInput {
   seatsBooked: number;
   luggageCount?: number;
   requiresChildSeat?: boolean;
+  travelingWithChildUnderTwo?: boolean;
+  bringingOwnChildSeat?: boolean;
   pickupWaypointId?: string;
   dropoffWaypointId?: string;
   notes?: string;
@@ -1874,6 +1892,7 @@ export interface Booking {
     destinationLng?: number;
     departureDate: string;
     departureTime: string;
+    routeDurationSeconds?: number | null;
     status?: string;
     driver?: { name: string | null; avatarUrl: string | null };
     vehicle?: { brand: string | null; model_name: string | null; color: string | null } | null;
@@ -1953,6 +1972,10 @@ export interface LocationInput {
   address: string;
   lat: number;
   lng: number;
+  parentPlaceId?: string;
+  parentAddress?: string;
+  parentLat?: number;
+  parentLng?: number;
   estimatedArrivalTime?: string;
 }
 
@@ -1971,6 +1994,7 @@ export interface DraftRide {
   maxLuggagePerPerson?: number;
   backSeatOnly?: boolean;
   noSmoking?: boolean;
+  alcoholFreeRide?: boolean;
   noBicycles?: boolean;
   childSeatAvailable?: boolean;
   basePricePerSeat?: number;
@@ -1991,9 +2015,16 @@ export interface PriceRecommendation {
   maxPrice: number;
   currency: string;
   breakdown: {
-    fuelCost: number;
+    estimatedRouteCost: number;
     distanceKm: number;
     pricePerKm: number;
+    pricingStrategy?: string;
+    regionCode?: string;
+    minimumSeatPrice?: number;
+    recommendedRatePerKm?: number;
+    minRatePerKm?: number;
+    maxRatePerKm?: number;
+    pricingConfigFallback?: boolean;
   };
 }
 
@@ -2012,6 +2043,7 @@ export interface PublishedRide {
   routeDistanceMeters?: number;
   routeDurationSeconds?: number;
   noSmoking?: boolean;
+  alcoholFreeRide?: boolean;
   noBicycles?: boolean;
   childSeatAvailable?: boolean;
 }
@@ -2038,6 +2070,8 @@ export interface DriverRideBooking {
   } | null;
   pickupWaypointId: string | null;
   dropoffWaypointId: string | null;
+  hasDriverRatedPassenger?: boolean;
+  driverRatedPassengerAt?: string | null;
   pickupLocation?: { address: string; placeId: string; lat?: number; lng?: number; estimatedArrivalTime?: string | null };
   dropoffLocation?: { address: string; placeId: string; lat?: number; lng?: number; estimatedArrivalTime?: string | null };
   createdAt?: string;

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { SlidersHorizontal, X } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from '@/lib/i18n-context';
 
 export interface Filters {
@@ -33,8 +34,10 @@ export default function SearchFilters({
   mobileOnly = false,
 }: SearchFiltersProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [filters, setFilters] = useState<Filters>(initialFilters);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const canUseWomenOnly = user?.gender === 'FEMALE';
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -136,33 +139,34 @@ export default function SearchFilters({
         </div>
       </div>
 
-      {/* Women only */}
-      <div className="flex items-center justify-between">
-        <label
-          htmlFor="filter-female"
-          className="text-sm font-medium text-deliivo-dark cursor-pointer"
-        >
-          {t('search.womenOnly')}
-        </label>
-        <button
-          id="filter-female"
-          type="button"
-          role="switch"
-          aria-checked={filters.femaleOnly}
-          onClick={() =>
-            applyFilters({ ...filters, femaleOnly: !filters.femaleOnly })
-          }
-          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
-            filters.femaleOnly ? 'bg-primary-500' : 'bg-gray-200'
-          }`}
-        >
-          <span
-            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-              filters.femaleOnly ? 'translate-x-5' : 'translate-x-0'
+      {canUseWomenOnly && (
+        <div className="flex items-center justify-between">
+          <label
+            htmlFor="filter-female"
+            className="text-sm font-medium text-deliivo-dark cursor-pointer"
+          >
+            {t('search.womenOnly')}
+          </label>
+          <button
+            id="filter-female"
+            type="button"
+            role="switch"
+            aria-checked={filters.femaleOnly}
+            onClick={() =>
+              applyFilters({ ...filters, femaleOnly: !filters.femaleOnly })
+            }
+            className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+              filters.femaleOnly ? 'bg-primary-500' : 'bg-gray-200'
             }`}
-          />
-        </button>
-      </div>
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                filters.femaleOnly ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+      )}
 
       {/* Min rating */}
       <div>

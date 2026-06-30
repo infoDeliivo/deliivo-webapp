@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUser = useCallback(async () => {
+  const fetchUser = useCallback(async (throwOnError = false) => {
     const tokens = getTokens();
     if (!tokens) {
       setUser(null);
@@ -33,9 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await userApi.getMe();
       setUser(res.data);
-    } catch {
+    } catch (error) {
       clearTokens();
       setUser(null);
+      if (throwOnError) throw error;
     } finally {
       setLoading(false);
     }
@@ -64,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (accessToken: string, refreshToken: string) => {
     setTokens({ accessToken, refreshToken });
-    await fetchUser();
+    await fetchUser(true);
   };
 
   const logout = () => {

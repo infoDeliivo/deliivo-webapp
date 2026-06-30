@@ -7,6 +7,8 @@ import { FaGoogle, FaApple, FaPhone } from "react-icons/fa";
 import { authApi, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import BrandLogo from "@/components/BrandLogo";
+import { buildE164PhoneNumber, PHONE_COUNTRY_OPTIONS, sanitizePhoneLocalNumber } from "@/lib/phone-auth";
+import { getSafeReturnTo, withReturnTo } from "@/lib/auth-redirect";
 
 type Step = 'identifier' | 'otp';
 type Method = 'email' | 'phone';
@@ -18,14 +20,27 @@ export default function SignInPage() {
   const [step, setStep] = useState<Step>('identifier');
   const [method, setMethod] = useState<Method>('email');
   const [identifier, setIdentifier] = useState('');
+  const [phoneCountryCode, setPhoneCountryCode] = useState('+372');
+  const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [returnTo, setReturnTo] = useState<string | null>(null);
+  const normalizedIdentifier = method === 'email' ? identifier.trim() : buildE164PhoneNumber(phoneCountryCode, phone);
+
+  function redirectAfterLogin(next: 'onboarding' | 'home') {
+    const destination = returnTo || getSafeReturnTo();
+    router.replace(next === 'onboarding' ? withReturnTo('/onboarding', destination) : (destination || '/'));
+  }
 
   // Google OAuth setup
   const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+
+  useEffect(() => {
+    setReturnTo(getSafeReturnTo());
+  }, []);
 
   const handleGoogleCallback = useCallback(async (response: { credential: string }) => {
     setGoogleLoading(true);
@@ -38,11 +53,7 @@ export default function SignInPage() {
         body: JSON.stringify({ idToken: response.credential }),
       });
       await login(res.data.accessToken, res.data.refreshToken);
-      if (res.data.next === 'onboarding') {
-        router.push('/onboarding');
-      } else {
-        router.push('/');
-      }
+      redirectAfterLogin(res.data.next);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Google sign-in failed');
     } finally {
@@ -79,9 +90,13 @@ export default function SignInPage() {
   const handleSubmitIdentifier = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!normalizedIdentifier) {
+      setError('Enter a valid phone number with country code.');
+      return;
+    }
     setLoading(true);
     try {
-      const res = await authApi.login(method, identifier);
+      const res = await authApi.login(method, normalizedIdentifier);
       if (res.data?.code) setDevCode(res.data.code);
       setStep('otp');
     } catch (err: unknown) {
@@ -95,15 +110,15 @@ export default function SignInPage() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!normalizedIdentifier) {
+      setError('Enter a valid phone number with country code.');
+      return;
+    }
     setLoading(true);
     try {
-      const res = await authApi.verifyOtp(identifier, otp, 'login', method);
+      const res = await authApi.verifyOtp(normalizedIdentifier, otp, 'login', method);
       await login(res.data.accessToken, res.data.refreshToken);
-      if (res.data.next === 'onboarding') {
-        router.push('/onboarding');
-      } else {
-        router.push('/');
-      }
+      redirectAfterLogin(res.data.next);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Verification failed';
       setError(msg);
@@ -114,8 +129,12 @@ export default function SignInPage() {
 
   const handleResendOtp = async () => {
     setError('');
+    if (!normalizedIdentifier) {
+      setError('Enter a valid phone number with country code.');
+      return;
+    }
     try {
-      const res = await authApi.resendOtp(identifier, 'login', method);
+      const res = await authApi.resendOtp(normalizedIdentifier, 'login', method);
       if (res.data?.code) setDevCode(res.data.code);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to resend';
@@ -124,36 +143,26 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-deliivo-cream px-4 py-12">
-      <div className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,#fff1e6_0%,#fffaf5_45%,#f7f7f5_100%)] px-4 py-8 sm:py-12">
+      <div className="grid w-full max-w-5xl overflow-hidden rounded-[2rem] bg-white shadow-xl ring-1 ring-black/5 lg:grid-cols-[1.12fr_0.88fr]">
+        <aside className="relative hidden min-h-[680px] bg-[#f97316] lg:block">
+          <img src="/signin-baltic-carpooling.png" alt="A shared ride travelling through the Baltics" className="h-full w-full object-cover" />
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-8 pb-8 pt-24 text-white">
+            <p className="text-2xl font-bold">Travel together across the Baltics</p>
+            <p className="mt-2 max-w-md text-sm text-white/85">Verified profiles, clear pickup points, and simple city-to-city rides.</p>
+          </div>
+        </aside>
+
+        <div className="p-6 sm:p-8 lg:p-10">
         {/* Logo */}
-        <div className="mb-8 flex items-center">
-          <BrandLogo size={56} className="h-14 w-auto object-contain" />
+        <div className="mb-8 flex items-center justify-center lg:justify-start">
+          <BrandLogo size={52} className="h-12 w-auto object-contain" />
         </div>
 
-        <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-black/5">
+        <div>
           {/* Illustration */}
-          <div className="mb-7 h-36 w-full overflow-hidden rounded-2xl bg-gradient-to-br from-primary-400 via-deliivo-orange to-primary-700 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-2 text-white/90">
-              <svg viewBox="0 0 120 64" className="w-28 h-auto" fill="none" aria-hidden="true">
-                <rect x="0" y="46" width="120" height="18" rx="3" fill="white" fillOpacity="0.15" />
-                <rect x="10" y="53" width="16" height="3" rx="1.5" fill="white" fillOpacity="0.4" />
-                <rect x="36" y="53" width="16" height="3" rx="1.5" fill="white" fillOpacity="0.4" />
-                <rect x="62" y="53" width="16" height="3" rx="1.5" fill="white" fillOpacity="0.4" />
-                <rect x="88" y="53" width="16" height="3" rx="1.5" fill="white" fillOpacity="0.4" />
-                <rect x="28" y="28" width="64" height="22" rx="6" fill="white" fillOpacity="0.9" />
-                <path d="M42 28 L50 12 L70 12 L78 28 Z" fill="white" fillOpacity="0.75" />
-                <rect x="52" y="15" width="16" height="11" rx="2" fill="#F97316" fillOpacity="0.6" />
-                <circle cx="44" cy="50" r="8" fill="#1A1A2E" />
-                <circle cx="44" cy="50" r="4" fill="white" fillOpacity="0.6" />
-                <circle cx="76" cy="50" r="8" fill="#1A1A2E" />
-                <circle cx="76" cy="50" r="4" fill="white" fillOpacity="0.6" />
-                <rect x="88" y="33" width="5" height="4" rx="1" fill="#FDE68A" />
-              </svg>
-              <span className="text-xs font-semibold tracking-wide opacity-80">
-                Baltic Carpooling
-              </span>
-            </div>
+          <div className="mb-7 overflow-hidden rounded-2xl lg:hidden">
+            <img src="/signin-baltic-carpooling.png" alt="Baltic carpooling" className="h-40 w-full object-cover" />
           </div>
 
           {step === 'identifier' ? (
@@ -168,21 +177,57 @@ export default function SignInPage() {
               </p>
 
               <form className="space-y-4" onSubmit={handleSubmitIdentifier}>
-                <div>
-                  <label htmlFor="identifier" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-                    {method === 'email' ? 'Email address' : 'Phone number'}
-                  </label>
-                  <input
-                    id="identifier"
-                    type={method === 'email' ? 'email' : 'tel'}
-                    autoComplete={method === 'email' ? 'email' : 'tel'}
-                    required
-                    placeholder={method === 'email' ? 'you@example.com' : '+44 7700 900000'}
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    className="input-field"
-                  />
-                </div>
+                {method === 'email' ? (
+                  <div>
+                    <label htmlFor="identifier" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                      Email address
+                    </label>
+                    <input
+                      id="identifier"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      placeholder="you@example.com"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      className="input-field"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label htmlFor="phone" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                      Phone number
+                    </label>
+                    <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+                      <select
+                        value={phoneCountryCode}
+                        onChange={(e) => setPhoneCountryCode(e.target.value)}
+                        className="input-field"
+                        aria-label="Country code"
+                      >
+                        {PHONE_COUNTRY_OPTIONS.map((option) => (
+                          <option key={option.code} value={option.code}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        id="phone"
+                        type="tel"
+                        autoComplete="tel-national"
+                        inputMode="numeric"
+                        required
+                        placeholder="51234567"
+                        value={phone}
+                        onChange={(e) => setPhone(sanitizePhoneLocalNumber(e.target.value))}
+                        className="input-field"
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs text-deliivo-gray">
+                      We send the OTP to {normalizedIdentifier ?? `${phoneCountryCode}...`}.
+                    </p>
+                  </div>
+                )}
 
                 {error && (
                   <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
@@ -203,7 +248,7 @@ export default function SignInPage() {
                 {method === 'email' ? (
                   <button
                     type="button"
-                    onClick={() => { setMethod('phone'); setIdentifier(''); setError(''); }}
+                    onClick={() => { setMethod('phone'); setIdentifier(''); setPhone(''); setError(''); }}
                     className="btn-outline w-full gap-2.5 py-3 text-sm"
                   >
                     <FaPhone className="h-4 w-4 shrink-0" />
@@ -212,7 +257,7 @@ export default function SignInPage() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => { setMethod('email'); setIdentifier(''); setError(''); }}
+                    onClick={() => { setMethod('email'); setIdentifier(''); setPhone(''); setError(''); }}
                     className="btn-outline w-full gap-2.5 py-3 text-sm"
                   >
                     Sign in with Email
@@ -246,7 +291,7 @@ export default function SignInPage() {
                 Enter verification code
               </h1>
               <p className="mb-2 text-sm text-deliivo-gray">
-                We sent a 4-digit code to <strong>{identifier}</strong>
+                We sent a 4-digit code to <strong>{normalizedIdentifier}</strong>
               </p>
 
               {devCode && (
@@ -303,12 +348,13 @@ export default function SignInPage() {
 
           <p className="mt-6 text-center text-sm text-deliivo-gray">
             Don&apos;t have an account?{" "}
-            <Link href="/auth/signup" className="font-semibold text-deliivo-orange hover:text-deliivo-orange-dark transition-colors">
+            <Link href={withReturnTo('/auth/signup', returnTo)} className="font-semibold text-deliivo-orange hover:text-deliivo-orange-dark transition-colors">
               Sign up
             </Link>
           </p>
         </div>
       </div>
+    </div>
     </div>
   );
 }

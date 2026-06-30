@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { DollarSign, AlertTriangle, CheckCircle2, Loader2, AlertCircle, Play, ChevronDown, Clipboard, ExternalLink } from 'lucide-react'
+import { Euro, AlertTriangle, CheckCircle2, Loader2, AlertCircle, Play, ChevronDown, Clipboard, ExternalLink } from 'lucide-react'
 import { adminApi, ReconciliationSummary, ReconciliationIssue, Pagination, AdminRevenueLedger, getApiErrorMessage } from '@/lib/api'
 import { showError, showSuccess } from '@/lib/app-feedback'
 import LoadFailureCard from '@/components/LoadFailureCard'
@@ -150,7 +150,7 @@ export default function AdminRevenuePage() {
           </div>
           <div className="bg-white rounded-2xl shadow-sm p-5">
             <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="w-4 h-4 text-[#F97316]" />
+              <Euro className="w-4 h-4 text-[#F97316]" />
               <p className="text-xs text-gray-500 font-medium">Total Scanned</p>
             </div>
             <p className="text-2xl font-bold text-gray-900">{summary.total}</p>

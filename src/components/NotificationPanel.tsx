@@ -1,18 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { Bell, CheckCheck, Loader2, RefreshCw, ArrowRight, MapPin, Calendar, Clock } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Bell, ChevronRight, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { NotificationRecord } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useNotificationStore } from '@/lib/notification-store';
-import { getBrowserNotificationStatus, registerBrowserPushDevice } from '@/lib/web-push';
-import LoadFailureCard from '@/components/LoadFailureCard';
 
 type Props = {
   title?: string;
   maxItems?: number;
-  showViewAll?: boolean;
   className?: string;
 };
 
@@ -20,17 +16,6 @@ function getString(data: Record<string, unknown> | null, key: string): string | 
   if (!data) return null;
   const value = data[key];
   return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function formatDateLabel(value: string | null) {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 function getNotificationLink(item: NotificationRecord): string | null {
@@ -59,246 +44,141 @@ function getNotificationLink(item: NotificationRecord): string | null {
   return null;
 }
 
-function getNotificationSummary(item: NotificationRecord): string | null {
-  const data = item.data;
-  if (!data) return null;
-
-  const origin = getString(data, 'originAddress');
-  const destination = getString(data, 'destinationAddress');
-  const departureDate = formatDateLabel(getString(data, 'departureDate'));
-  const departureTime = getString(data, 'departureTime');
-  const refundPercent = getString(data, 'refundPercent');
-  const cancellationReason = getString(data, 'cancellationReason') || getString(data, 'reason');
-  const rejectionReason = getString(data, 'rejectionReason');
-  const statusReason = cancellationReason || rejectionReason;
-
-  const route = origin && destination ? `${origin.split(',')[0]} -> ${destination.split(',')[0]}` : null;
-  const schedule = departureDate || departureTime ? [departureDate, departureTime].filter(Boolean).join(' | ') : null;
-  const refundLabel = refundPercent ? `Refund ${refundPercent}%` : null;
-  const reasonLabel = statusReason ? `Reason: ${statusReason}` : null;
-
-  return [route, schedule, refundLabel, reasonLabel].filter(Boolean).join(' | ') || null;
-}
-
 export default function NotificationPanel({
   title = 'Notifications',
   maxItems = 5,
-  showViewAll = true,
   className = '',
 }: Props) {
-  const [busy, setBusy] = useState(false);
-  const [pushStatus, setPushStatus] = useState<ReturnType<typeof getBrowserNotificationStatus>>('unsupported');
-  const [pushBusy, setPushBusy] = useState(false);
   const { user } = useAuth();
-  const { items, unreadCount, loading, refresh, markAllRead: markAllReadInStore, lastSyncedAt, lastSyncAttemptAt, lastError } = useNotificationStore(user?.id);
+  const { items, loading, refresh, remove, clearAll, lastError } = useNotificationStore(user?.id);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [operationError, setOperationError] = useState('');
   const visibleItems = useMemo<NotificationRecord[]>(() => items.slice(0, maxItems), [items, maxItems]);
 
-  useEffect(() => {
-    if (!user) return;
-    setPushStatus(getBrowserNotificationStatus());
-  }, [user?.id]);
-
-  async function handleMarkAllRead() {
-    if (unreadCount === 0) return;
-    setBusy(true);
-    try {
-      await markAllReadInStore();
-    } catch {
-      // ignore
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function enableBrowserAlerts() {
-    setPushBusy(true);
-    try {
-      setPushStatus(await registerBrowserPushDevice());
-    } catch {
-      setPushStatus(getBrowserNotificationStatus());
-    } finally {
-      setPushBusy(false);
-    }
-  }
-
   const content = (
-    <div className={`mx-auto w-full max-w-[720px] overflow-hidden rounded-2xl bg-white shadow-sm border border-gray-100 ${className}`}>
-      <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 sm:px-5">
-        <div className="flex items-center gap-2 min-w-0">
-          <Bell className="h-4 w-4 text-deliivo-orange" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-deliivo-dark">{title}</p>
-            <p className="text-xs text-deliivo-gray">{unreadCount} unread</p>
-          </div>
-        </div>
+    <div className={`w-full ${className}`}>
+      <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-0 py-3">
+        <p className="text-sm font-semibold text-deliivo-dark">{title}</p>
         <div className="flex items-center gap-2">
-          {pushStatus === 'permission-default' && (
-            <button
-              type="button"
-              onClick={enableBrowserAlerts}
-              disabled={pushBusy}
-              className="hidden rounded-full border border-orange-200 px-3 py-1.5 text-xs font-semibold text-deliivo-orange hover:bg-orange-50 disabled:opacity-50 sm:inline-flex"
-            >
-              {pushBusy ? 'Enabling...' : 'Enable browser alerts'}
-            </button>
-          )}
-          {pushStatus === 'enabled' && (
-            <span className="hidden rounded-full bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 sm:inline-flex">
-              Browser alerts on
-            </span>
-          )}
-            <button
-              type="button"
+          {items.length > 0 && (confirmClear ? (
+            <>
+              <button type="button" onClick={() => setConfirmClear(false)} className="text-xs font-semibold text-deliivo-gray hover:text-deliivo-dark">Cancel</button>
+              <button
+                type="button"
+                disabled={clearing}
+                onClick={async () => {
+                  setClearing(true);
+                  setOperationError('');
+                  try {
+                    await clearAll();
+                    setConfirmClear(false);
+                  } catch {
+                    setOperationError('Could not clear notifications. Please try again.');
+                  } finally {
+                    setClearing(false);
+                  }
+                }}
+                className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
+              >
+                {clearing ? 'Clearing...' : 'Confirm clear'}
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => setConfirmClear(true)} className="text-xs font-semibold text-deliivo-gray hover:text-red-600">Clear all</button>
+          ))}
+          <button
+            type="button"
             onClick={() => { void refresh(); }}
-            className="rounded-full p-2 text-deliivo-gray hover:bg-gray-100 hover:text-deliivo-dark"
+            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-deliivo-dark hover:bg-gray-50"
             aria-label="Refresh notifications"
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-            <button
-              type="button"
-            onClick={handleMarkAllRead}
-            disabled={busy || unreadCount === 0}
-            className="rounded-full p-2 text-deliivo-gray hover:bg-gray-100 hover:text-deliivo-dark disabled:opacity-40"
-            aria-label="Mark notifications as read"
-          >
-            <CheckCheck className="h-4 w-4" />
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
         </div>
       </div>
-      {(lastSyncedAt || lastSyncAttemptAt || lastError) && (
-        <div className="border-b border-gray-200 px-4 py-2 text-[11px] text-deliivo-gray sm:px-5">
-          {lastError ? (
-            <span className="text-red-600">{lastError}</span>
-          ) : lastSyncedAt ? (
-            <span>Synced {new Date(lastSyncedAt as string).toLocaleTimeString()}</span>
-          ) : (
-            <span>Syncing {lastSyncAttemptAt ? new Date(lastSyncAttemptAt).toLocaleTimeString() : ''}</span>
-          )}
-        </div>
-      )}
 
-      <div className="max-h-[70vh] overflow-auto">
+      <div className="mt-4 space-y-3">
+        {operationError && (
+          <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {operationError}
+          </div>
+        )}
         {loading ? (
-          <div className="flex items-center gap-2 px-4 py-6 text-sm text-deliivo-gray">
+          <div className="flex items-center gap-2 text-sm text-deliivo-gray">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading notifications...
           </div>
         ) : lastError ? (
-          <div className="p-4">
-            <LoadFailureCard
-              title="Notifications are temporarily unavailable"
-              message={lastError}
-              onRetry={() => { void refresh(); }}
-            />
+          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {lastError}
           </div>
         ) : visibleItems.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-deliivo-gray">
-            No notifications yet.
+          <div className="flex flex-col items-center rounded-2xl bg-orange-50/60 px-6 py-12 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-deliivo-orange shadow-sm">
+              <Bell className="h-5 w-5" />
+            </span>
+            <p className="mt-4 text-sm font-semibold text-deliivo-dark">You are all caught up</p>
+            <p className="mt-1 text-sm text-deliivo-gray">New ride and booking updates will appear here.</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200 bg-white">
+          <div className="space-y-3">
             {visibleItems.map((item) => {
-              const summary = getNotificationSummary(item);
-              const rideId = getString(item.data, 'rideId');
-              const bookingId = getString(item.data, 'bookingId');
-              const departureDate = formatDateLabel(getString(item.data, 'departureDate'));
-              const departureTime = getString(item.data, 'departureTime');
               const href = getNotificationLink(item);
-              const origin = getString(item.data, 'originAddress');
-              const destination = getString(item.data, 'destinationAddress');
 
               return (
-                <div
+                <article
                   key={item.id}
-                  className={`relative px-4 py-4 transition-colors sm:px-5 ${item.isRead ? 'bg-white' : 'bg-orange-50/50'} border-b border-gray-200 last:border-b-0`}
+                  className={`rounded-2xl border px-4 py-4 transition-colors ${item.isRead ? 'border-gray-200 bg-white' : 'border-orange-200 bg-orange-50/50'}`}
                 >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${item.isRead ? 'bg-gray-100 text-deliivo-gray' : 'bg-white text-deliivo-orange shadow-sm'}`}>
+                      <Bell className="h-4 w-4" />
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-deliivo-dark">{item.title}</p>
-                      <p className="mt-0.5 text-xs text-deliivo-gray">{item.body}</p>
-
-                      {summary && (
-                        <div className="mt-3 rounded-xl bg-gray-50 px-3 py-2 text-xs text-deliivo-gray">
-                          {summary}
-                        </div>
-                      )}
-
-                      {(origin || destination || departureDate || departureTime || rideId || bookingId) && (
-                        <div className="mt-3 grid gap-3 text-[11px] text-deliivo-gray sm:grid-cols-2">
-                          {origin && destination && (
-                            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm sm:col-span-2">
-                              <div className="flex items-center gap-1.5 font-medium text-deliivo-dark">
-                                <MapPin className="h-3 w-3 text-deliivo-orange" />
-                                Route
-                              </div>
-                              <div className="mt-1 break-words">
-                                {origin} {'->'} {destination}
-                              </div>
-                            </div>
-                          )}
-                          {(departureDate || departureTime) && (
-                            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm">
-                              <div className="flex items-center gap-1.5 font-medium text-deliivo-dark">
-                                <Clock className="h-3 w-3 text-deliivo-orange" />
-                                Schedule
-                              </div>
-                              <div className="mt-1">
-                                {[departureDate, departureTime].filter(Boolean).join(' | ')}
-                              </div>
-                            </div>
-                          )}
-                          {rideId && (
-                            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm sm:col-span-2">
-                              <div className="flex items-center gap-1.5 font-medium text-deliivo-dark">
-                                <Calendar className="h-3 w-3 text-deliivo-orange" />
-                                Ride ID
-                              </div>
-                              <div className="mt-1 break-all">{rideId}</div>
-                            </div>
-                          )}
-                          {bookingId && (
-                            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm sm:col-span-2">
-                              <div className="flex items-center gap-1.5 font-medium text-deliivo-dark">
-                                <Calendar className="h-3 w-3 text-deliivo-orange" />
-                                Booking ID
-                              </div>
-                              <div className="mt-1 break-all">{bookingId}</div>
-                            </div>
-                          )}
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-semibold text-deliivo-dark">{item.title}</p>
+                        <button
+                          type="button"
+                          disabled={removingId === item.id}
+                          onClick={async () => {
+                            setRemovingId(item.id);
+                            setOperationError('');
+                            try {
+                              await remove(item.id);
+                            } catch {
+                              setOperationError('Could not remove the notification. Please try again.');
+                            } finally {
+                              setRemovingId(null);
+                            }
+                          }}
+                          className="rounded-lg p-1.5 text-deliivo-gray hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                          aria-label="Remove notification"
+                          title="Remove notification"
+                        >
+                          {removingId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                      <p className="mt-1 text-sm leading-6 text-deliivo-gray">{item.body}</p>
+                      <p className="mt-2 text-xs text-deliivo-gray">
+                        {new Date(item.createdAt).toLocaleString()}
+                      </p>
+                      {href && (
+                        <div className="mt-3">
+                          <a href={href} className="inline-flex items-center gap-1 text-sm font-semibold text-deliivo-orange hover:underline">
+                            Open ride <ChevronRight className="h-3.5 w-3.5" />
+                          </a>
                         </div>
                       )}
                     </div>
-                    {!item.isRead && <span className="mt-0.5 h-2.5 w-2.5 rounded-full bg-deliivo-orange shrink-0" />}
                   </div>
-
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
-                    <p className="text-[11px] uppercase tracking-wide text-deliivo-gray">
-                      {item.type.replace(/\./g, ' ')}
-                    </p>
-                    {href && (
-                      <Link
-                        href={href}
-                        className="inline-flex items-center gap-1 rounded-full border border-orange-200 px-3 py-1 text-xs font-semibold text-deliivo-orange hover:bg-orange-50"
-                      >
-                        Open ride
-                        <ArrowRight className="h-3 w-3" />
-                      </Link>
-                    )}
-                  </div>
-                </div>
+                </article>
               );
             })}
           </div>
         )}
       </div>
-
-      {showViewAll && (
-        <div className="border-t border-gray-100 px-4 py-3">
-          <Link href="/profile/notifications" className="text-sm font-semibold text-deliivo-orange hover:underline">
-            View all notifications
-          </Link>
-        </div>
-      )}
     </div>
   );
 

@@ -19,6 +19,7 @@ export interface Ride {
   pricePerSeat: number;
   femaleOnly?: boolean;
   noSmoking?: boolean;
+  alcoholFreeRide?: boolean;
   noBicycles?: boolean;
   childSeatAvailable?: boolean;
 }
@@ -85,13 +86,16 @@ export default function RideCard({ ride }: RideCardProps) {
             </span>
           )}
         </div>
-        {(ride.noSmoking || ride.noBicycles || ride.childSeatAvailable) && (
+        {(ride.noSmoking || ride.alcoholFreeRide || ride.noBicycles) && (
           <div className="flex flex-wrap gap-1.5">
             {ride.noSmoking && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-deliivo-orange">{t('ride.noSmoking')}</span>}
+            {ride.alcoholFreeRide && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-deliivo-orange">{t('ride.alcoholFreeRide')}</span>}
             {ride.noBicycles && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-deliivo-orange">{t('ride.noBicycles')}</span>}
-            {ride.childSeatAvailable && <span className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">{t('ride.childSeat')}</span>}
           </div>
         )}
+        <p className="text-xs text-deliivo-gray">
+          {t('ride.childSeatPolicy')}
+        </p>
 
         {/* Route */}
         <div className="flex items-stretch gap-3">

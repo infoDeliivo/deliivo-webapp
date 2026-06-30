@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { useAuth } from '@/lib/auth-context';
 import {
   mapsApi,
   searchRidesApi,
@@ -45,11 +46,13 @@ function PlaceInput({
   value,
   onChange,
   placeholder,
+  label,
   icon,
 }: {
   value: PlaceSelection | null;
   onChange: (place: PlaceSelection | null) => void;
   placeholder: string;
+  label: string;
   icon: React.ReactNode;
 }) {
   const [query, setQuery] = useState(value?.address || '');
@@ -94,7 +97,8 @@ function PlaceInput({
 
   return (
     <div className="relative flex-1">
-      <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">{icon}</div>
+      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{label}</label>
+      <div className="pointer-events-none absolute bottom-0 left-3 flex h-11 items-center">{icon}</div>
       <input
         type="text"
         value={query}
@@ -102,9 +106,9 @@ function PlaceInput({
         onFocus={() => predictions.length > 0 && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 200)}
         placeholder={placeholder}
-        className="input-field pl-9"
+        className="input-field h-11 pl-9"
       />
-      {loading && <div className="absolute inset-y-0 right-3 flex items-center"><Loader2 className="h-4 w-4 animate-spin text-deliivo-gray" /></div>}
+      {loading && <div className="absolute bottom-0 right-3 flex h-11 items-center"><Loader2 className="h-4 w-4 animate-spin text-deliivo-gray" /></div>}
       {open && predictions.length > 0 && (
         <div className="absolute z-20 mt-1 w-full rounded-xl border border-gray-100 bg-white shadow-lg max-h-60 overflow-y-auto">
           {predictions.map((p) => (
@@ -180,13 +184,16 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
               <span className="ml-1 rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-600">{t('ride.womenOnly')}</span>
             )}
           </div>
-          {(ride.noSmoking || ride.noBicycles || ride.childSeatAvailable) && (
+          {(ride.noSmoking || ride.alcoholFreeRide || ride.noBicycles) && (
             <div className="flex flex-wrap gap-1.5">
               {ride.noSmoking && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-deliivo-orange">{t('ride.noSmoking')}</span>}
+              {ride.alcoholFreeRide && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-deliivo-orange">{t('ride.alcoholFreeRide')}</span>}
               {ride.noBicycles && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-deliivo-orange">{t('ride.noBicycles')}</span>}
-              {ride.childSeatAvailable && <span className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">{t('ride.childSeat')}</span>}
             </div>
           )}
+          <p className="text-xs text-deliivo-gray">
+            {t('ride.childSeatPolicy')}
+          </p>
 
           {/* Route */}
           <div className="flex items-stretch gap-3">
@@ -234,6 +241,8 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
 // ─── Main Search Page ─────────────────────────────────────────────────────────
 
 function SearchPageContent() {
+  const { user, loading: authLoading } = useAuth();
+  const canUseWomenOnly = user?.gender === 'FEMALE';
   const { t } = useTranslation();
   const searchParams = useSearchParams();
 
@@ -266,10 +275,14 @@ function SearchPageContent() {
   const [alertCreated, setAlertCreated] = useState(false);
 
   useEffect(() => {
+    if (authLoading || !user) {
+      setRecentSearches([]);
+      return;
+    }
     searchRidesApi.getRecent(5).then(res => {
       setRecentSearches(res.data || []);
     }).catch(() => {});
-  }, []);
+  }, [authLoading, user]);
 
   useEffect(() => {
     if (hydratedQueryRef.current) return;
@@ -418,6 +431,7 @@ function SearchPageContent() {
                 value={origin}
                 onChange={setOrigin}
                 placeholder={t('search.fromPlaceholder')}
+                label={t('search.fromLabel')}
                 icon={<MapPin size={18} className="text-primary-500" />}
               />
               <button type="button" onClick={swap} aria-label={t('search.swap')} className="mx-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-primary-500 hover:bg-primary-50 sm:mx-0">
@@ -427,6 +441,7 @@ function SearchPageContent() {
                 value={destination}
                 onChange={setDestination}
                 placeholder={t('search.toPlaceholder')}
+                label={t('search.toLabel')}
                 icon={<MapPin size={18} className="text-deliivo-gray" />}
               />
               <div className="relative flex-1">
@@ -444,14 +459,15 @@ function SearchPageContent() {
                     {[1,2,3,4].map(n => <option key={n} value={n}>{n} {n > 1 ? t('search.seatsPlural') : t('search.seat')}</option>)}
                   </select>
                 </div>
-                {/* Women only */}
-                <label className="flex cursor-pointer items-center gap-2 select-none">
-                  <button type="button" role="switch" aria-checked={femaleOnly} onClick={() => setFemaleOnly(v => !v)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${femaleOnly ? 'bg-primary-500' : 'bg-gray-200'}`}>
-                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${femaleOnly ? 'translate-x-5' : 'translate-x-0'}`} />
-                  </button>
-                  <span className="text-sm font-medium text-deliivo-dark">{t('search.womenOnly')}</span>
-                </label>
+                {canUseWomenOnly && (
+                  <label className="flex cursor-pointer items-center gap-2 select-none">
+                    <button type="button" role="switch" aria-checked={femaleOnly} onClick={() => setFemaleOnly(v => !v)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${femaleOnly ? 'bg-primary-500' : 'bg-gray-200'}`}>
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${femaleOnly ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                    <span className="text-sm font-medium text-deliivo-dark">{t('search.womenOnly')}</span>
+                  </label>
+                )}
                 {/* Filters toggle */}
                 <button type="button" onClick={() => setShowFilters(v => !v)} className="flex items-center gap-1 text-sm text-deliivo-gray hover:text-deliivo-orange">
                   <SlidersHorizontal size={14} /> {t('common.filters')}
@@ -527,7 +543,7 @@ function SearchPageContent() {
           )}
 
           {/* Ride alert — shown after search with no results */}
-          {searched && !loading && results.length === 0 && origin && destination && date && (
+          {user && searched && !loading && results.length === 0 && origin && destination && date && (
             <div className="rounded-2xl bg-white shadow-sm p-5 mb-6">
               {alertCreated ? (
                 <div className="flex items-center gap-2">

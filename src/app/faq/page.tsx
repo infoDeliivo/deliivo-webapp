@@ -16,9 +16,31 @@ const faqs = [
 
 export default function FaqPage() {
   const { t } = useTranslation();
+  const faqSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map((item) => ({
+      '@type': 'Question',
+      name: t(item.q),
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: t(item.a, { email: publicConfig.supportEmail }),
+      },
+    })),
+  };
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://deliivo.com/' },
+      { '@type': 'ListItem', position: 2, name: 'FAQ', item: 'https://deliivo.com/faq' },
+    ],
+  };
 
   return (
     <div className="flex min-h-full flex-col bg-deliivo-cream">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <Navbar />
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10 sm:px-6 sm:py-14">
         <div className="mb-8">

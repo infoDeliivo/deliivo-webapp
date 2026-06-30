@@ -111,15 +111,21 @@ export default function AdminContentPage() {
 
   const publishedCount = posts.filter((post) => post.status === 'PUBLISHED').length;
   const locales = Array.from(new Set(posts.map((post) => post.locale))).sort();
+  const categoryOptions: Array<{ value: ContentPost['category']; label: string }> = [
+    { value: 'Rider guide', label: 'Rider blog' },
+    { value: 'Driver guide', label: 'Driver blog' },
+    { value: 'Safety', label: 'Safety' },
+    { value: 'Product update', label: 'Product update' },
+  ];
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-orange-600">Content operations</p>
-          <h1 className="mt-1 text-2xl font-bold text-gray-900">Guides, pages, and translations</h1>
+          <h1 className="mt-1 text-2xl font-bold text-gray-900">Blog posts, pages, and translations</h1>
           <p className="mt-2 max-w-3xl text-sm text-gray-600">
-            Manage public guide posts with draft and published states. This is the current content foundation for the public blog.
+            Manage public blog posts with draft and published states. This is the current content foundation for the public blog.
           </p>
         </div>
         <button type="button" onClick={createNew} className="inline-flex items-center gap-2 rounded-xl bg-[#F97316] px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600">
@@ -132,7 +138,7 @@ export default function AdminContentPage() {
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3">
             <BookOpen className="h-5 w-5 text-orange-600" />
-            <h2 className="font-semibold text-gray-900">Published guides</h2>
+            <h2 className="font-semibold text-gray-900">Published blog posts</h2>
           </div>
           <p className="mt-3 text-3xl font-bold text-gray-900">{publishedCount}</p>
           <p className="mt-1 text-sm text-gray-500">Public blog posts currently visible on `/blog`.</p>
@@ -151,14 +157,14 @@ export default function AdminContentPage() {
             <h2 className="font-semibold text-gray-900">Total content entries</h2>
           </div>
           <p className="mt-3 text-3xl font-bold text-gray-900">{posts.length}</p>
-          <p className="mt-1 text-sm text-gray-500">Draft and published guide records.</p>
+          <p className="mt-1 text-sm text-gray-500">Draft and published blog records.</p>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-100 px-5 py-4">
-            <h2 className="font-semibold text-gray-900">Guide catalogue</h2>
+            <h2 className="font-semibold text-gray-900">Blog catalogue</h2>
           </div>
           {loading ? (
             <div className="flex items-center justify-center py-16">
@@ -178,7 +184,7 @@ export default function AdminContentPage() {
                       {post.status}
                     </span>
                     <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-700">
-                      {post.category}
+                      {post.category === 'Rider guide' ? 'Rider blog' : post.category === 'Driver guide' ? 'Driver blog' : post.category}
                     </span>
                     <span className="text-[11px] text-gray-500">{post.locale}</span>
                   </div>
@@ -196,7 +202,7 @@ export default function AdminContentPage() {
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <h2 className="font-semibold text-gray-900">{selectedId ? 'Edit content post' : 'Create content post'}</h2>
-              <p className="mt-1 text-sm text-gray-500">Maintain blog guides without leaving the admin portal.</p>
+              <p className="mt-1 text-sm text-gray-500">Maintain blog posts without leaving the admin portal.</p>
             </div>
             {selectedPost && (
               <button type="button" onClick={() => deletePost(selectedPost.id)} className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50">
@@ -215,7 +221,7 @@ export default function AdminContentPage() {
             </Field>
             <Field label="Category">
               <select value={draft.category} onChange={(e) => setDraft((prev) => ({ ...prev, category: e.target.value as ContentPost['category'] }))} className="input-field">
-                {['Rider guide', 'Driver guide', 'Safety', 'Product update'].map((value) => <option key={value} value={value}>{value}</option>)}
+                {categoryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </Field>
             <Field label="Status">

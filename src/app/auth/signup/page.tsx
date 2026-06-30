@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FaGoogle, FaApple } from "react-icons/fa";
 import { authApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import BrandLogo from "@/components/BrandLogo";
+import { buildE164PhoneNumber, PHONE_COUNTRY_OPTIONS, sanitizePhoneLocalNumber } from "@/lib/phone-auth";
+import { getSafeReturnTo, withReturnTo } from "@/lib/auth-redirect";
 
 type Step = 'form' | 'otp';
 type Method = 'email' | 'phone';
@@ -19,16 +21,26 @@ export default function SignUpPage() {
   const [method, setMethod] = useState<Method>('email');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [phoneCountryCode, setPhoneCountryCode] = useState('+372');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
+  const [returnTo, setReturnTo] = useState<string | null>(null);
 
-  const identifier = method === 'email' ? email : phone;
+  const identifier = method === 'email' ? email.trim() : buildE164PhoneNumber(phoneCountryCode, phone);
+
+  useEffect(() => {
+    setReturnTo(getSafeReturnTo());
+  }, []);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!identifier) {
+      setError('Enter a valid phone number with country code.');
+      return;
+    }
     setLoading(true);
     try {
       const res = await authApi.signup(method, identifier);
@@ -45,11 +57,15 @@ export default function SignUpPage() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!identifier) {
+      setError('Enter a valid phone number with country code.');
+      return;
+    }
     setLoading(true);
     try {
       const res = await authApi.verifyOtp(identifier, otp, 'signup', method);
       await login(res.data.accessToken, res.data.refreshToken);
-      router.push('/onboarding');
+      router.replace(withReturnTo('/onboarding', returnTo || getSafeReturnTo()));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Verification failed';
       setError(msg);
@@ -60,6 +76,10 @@ export default function SignUpPage() {
 
   const handleResendOtp = async () => {
     setError('');
+    if (!identifier) {
+      setError('Enter a valid phone number with country code.');
+      return;
+    }
     try {
       const res = await authApi.resendOtp(identifier, 'signup', method);
       if (res.data?.code) setDevCode(res.data.code);
@@ -91,7 +111,7 @@ export default function SignUpPage() {
               <div className="mb-6 flex rounded-full bg-gray-100 p-1">
                 <button
                   type="button"
-                  onClick={() => setMethod('email')}
+                  onClick={() => { setMethod('email'); setError(''); }}
                   className={`flex-1 rounded-full py-2 text-sm font-medium transition-all ${
                     method === 'email' ? 'bg-white shadow-sm text-deliivo-dark' : 'text-deliivo-gray'
                   }`}
@@ -100,7 +120,7 @@ export default function SignUpPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setMethod('phone')}
+                  onClick={() => { setMethod('phone'); setError(''); }}
                   className={`flex-1 rounded-full py-2 text-sm font-medium transition-all ${
                     method === 'phone' ? 'bg-white shadow-sm text-deliivo-dark' : 'text-deliivo-gray'
                   }`}
@@ -131,16 +151,34 @@ export default function SignUpPage() {
                     <label htmlFor="phone" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
                       Phone number
                     </label>
-                    <input
-                      id="phone"
-                      type="tel"
-                      autoComplete="tel"
-                      required
-                      placeholder="+44 7700 900000"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="input-field"
-                    />
+                    <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+                      <select
+                        value={phoneCountryCode}
+                        onChange={(e) => setPhoneCountryCode(e.target.value)}
+                        className="input-field"
+                        aria-label="Country code"
+                      >
+                        {PHONE_COUNTRY_OPTIONS.map((option) => (
+                          <option key={option.code} value={option.code}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        id="phone"
+                        type="tel"
+                        autoComplete="tel-national"
+                        inputMode="numeric"
+                        required
+                        placeholder="51234567"
+                        value={phone}
+                        onChange={(e) => setPhone(sanitizePhoneLocalNumber(e.target.value))}
+                        className="input-field"
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs text-deliivo-gray">
+                      We store your number as {phoneCountryCode} plus your local number.
+                    </p>
                   </div>
                 )}
 
@@ -246,7 +284,7 @@ export default function SignUpPage() {
 
           <p className="mt-6 text-center text-sm text-deliivo-gray">
             Already have an account?{" "}
-            <Link href="/auth/signin" className="font-semibold text-deliivo-orange hover:text-deliivo-orange-dark transition-colors">
+            <Link href={withReturnTo('/auth/signin', returnTo)} className="font-semibold text-deliivo-orange hover:text-deliivo-orange-dark transition-colors">
               Sign in
             </Link>
           </p>

@@ -10,7 +10,8 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/auth/signin');
+      const returnTo = `${window.location.pathname}${window.location.search}`;
+      router.replace(`/auth/signin?returnTo=${encodeURIComponent(returnTo)}`);
     }
   }, [user, loading, router]);
 

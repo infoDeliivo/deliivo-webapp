@@ -6,6 +6,7 @@ import OngoingRidePanel from '@/components/OngoingRidePanel';
 import AppFeedbackToast from '@/components/AppFeedbackToast';
 import { I18nProvider } from '@/lib/i18n-context';
 import ConnectivityBanner from '@/components/ConnectivityBanner';
+import RecoveryOutboxSync from '@/components/RecoveryOutboxSync';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -13,6 +14,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <AuthProvider>
         {children}
         <ConnectivityBanner />
+        <RecoveryOutboxSync />
         <OngoingRidePanel />
         <AppFeedbackToast />
         <NotificationToast />

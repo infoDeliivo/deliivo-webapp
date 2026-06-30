@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -21,7 +21,6 @@ import {
   Share2,
 } from 'lucide-react';
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
-import ProtectedRoute from '@/components/ProtectedRoute';
 import EmergencySosButton from '@/components/EmergencySosButton';
 import SupportOverrideCard from '@/components/SupportOverrideCard';
 import { authApi, searchRidesApi, bookingsApi, rideOpsApi, ratingsApi, trackingApi, disputesApi, paymentMethodsApi, RideDetails, PricePreview, Booking, TrackingLink, Dispute, PaymentMethod, getApiErrorMessage } from '@/lib/api';
@@ -30,6 +29,9 @@ import { emitSocketEvent, getSocket, onSocketEvent, LocationUpdate, Notification
 import { isStripeConfigured, StripeProvider } from '@/lib/stripe';
 import { showError, showSuccess } from '@/lib/app-feedback';
 import { useTranslation } from '@/lib/i18n-context';
+import { withReturnTo } from '@/lib/auth-redirect';
+import { getBookingStatusBadgeClass, getRideStatusLabel } from '@/lib/ride-status';
+import { enqueueRecoveryAction, isRecoverableServerFailure } from '@/lib/recovery-outbox';
 
 const TOS_VERSION = '1.0';
 const PRIVACY_VERSION = '1.0';
@@ -78,10 +80,123 @@ function buildRiderPointOptions(ride: RideDetails): RiderPointOption[] {
   ];
 }
 
+function isWithinConfirmedCancellationWindow(ride: RideDetails, booking: Booking | null) {
+  if (booking?.status !== 'CONFIRMED') return false;
+  const date = new Date(ride.departureDate);
+  const [hours, minutes] = ride.departureTime.split(':').map(Number);
+  const departureAt = Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    hours,
+    minutes,
+  );
+  return departureAt - Date.now() <= 3 * 60 * 60 * 1000;
+}
+
+type LiveSharingLinksCardProps = {
+  trackingLinks: TrackingLink[];
+  trackingBusy: boolean;
+  trackingMessage: string;
+  activeTrackingUrl: string | null;
+  locale: string;
+  title: string;
+  description: string;
+  emptyText: string;
+  createLabel: string;
+  creatingLabel: string;
+  copyLabel: string;
+  onCreate: () => void;
+  onCopy: (link: TrackingLink) => void;
+  trackingUrlFor: (link: TrackingLink) => string;
+};
+
+const LiveSharingLinksCard = memo(function LiveSharingLinksCard({
+  trackingLinks,
+  trackingBusy,
+  trackingMessage,
+  activeTrackingUrl,
+  locale,
+  title,
+  description,
+  emptyText,
+  createLabel,
+  creatingLabel,
+  copyLabel,
+  onCreate,
+  onCopy,
+  trackingUrlFor,
+}: LiveSharingLinksCardProps) {
+  const latestLink = trackingLinks[0] || null;
+
+  return (
+    <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-deliivo-dark">{title}</p>
+          <p className="mt-1 text-xs text-deliivo-gray">
+            {description}
+          </p>
+        </div>
+        <Share2 className="h-4 w-4 text-blue-600" />
+      </div>
+
+      {latestLink ? (
+        <div className="rounded-lg bg-white border border-blue-100 px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-xs font-medium text-deliivo-dark">
+                {activeTrackingUrl || trackingUrlFor(latestLink)}
+              </p>
+              <p className="text-[11px] text-deliivo-gray">
+                Expires at {new Date(latestLink.expiresAt).toLocaleString(locale)}
+              </p>
+            </div>
+              <button
+              type="button"
+              onClick={() => onCopy(latestLink)}
+              className="shrink-0 rounded-full border border-blue-200 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+            >
+              {copyLabel}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-deliivo-gray">{emptyText}</p>
+      )}
+
+      <button
+        type="button"
+        onClick={onCreate}
+        disabled={trackingBusy}
+        className="w-full rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+      >
+        {trackingBusy ? creatingLabel : createLabel}
+      </button>
+      {trackingMessage && <p className="text-xs text-deliivo-gray">{trackingMessage}</p>}
+    </div>
+  );
+});
+
+function areTrackingLinksEqual(previous: TrackingLink[], next: TrackingLink[]) {
+  if (previous.length !== next.length) return false;
+  return previous.every((link, index) => {
+    const candidate = next[index];
+    return Boolean(
+      candidate
+      && candidate.id === link.id
+      && candidate.token === link.token
+      && candidate.expiresAt === link.expiresAt
+      && candidate.trackingUrl === link.trackingUrl
+    );
+  });
+}
+
 function RideDetailContent() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const segmentId = searchParams.get('segmentId') || undefined;
+  const rideReturnTo = `/rides/${id}${segmentId ? `?segmentId=${encodeURIComponent(segmentId)}` : ''}`;
   const { user, refreshUser } = useAuth();
   const { t, locale } = useTranslation();
   const stripe = useStripe();
@@ -103,7 +218,8 @@ function RideDetailContent() {
   const [showAddPaymentMethod, setShowAddPaymentMethod] = useState(false);
   const [tosAcceptedForBooking, setTosAcceptedForBooking] = useState(false);
   const [responseExpiryOption, setResponseExpiryOption] = useState<'ONE_HOUR' | 'THREE_HOURS' | 'SIX_HOURS' | 'TWELVE_HOURS' | 'TWENTY_FOUR_HOURS' | 'BEFORE_DEPARTURE'>('BEFORE_DEPARTURE');
-  const [requiresChildSeat, setRequiresChildSeat] = useState(false);
+  const [travelingWithChildUnderTwo, setTravelingWithChildUnderTwo] = useState(false);
+  const [bringingOwnChildSeat, setBringingOwnChildSeat] = useState(false);
   const [selectedPickupValue, setSelectedPickupValue] = useState('origin');
   const [selectedDropoffValue, setSelectedDropoffValue] = useState('destination');
 
@@ -135,6 +251,7 @@ function RideDetailContent() {
   // Live driver location (for passengers)
   const [driverLiveLocation, setDriverLiveLocation] = useState<{ lat: number; lng: number } | null>(null);
   const refreshInFlightRef = useRef(false);
+  const lastBookingIdRef = useRef<string | null>(null);
   const requestExpiryOptions = [
     { value: 'ONE_HOUR', label: t('rideDetail.expiryOneHour') },
     { value: 'THREE_HOURS', label: t('rideDetail.expiryThreeHours') },
@@ -154,18 +271,28 @@ function RideDetailContent() {
   useEffect(() => {
     if (!id) return;
     loadRide(true);
-    loadMyBooking();
-    loadPaymentMethods();
-  }, [id]);
-
-  useEffect(() => {
-    if (!myBooking) {
+    if (!user) {
+      setMyBooking(null);
+      lastBookingIdRef.current = null;
       setTrackingLinks([]);
+      setTrackingMessage('');
       setMyDisputes([]);
+      setPaymentMethods([]);
+      setSelectedPaymentMethodId('');
       return;
     }
-    loadTrackingLinks(myBooking.id);
-    loadMyDisputes(myBooking.id);
+    loadMyBooking();
+    loadPaymentMethods();
+  }, [id, user?.id]);
+
+  useEffect(() => {
+    if (myBooking?.id) {
+      lastBookingIdRef.current = myBooking.id;
+    }
+    const bookingId = myBooking?.id || lastBookingIdRef.current;
+    if (!bookingId) return;
+    loadTrackingLinks(bookingId);
+    loadMyDisputes(bookingId);
   }, [myBooking?.id]);
 
   useEffect(() => {
@@ -311,16 +438,17 @@ function RideDetailContent() {
       const detail = await bookingsApi.getById(match.id);
       setMyBooking(detail.data || match);
     } catch {
-      setMyBooking(null);
+      // Keep the current booking view stable if a background refresh fails.
     }
   }
 
   async function loadTrackingLinks(bookingId: string) {
     try {
       const res = await trackingApi.listLinks(bookingId);
-      setTrackingLinks(res.data || []);
+      const nextLinks = res.data || [];
+      setTrackingLinks((previous) => (areTrackingLinksEqual(previous, nextLinks) ? previous : nextLinks));
     } catch {
-      setTrackingLinks([]);
+      // Keep the current list instead of blanking the UI on transient failures.
     }
   }
 
@@ -353,20 +481,22 @@ function RideDetailContent() {
     }
   }
 
-  function trackingUrlFor(link: TrackingLink) {
+  const trackingUrlFor = useCallback((link: TrackingLink) => {
     const path = link.trackingUrl || `/tracking/${link.token}`;
     if (typeof window === 'undefined') return path;
     return new URL(path, window.location.origin).toString();
-  }
+  }, []);
 
-  async function handleCreateTrackingLink() {
+  const handleCreateTrackingLink = useCallback(async () => {
     if (!myBooking) return;
     setTrackingBusy(true);
     setTrackingMessage('');
     try {
       const res = await trackingApi.createLink(myBooking.id, 24);
-      const nextLinks = [res.data, ...trackingLinks];
-      setTrackingLinks(nextLinks);
+      setTrackingLinks((previous) => {
+        const nextLinks = [res.data, ...previous.filter((link) => link.id !== res.data.id)];
+        return areTrackingLinksEqual(previous, nextLinks) ? previous : nextLinks;
+      });
       const url = trackingUrlFor(res.data);
       await navigator.clipboard?.writeText(url);
       setTrackingMessage(t('rideDetail.liveLinkCopied'));
@@ -378,9 +508,9 @@ function RideDetailContent() {
     } finally {
       setTrackingBusy(false);
     }
-  }
+  }, [myBooking?.id, trackingUrlFor, t]);
 
-  async function handleCopyTrackingLink(link: TrackingLink) {
+  const handleCopyTrackingLink = useCallback(async (link: TrackingLink) => {
     try {
       await navigator.clipboard?.writeText(trackingUrlFor(link));
       setTrackingMessage(t('rideDetail.liveLinkCopied'));
@@ -389,7 +519,7 @@ function RideDetailContent() {
       setTrackingMessage(trackingUrlFor(link));
       showError(t('rideDetail.couldNotCopyLink'), t('rideDetail.copyLiveLinkManually'));
     }
-  }
+  }, [t, trackingUrlFor]);
 
   async function handleRiderConfirmDropoff() {
     if (!myBooking) return;
@@ -542,7 +672,26 @@ function RideDetailContent() {
 
   async function handleManualRideReview(reason: string) {
     if (!myBooking || !ride) return;
-    await handleCreateDispute(reason, `Manual recovery request: ${reason}`);
+    const recoveryReason = reason.trim() || 'Manual recovery requested';
+    try {
+      await disputesApi.create({
+        rideId: ride.id,
+        bookingId: myBooking.id,
+        reason: recoveryReason,
+        description: `Manual recovery request: ${recoveryReason}`,
+      });
+      await loadMyDisputes(myBooking.id);
+      showSuccess(t('rideDetail.reportSubmitted'), t('rideDetail.reportSubmittedSupportCopy'));
+    } catch (err: unknown) {
+      if (isRecoverableServerFailure(err)) {
+        enqueueRecoveryAction({ eventType: 'MANUAL_RIDER_RECOVERY', rideId: ride.id, bookingId: myBooking.id, overrideReason: recoveryReason });
+        showSuccess('Saved offline', 'Your recovery request is saved on this device and will be reconciled when the server is available.');
+        return;
+      }
+      const message = getApiErrorMessage(err, t('rideDetail.failedSubmitReport'));
+      setBookError(message);
+      showError(t('rideDetail.couldNotSubmitReport'), message);
+    }
   }
 
   async function refreshRideData() {
@@ -576,7 +725,8 @@ function RideDetailContent() {
       const res = await bookingsApi.pricePreview({
         rideId: ride.id,
         seatsBooked: seats,
-        requiresChildSeat,
+        travelingWithChildUnderTwo,
+        bringingOwnChildSeat,
         pickupWaypointId,
         dropoffWaypointId,
       });
@@ -590,7 +740,7 @@ function RideDetailContent() {
 
   useEffect(() => {
     if (ride) loadPricePreview();
-  }, [ride, seats, requiresChildSeat, selectedPickupValue, selectedDropoffValue]);
+  }, [ride, seats, travelingWithChildUnderTwo, bringingOwnChildSeat, selectedPickupValue, selectedDropoffValue]);
 
   async function confirmStripeBookingPayment(targetBooking: Booking) {
     if (!targetBooking.payment?.clientSecret) return targetBooking;
@@ -644,8 +794,8 @@ function RideDetailContent() {
     setBookError('');
     setPaymentMessage('');
     try {
-      if (requiresChildSeat && !ride.childSeatAvailable) {
-        throw new Error('This ride does not offer a child seat.');
+      if (travelingWithChildUnderTwo && !bringingOwnChildSeat) {
+        throw new Error('Please confirm that you will bring your own child seat.');
       }
       if (needsTosAcceptance) {
         await authApi.acceptTos(TOS_VERSION, PRIVACY_VERSION);
@@ -654,7 +804,8 @@ function RideDetailContent() {
       const res = await bookingsApi.create({
         rideId: ride.id,
         seatsBooked: seats,
-        requiresChildSeat,
+        travelingWithChildUnderTwo,
+        bringingOwnChildSeat,
         pickupWaypointId: selectedPickupValue !== 'origin' ? selectedPickupValue : undefined,
         dropoffWaypointId: selectedDropoffValue !== 'destination' ? selectedDropoffValue : undefined,
         responseExpiryOption,
@@ -789,6 +940,7 @@ function RideDetailContent() {
   const disputeEligibleStatuses = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED', 'DISPUTED'];
   const openDispute = myDisputes.find((dispute) => ['OPEN', 'EVIDENCE_COLLECTED', 'NEEDS_MANUAL_REVIEW', 'WAITING_FOR_USER_RESPONSE', 'ESCALATED'].includes(dispute.status));
   const isDriverConfirmedBooking = Boolean(myBooking && !['PENDING', 'PAYMENT_PENDING', 'DRIVER_PENDING', 'PAYMENT_FAILED', 'REJECTED', 'CANCELLED'].includes(myBooking.status));
+  const cancellationWindowClosed = isWithinConfirmedCancellationWindow(ride, myBooking);
 
   function pointKindLabel(kind: RiderPointKind) {
     if (kind === 'origin') return t('rideDetail.mainDeparture');
@@ -796,6 +948,21 @@ function RideDetailContent() {
     if (kind === 'stopover') return t('rideDetail.stopoverPointType');
     if (kind === 'dropoff') return t('rideDetail.dropoffPointType');
     return t('rideDetail.mainDestination');
+  }
+
+  function pointChipLabel(kind: RiderPointKind) {
+    if (kind === 'origin') return t('rideDetail.mainDeparture');
+    if (kind === 'pickup') return t('rideDetail.pickupPointType');
+    if (kind === 'stopover') return t('rideDetail.stopoverPointType');
+    if (kind === 'dropoff') return t('rideDetail.dropoffPointType');
+    return t('rideDetail.mainDestination');
+  }
+
+  function pointChipClass(kind: RiderPointKind) {
+    if (kind === 'pickup' || kind === 'origin') return 'bg-orange-50 text-deliivo-orange';
+    if (kind === 'dropoff') return 'bg-red-50 text-red-600';
+    if (kind === 'stopover') return 'bg-blue-50 text-blue-700';
+    return 'bg-gray-100 text-deliivo-gray';
   }
 
   function handlePickupChange(nextValue: string) {
@@ -918,7 +1085,7 @@ function RideDetailContent() {
                   .sort((a, b) => a.orderIndex - b.orderIndex)
                   .map((waypoint) => (
                     <div key={waypoint.id} className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-deliivo-orange">
+                      <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${waypoint.waypointType === 'PICKUP' ? 'bg-orange-100 text-deliivo-orange' : waypoint.waypointType === 'DROPOFF' ? 'bg-red-100 text-red-600' : 'bg-white text-deliivo-orange'}`}>
                         <MapPin className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -930,6 +1097,9 @@ function RideDetailContent() {
                           <p className="text-xs text-deliivo-gray">{t('rideDetail.estimatedTime')}: {waypoint.estimatedArrivalTime}</p>
                         )}
                       </div>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${pointChipClass(toRiderPointKind(waypoint.waypointType))}`}>
+                        {pointChipLabel(toRiderPointKind(waypoint.waypointType))}
+                      </span>
                     </div>
                   ))}
               </div>
@@ -941,7 +1111,7 @@ function RideDetailContent() {
               <p className="text-sm text-deliivo-dark">{ride.notes}</p>
             </div>
           )}
-        {(ride.femaleOnly || ride.noSmoking || ride.noBicycles || ride.childSeatAvailable) && (
+        {(ride.femaleOnly || ride.noSmoking || ride.alcoholFreeRide || ride.noBicycles) && (
           <div className="flex flex-wrap gap-2">
             {ride.femaleOnly && (
               <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-600">
@@ -953,72 +1123,118 @@ function RideDetailContent() {
                 <CheckCircle className="h-3 w-3" /> {t('ride.noSmoking')}
               </span>
             )}
+            {ride.alcoholFreeRide && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-deliivo-orange">
+                <CheckCircle className="h-3 w-3" /> {t('ride.alcoholFreeRide')}
+              </span>
+            )}
             {ride.noBicycles && (
               <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-deliivo-orange">
                 <CheckCircle className="h-3 w-3" /> {t('ride.noBicycles')}
               </span>
             )}
-            {ride.childSeatAvailable && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-                <CheckCircle className="h-3 w-3" /> {t('ride.childSeat')}
-              </span>
-            )}
           </div>
         )}
+        <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+          <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.childSeatPolicyTitle')}</p>
+          <p className="mt-1 text-xs text-deliivo-gray">{t('rideDetail.childSeatPolicyCopy')}</p>
+        </div>
       </div>
 
         {/* Booking section */}
-        {!isOwnRide && !myBooking && ride.availableSeats > 0 && (
+        {!user && !isOwnRide && !myBooking && ride.availableSeats > 0 && (
+          <div className="rounded-2xl border border-primary-100 bg-primary-50 p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
+            <p className="mt-2 text-sm text-deliivo-gray">{t('rideDetail.signInToChoosePickup')}</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href={withReturnTo('/auth/signin', rideReturnTo)} className="btn-primary px-5 py-2.5 text-sm">
+                {t('nav.signIn')}
+              </Link>
+              <Link href={withReturnTo('/auth/signup', rideReturnTo)} className="btn-outline px-5 py-2.5 text-sm">
+                {t('nav.signUp')}
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {user && !isOwnRide && !myBooking && ride.availableSeats > 0 && (
           <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
             <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
 
-            <div className="rounded-2xl border border-primary-100 bg-primary-50 p-4 space-y-4">
-              <div>
-                <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.yourTripOnThisRide')}</p>
-                <p className="mt-1 text-xs text-deliivo-gray">{t('rideDetail.choosePickupDropoffCopy')}</p>
+            <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <div>
+                  <p className="text-base font-semibold text-deliivo-dark">{t('rideDetail.yourTripOnThisRide')}</p>
+                  <p className="mt-1 text-sm text-deliivo-gray">{t('rideDetail.choosePickupDropoffCopy')}</p>
+                </div>
+                <span className="shrink-0 text-xs font-medium text-deliivo-gray">
+                  {pickupOptions.length} pickup · {dropoffOptions.length} drop-off choices
+                </span>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('rideDetail.pickupChoice')}</span>
+                <label className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 focus-within:border-deliivo-orange focus-within:bg-white focus-within:ring-2 focus-within:ring-deliivo-orange/10">
+                  <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-100 text-deliivo-orange">
+                      <MapPin className="h-3.5 w-3.5" />
+                    </span>
+                    {t('rideDetail.pickupChoice')}
+                  </span>
                   <select
                     value={selectedPickupValue}
                     onChange={(event) => handlePickupChange(event.target.value)}
-                    className="w-full rounded-xl border border-primary-200 bg-white px-3 py-3 text-sm text-deliivo-dark focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
+                    className="mt-2 min-w-0 w-full bg-transparent text-sm font-semibold text-deliivo-dark outline-none"
                   >
                     {filteredPickupOptions.map((option) => (
                       <option key={option.value} value={option.value}>
-                        {pointKindLabel(option.kind)} - {option.address}
+                        {pointKindLabel(option.kind)}: {option.address}
                       </option>
                     ))}
                   </select>
+                  <span className="mt-1 block text-xs text-deliivo-gray">
+                    {t('rideDetail.estimatedPickup')}: {selectedPickupOption.estimatedArrivalTime || ride.departureTime}
+                  </span>
                 </label>
 
-                <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('rideDetail.dropoffChoice')}</span>
+                <label className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 focus-within:border-deliivo-orange focus-within:bg-white focus-within:ring-2 focus-within:ring-deliivo-orange/10">
+                  <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-red-600">
+                      <MapPin className="h-3.5 w-3.5" />
+                    </span>
+                    {t('rideDetail.dropoffChoice')}
+                  </span>
                   <select
                     value={selectedDropoffValue}
                     onChange={(event) => handleDropoffChange(event.target.value)}
-                    className="w-full rounded-xl border border-primary-200 bg-white px-3 py-3 text-sm text-deliivo-dark focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
+                    className="mt-2 min-w-0 w-full bg-transparent text-sm font-semibold text-deliivo-dark outline-none"
                   >
                     {filteredDropoffOptions.map((option) => (
                       <option key={option.value} value={option.value}>
-                        {pointKindLabel(option.kind)} - {option.address}
+                        {pointKindLabel(option.kind)}: {option.address}
                       </option>
                     ))}
                   </select>
+                  <span className="mt-1 block text-xs text-deliivo-gray">
+                    {t('rideDetail.estimatedDropoff')}: {selectedDropoffOption.estimatedArrivalTime || t('rideDetail.atDestination')}
+                  </span>
                 </label>
               </div>
 
-              <div className="rounded-xl border border-primary-100 bg-white px-4 py-4 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('rideDetail.tripSummary')}</p>
-                <p className="text-sm font-semibold text-deliivo-dark">
-                  {selectedPickupOption.address} - {selectedDropoffOption.address}
-                </p>
-                <div className="grid gap-2 text-xs text-deliivo-gray sm:grid-cols-2">
-                  <p>{t('rideDetail.estimatedPickup')}: {selectedPickupOption.estimatedArrivalTime || ride.departureTime}</p>
-                  <p>{t('rideDetail.estimatedDropoff')}: {selectedDropoffOption.estimatedArrivalTime || t('rideDetail.atDestination')}</p>
+              <div className="flex items-center gap-3 rounded-xl bg-orange-50/70 px-4 py-3">
+                <div className="flex shrink-0 items-center gap-1.5" aria-hidden="true">
+                  <span className="h-2.5 w-2.5 rounded-full border-2 border-deliivo-orange bg-white" />
+                  <span className="h-0.5 w-8 bg-orange-200" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-deliivo-orange" />
                 </div>
+                <p className="min-w-0 text-sm font-medium text-deliivo-dark">
+                  <span className="block truncate">{selectedPickupOption.address}</span>
+                  <span className="block truncate text-deliivo-gray">to {selectedDropoffOption.address}</span>
+                </p>
+                {previewBreakdown && (
+                  <span className="ml-auto shrink-0 text-sm font-bold text-deliivo-orange">
+                    {previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1070,19 +1286,35 @@ function RideDetailContent() {
             <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
               <input
                 type="checkbox"
-                checked={requiresChildSeat}
-                onChange={(event) => setRequiresChildSeat(event.target.checked)}
+                checked={travelingWithChildUnderTwo}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setTravelingWithChildUnderTwo(checked);
+                  if (!checked) setBringingOwnChildSeat(false);
+                }}
                 className="mt-1 h-4 w-4 rounded border-gray-300 text-deliivo-orange focus:ring-deliivo-orange"
               />
               <span className="text-sm text-deliivo-dark">
-                Travelling with a child and need a child seat.
-                {!ride.childSeatAvailable && (
-                  <span className="mt-1 block text-xs text-red-600">
-                    This ride does not offer a child seat, so booking is blocked when this is selected.
-                  </span>
-                )}
+                Travelling with a child aged 2 or younger.
+                <span className="mt-1 block text-xs text-deliivo-gray">
+                  Riders must bring their own child seat. Drivers are not assumed to provide one.
+                </span>
               </span>
             </label>
+
+            {travelingWithChildUnderTwo && (
+              <label className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={bringingOwnChildSeat}
+                  onChange={(event) => setBringingOwnChildSeat(event.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-orange-300 text-deliivo-orange focus:ring-deliivo-orange"
+                />
+                <span className="text-sm text-deliivo-dark">
+                  I confirm that I will bring the child seat for this trip.
+                </span>
+              </label>
+            )}
 
             {isStripeConfigured() ? (
               <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
@@ -1158,13 +1390,36 @@ function RideDetailContent() {
             {/* Price preview */}
             {previewLoading ? (
               <div className="flex items-center gap-2 text-sm text-deliivo-gray"><Loader2 className="h-4 w-4 animate-spin" /> {t('rideDetail.calculating')}</div>
-            ) : preview ? (
-              <div className="rounded-xl bg-primary-50 border border-primary-100 p-4 space-y-2">
-                <div className="flex justify-between text-sm"><span className="text-deliivo-gray">{t('rideDetail.pricePerSeat')}</span><span className="font-medium">{previewBreakdown?.currency} {previewBreakdown?.basePricePerSeat?.toFixed(2)}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-deliivo-gray">{t('rideDetail.baseFare', { seats, plural: seats > 1 ? 's' : '' })}</span><span className="font-medium">{previewBreakdown?.currency} {previewBreakdown?.subtotal?.toFixed(2)}</span></div>
-                {previewBreakdown && previewBreakdown.serviceFee > 0 && <div className="flex justify-between text-sm"><span className="text-deliivo-gray">{t('rideDetail.serviceFee')}</span><span className="font-medium">{previewBreakdown.currency} {previewBreakdown.serviceFee.toFixed(2)}</span></div>}
-                {previewBreakdown && previewBreakdown.luggageFee > 0 && <div className="flex justify-between text-sm"><span className="text-deliivo-gray">{t('rideDetail.luggageFee')}</span><span className="font-medium">{previewBreakdown.currency} {previewBreakdown.luggageFee.toFixed(2)}</span></div>}
-                <div className="flex justify-between text-base font-bold pt-2 border-t border-primary-200"><span>{t('rideDetail.total')}</span><span className="text-primary-500">{previewBreakdown?.currency} {previewBreakdown?.totalPrice?.toFixed(2)}</span></div>
+            ) : preview && previewBreakdown ? (
+              <div className="overflow-hidden rounded-xl border border-primary-100 bg-primary-50">
+                <div className="border-b border-primary-100 px-4 py-3">
+                  <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.priceBreakdown')}</p>
+                  <p className="mt-0.5 truncate text-xs text-deliivo-gray">
+                    {selectedPickupOption.address} {t('search.toLabel').toLowerCase()} {selectedDropoffOption.address}
+                  </p>
+                </div>
+                <div className="space-y-2 px-4 py-3">
+                  <div className="flex justify-between gap-4 text-sm">
+                    <span className="text-deliivo-gray">
+                      {t('rideDetail.seatCalculation', {
+                        currency: previewBreakdown.currency,
+                        price: previewBreakdown.basePricePerSeat.toFixed(2),
+                        seats: previewBreakdown.seatsBooked,
+                        plural: previewBreakdown.seatsBooked === 1 ? '' : 's',
+                      })}
+                    </span>
+                    <span className="font-medium text-deliivo-dark">{previewBreakdown.currency} {previewBreakdown.subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4 text-sm">
+                    <span className="text-deliivo-gray">{t('rideDetail.serviceFee')}</span>
+                    <span className="font-medium text-deliivo-dark">{previewBreakdown.currency} {previewBreakdown.serviceFee.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4 border-t border-primary-200 pt-3 text-base font-bold">
+                    <span>{t('rideDetail.totalToPay')}</span>
+                    <span className="text-primary-500">{previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}</span>
+                  </div>
+                  <p className="pt-1 text-xs leading-5 text-deliivo-gray">{t('rideDetail.priceBreakdownNotice')}</p>
+                </div>
               </div>
             ) : null}
 
@@ -1185,7 +1440,7 @@ function RideDetailContent() {
             <button
               type="button"
               onClick={handleBook}
-              disabled={booking || paymentMethodsLoading || (isStripeConfigured() && (!selectedPaymentMethodId || showAddPaymentMethod)) || (needsTosAcceptance && !tosAcceptedForBooking)}
+              disabled={booking || paymentMethodsLoading || (isStripeConfigured() && (!selectedPaymentMethodId || showAddPaymentMethod)) || (needsTosAcceptance && !tosAcceptedForBooking) || (travelingWithChildUnderTwo && !bringingOwnChildSeat)}
               className="btn-primary w-full py-3.5 text-base gap-2 disabled:opacity-60"
             >
               {booking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-5 w-5" />}
@@ -1203,13 +1458,9 @@ function RideDetailContent() {
           <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.yourBooking')}</h3>
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                myBooking.status === 'ACCEPTED' || myBooking.status === 'CONFIRMED' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                myBooking.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border border-green-200' :
-                myBooking.status === 'NO_SHOW' || myBooking.status === 'DRIVER_MISSED_PICKUP' ? 'bg-red-50 text-red-700 border border-red-200' :
-                myBooking.status === 'DISPUTED' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
-                'bg-yellow-50 text-yellow-700 border border-yellow-200'
-              }`}>{myBooking.status}</span>
+              <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getBookingStatusBadgeClass(myBooking.status)}`}>
+                {getRideStatusLabel(myBooking.status, t)}
+              </span>
             </div>
 
             <EmergencySosButton
@@ -1404,49 +1655,22 @@ function RideDetailContent() {
             </div>
 
             {['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'ONBOARD', 'DROP_PENDING', 'IN_PROGRESS', 'COMPLETED'].includes(myBooking.status) && (
-              <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.liveSharingLink')}</p>
-                    <p className="mt-1 text-xs text-deliivo-gray">
-                      {t('rideDetail.liveSharingLinkCopy')}
-                    </p>
-                  </div>
-                  <Share2 className="h-4 w-4 text-blue-600" />
-                </div>
-
-                {trackingLinks.length > 0 ? (
-                  <div className="space-y-2">
-                    {trackingLinks.slice(0, 2).map((link) => (
-                      <div key={link.id} className="flex items-center justify-between gap-2 rounded-lg bg-white border border-blue-100 px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-medium text-deliivo-dark">{trackingUrlFor(link)}</p>
-                          <p className="text-[11px] text-deliivo-gray">{t('rideDetail.expiresAt', { time: new Date(link.expiresAt).toLocaleString(locale) })}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleCopyTrackingLink(link)}
-                          className="shrink-0 rounded-full border border-blue-200 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                        >
-                          {t('common.copy')}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-deliivo-gray">{t('rideDetail.noSharingLink')}</p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleCreateTrackingLink}
-                  disabled={trackingBusy}
-                  className="w-full rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
-                >
-                  {trackingBusy ? t('rideDetail.creating') : t('rideDetail.createCopyLiveLink')}
-                </button>
-                {trackingMessage && <p className="text-xs text-deliivo-gray">{trackingMessage}</p>}
-              </div>
+              <LiveSharingLinksCard
+                trackingLinks={trackingLinks}
+                trackingBusy={trackingBusy}
+                trackingMessage={trackingMessage}
+                activeTrackingUrl={activeTrackingUrl}
+                locale={locale}
+                title={t('rideDetail.liveSharingLink')}
+                description={t('rideDetail.liveSharingLinkCopy')}
+                emptyText={t('rideDetail.noSharingLink')}
+                createLabel={t('rideDetail.createCopyLiveLink')}
+                creatingLabel={t('rideDetail.creating')}
+                copyLabel={t('common.copy')}
+                onCreate={handleCreateTrackingLink}
+                onCopy={handleCopyTrackingLink}
+                trackingUrlFor={trackingUrlFor}
+              />
             )}
 
             {(myBooking.status === 'PENDING' || myBooking.status === 'PAYMENT_PENDING' || myBooking.status === 'DRIVER_PENDING') && (
@@ -1473,14 +1697,21 @@ function RideDetailContent() {
             )}
 
             {(myBooking.status === 'ACCEPTED' || myBooking.status === 'CONFIRMED') && (
-              <button
-                type="button"
-                onClick={handleCancelBooking}
-                disabled={riderActionLoading}
-                className="w-full rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
-              >
-                {riderActionLoading ? t('common.working') : t('rideDetail.cancelBooking')}
-              </button>
+              <div className="space-y-2">
+                {cancellationWindowClosed && (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Confirmed bookings cannot be cancelled within 3 hours of departure.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCancelBooking}
+                  disabled={riderActionLoading || cancellationWindowClosed}
+                  className="w-full rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {riderActionLoading ? t('common.working') : t('rideDetail.cancelBooking')}
+                </button>
+              </div>
             )}
 
             {/* Confirm Dropoff */}
@@ -1745,10 +1976,8 @@ function RideAddPaymentMethodForm({ onSaved }: { onSaved: (method: PaymentMethod
 
 export default function RideDetailPage() {
   return (
-    <ProtectedRoute>
-      <StripeProvider>
-        <RideDetailContent />
-      </StripeProvider>
-    </ProtectedRoute>
+    <StripeProvider>
+      <RideDetailContent />
+    </StripeProvider>
   );
 }

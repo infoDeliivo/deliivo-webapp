@@ -85,6 +85,9 @@ async function loadNotifications(force = false) {
       setState({
         items: listRes.data.notifications || [],
         unreadCount: unreadRes.data.unreadCount || 0,
+        lastIncoming: state.lastIncoming && listRes.data.notifications.some((item) => item.id === state.lastIncoming?.id)
+          ? state.lastIncoming
+          : null,
         loading: false,
         lastSyncedAt: new Date().toISOString(),
         lastSyncAttemptAt: new Date().toISOString(),
@@ -210,6 +213,19 @@ export function useNotificationStore(userId?: string) {
         ),
         unreadCount: 0,
       });
+    },
+    remove: async (notificationId: string) => {
+      const item = state.items.find((entry) => entry.id === notificationId);
+      await notificationsApi.remove(notificationId);
+      setState({
+        items: state.items.filter((entry) => entry.id !== notificationId),
+        unreadCount: item && !item.isRead ? Math.max(0, state.unreadCount - 1) : state.unreadCount,
+        lastIncoming: state.lastIncoming?.id === notificationId ? null : state.lastIncoming,
+      });
+    },
+    clearAll: async () => {
+      await notificationsApi.clearAll();
+      setState({ items: [], unreadCount: 0, lastIncoming: null });
     },
   };
 }

@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useTranslation } from "@/lib/i18n-context";
 import BrandLogo from "@/components/BrandLogo";
+import { publicConfig } from "@/lib/public-config";
 
 const socialLinks = [
   { label: "Twitter / X", href: "https://twitter.com", icon: "X" },
-  { label: "Instagram", href: "https://instagram.com", icon: "IG" },
+  { label: "Instagram", href: publicConfig.instagramUrl, icon: "IG" },
   { label: "LinkedIn", href: "https://linkedin.com", icon: "IN" },
-  { label: "Facebook", href: "https://facebook.com", icon: "FB" },
+  { label: "Facebook", href: publicConfig.facebookUrl, icon: "FB" },
 ];
 
 export default function Footer() {

@@ -240,7 +240,7 @@ function ProfileContent() {
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-deliivo-gray">{t('profile.editProfile')}</h3>
                 <button onClick={() => setEditingProfile(false)} className="text-xs font-semibold text-deliivo-orange">{t('common.cancel')}</button>
               </div>
-              <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-deliivo-gray">{t('profile.name')}</label>
                   <input type="text" value={profileName} onChange={e => setProfileName(e.target.value)} className="input-field" placeholder={t('profile.namePlaceholder')} />
@@ -275,9 +275,11 @@ function ProfileContent() {
                   <label className="mb-1 block text-xs font-medium text-deliivo-gray">{t('profile.dob')}</label>
                   <input type="date" value={profileDob} max={maxDob} onChange={e => setProfileDob(e.target.value)} className="input-field" />
                 </div>
-                <button onClick={handleSaveProfile} disabled={profileSaving} className="btn-primary py-2 px-4 text-sm disabled:opacity-50">
-                  {profileSaving ? t('profile.saving') : t('profile.saveProfile')}
-                </button>
+                <div className="sm:col-span-2 flex justify-start">
+                  <button onClick={handleSaveProfile} disabled={profileSaving} className="btn-primary py-2 px-4 text-sm disabled:opacity-50">
+                    {profileSaving ? t('profile.saving') : t('profile.saveProfile')}
+                  </button>
+                </div>
               </div>
             </section>
           )}
@@ -383,6 +385,7 @@ function ProfileContent() {
               ))}
             </div>
           </section>
+
           </div>
 
           {/* Logout */}

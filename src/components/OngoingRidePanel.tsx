@@ -17,10 +17,10 @@ type PanelRide = {
   destinationAddress: string;
   departureDate: string;
   departureTime: string;
+  routeDurationSeconds?: number | null;
 };
 
 const ACTIVE_BOOKING_STATUSES = [
-  'CONFIRMED',
   'WAITING_FOR_PICKUP',
   'DRIVER_ARRIVED',
   'OTP_PENDING',
@@ -30,7 +30,7 @@ const ACTIVE_BOOKING_STATUSES = [
   'DRIVER_DROPPED',
 ];
 
-const ACTIVE_RIDE_STATUSES = ['IN_PROGRESS'];
+const ACTIVE_RIDE_STATUSES = ['READY_TO_START', 'IN_PROGRESS'];
 const UPCOMING_BOOKING_STATUSES = ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED'];
 const UPCOMING_RIDE_STATUSES = ['PUBLISHED', 'READY_TO_START'];
 
@@ -48,6 +48,18 @@ function isWithinNext24Hours(date: string, time: string) {
   const departureMs = getDepartureTimeMs(date, time);
   const now = Date.now();
   return departureMs >= now && departureMs <= now + 24 * 60 * 60 * 1000;
+}
+
+function isOperationallyCurrent(ride: PanelRide) {
+  const departureMs = getDepartureTimeMs(ride.departureDate, ride.departureTime);
+  if (departureMs === Number.MAX_SAFE_INTEGER) return false;
+
+  if (['READY_TO_START', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED'].includes(ride.status)) {
+    return Date.now() <= departureMs + 2 * 60 * 60 * 1000;
+  }
+
+  const expectedDurationMs = Math.max(ride.routeDurationSeconds || 0, 2 * 60 * 60) * 1000;
+  return Date.now() <= departureMs + expectedDurationMs + 12 * 60 * 60 * 1000;
 }
 
 function statusLabel(status: string) {
@@ -84,6 +96,7 @@ function mapBooking(booking: Booking): PanelRide | null {
     destinationAddress: booking.segmentRide?.destinationAddress || booking.ride.destinationAddress,
     departureDate: booking.ride.departureDate,
     departureTime: booking.ride.departureTime,
+    routeDurationSeconds: booking.ride.routeDurationSeconds,
   };
 }
 
@@ -97,14 +110,16 @@ function mapPublishedRide(ride: PublishedRide): PanelRide {
     destinationAddress: ride.destinationAddress,
     departureDate: ride.departureDate,
     departureTime: ride.departureTime,
+    routeDurationSeconds: ride.routeDurationSeconds,
   };
 }
 
 function pickBestRide(rides: PanelRide[]) {
   const active = rides.filter((ride) =>
-    ride.role === 'driver'
+    (ride.role === 'driver'
       ? ACTIVE_RIDE_STATUSES.includes(ride.status)
-      : ACTIVE_BOOKING_STATUSES.includes(ride.status)
+      : ACTIVE_BOOKING_STATUSES.includes(ride.status))
+    && isOperationallyCurrent(ride)
   );
   if (active.length > 0) {
     return active.sort((a, b) => getDepartureTimeMs(a.departureDate, a.departureTime) - getDepartureTimeMs(b.departureDate, b.departureTime))[0];
