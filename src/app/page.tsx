@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { useTranslation } from '@/lib/i18n-context';
 import { useAuth } from '@/lib/auth-context';
+import HomepageV2 from '@/components/HomepageV2';
 
 const featuredRoutes = [
   {
@@ -97,7 +98,7 @@ const whyDeliivo = [
   },
 ];
 
-export default function HomePage() {
+function LegacyHomePage() {
   const { t } = useTranslation();
   const { user } = useAuth();
 
@@ -306,3 +307,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+export default HomepageV2;

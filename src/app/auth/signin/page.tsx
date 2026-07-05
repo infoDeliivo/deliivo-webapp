@@ -15,7 +15,7 @@ type Method = 'email' | 'phone';
 
 export default function SignInPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, user, loading: authLoading } = useAuth();
 
   const [step, setStep] = useState<Step>('identifier');
   const [method, setMethod] = useState<Method>('email');
@@ -41,6 +41,12 @@ export default function SignInPage() {
   useEffect(() => {
     setReturnTo(getSafeReturnTo());
   }, []);
+
+  useEffect(() => {
+    if (!authLoading && user && !loading && !googleLoading) {
+      router.replace(returnTo || getSafeReturnTo() || '/');
+    }
+  }, [authLoading, googleLoading, loading, returnTo, router, user]);
 
   const handleGoogleCallback = useCallback(async (response: { credential: string }) => {
     setGoogleLoading(true);

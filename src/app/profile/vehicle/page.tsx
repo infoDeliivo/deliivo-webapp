@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Car, Plus, Trash2, ArrowLeft, Upload, CheckCircle } from 'lucide-react';
 import { vehicleApi, Vehicle, VehicleType } from '@/lib/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -29,6 +30,8 @@ function formatVehicleLabel(vehicle: Vehicle) {
 
 function VehicleContent() {
   const { t } = useTranslation();
+  const router = useRouter();
+  const [returnTo, setReturnTo] = useState('/profile');
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -49,6 +52,15 @@ function VehicleContent() {
 
   useEffect(() => {
     fetchVehicles();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedReturn = params.get('returnTo');
+    if (requestedReturn?.startsWith('/') && !requestedReturn.startsWith('//') && !requestedReturn.startsWith('/auth/')) {
+      setReturnTo(requestedReturn);
+    }
+    if (params.get('add') === '1') setShowAddForm(true);
   }, []);
 
   const fetchVehicles = async () => {
@@ -106,6 +118,14 @@ function VehicleContent() {
   };
 
   const handleDocUpload = async (file: File, documentType: string) => {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('Only JPG, PNG, and WEBP images are allowed.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Images must be 5 MB or smaller.');
+      return;
+    }
     setUploading(true);
     setError('');
     try {
@@ -128,6 +148,7 @@ function VehicleContent() {
       setStep(1);
       resetForm();
       setDocuments([]);
+      if (returnTo !== '/profile') router.push(returnTo);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('profile.vehicleSaveFailed'));
     } finally {
@@ -174,7 +195,7 @@ function VehicleContent() {
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
       <div className="mb-6 flex items-start gap-3">
-        <Link href="/profile" className="rounded-full p-2 hover:bg-gray-100">
+        <Link href={returnTo} className="rounded-full p-2 hover:bg-gray-100">
           <ArrowLeft size={20} />
         </Link>
         <div>

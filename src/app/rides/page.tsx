@@ -30,6 +30,8 @@ const STATUS_CONFIG: Record<string, { labelKey: string; className: string }> = {
   ACCEPTED: { labelKey: 'rides.accepted', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   CONFIRMED: { labelKey: 'rides.confirmed', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   PUBLISHED: { labelKey: 'rides.upcoming', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  SCHEDULED: { labelKey: 'rides.upcoming', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  READY_TO_START: { labelKey: 'rides.readyToStart', className: 'bg-amber-50 text-amber-700 border border-amber-200' },
   WAITING_FOR_PICKUP: { labelKey: 'rides.pickupSoon', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   DRIVER_ARRIVED: { labelKey: 'rides.driverArrived', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   IN_PROGRESS: { labelKey: 'rides.inProgress', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
@@ -63,10 +65,10 @@ const PUBLISHED_VIEW_FILTERS: Array<{
   statuses: string[];
 }> = [
   { id: 'all', labelKey: 'rides.all', statuses: [] },
-  { id: 'pending', labelKey: 'rides.pending', statuses: ['PUBLISHED'] },
-  { id: 'active', labelKey: 'rides.active', statuses: ['IN_PROGRESS'] },
+  { id: 'pending', labelKey: 'rides.pending', statuses: ['PUBLISHED', 'SCHEDULED'] },
+  { id: 'active', labelKey: 'rides.active', statuses: ['READY_TO_START', 'IN_PROGRESS'] },
   { id: 'completed', labelKey: 'rides.completed', statuses: ['COMPLETED'] },
-  { id: 'cancelled', labelKey: 'rides.cancelled', statuses: ['CANCELLED'] },
+  { id: 'cancelled', labelKey: 'rides.cancelled', statuses: ['CANCELLED', 'EXPIRED'] },
 ];
 
 function getBookingStatuses(view: BookingView) {
@@ -271,7 +273,7 @@ function PublishedRideCard({ ride }: { ride: PublishedRide }) {
     month: 'short',
     day: 'numeric',
   });
-  const canManage = ['PUBLISHED', 'IN_PROGRESS'].includes(ride.status);
+  const canManage = ['PUBLISHED', 'SCHEDULED', 'READY_TO_START', 'IN_PROGRESS'].includes(ride.status);
 
   return (
     <div className="bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-4 hover:shadow-md transition-shadow">

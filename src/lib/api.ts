@@ -452,11 +452,12 @@ export const travelPreferencesApi = {
 
 // Maps API
 export const mapsApi = {
-  autocomplete(input: string, lat?: number, lng?: number) {
+  autocomplete(input: string, lat?: number, lng?: number, radiusKm?: number) {
     const params = new URLSearchParams({ input });
     if (lat !== undefined && lng !== undefined) {
       params.set('lat', String(lat));
       params.set('lng', String(lng));
+      if (radiusKm !== undefined) params.set('radius', String(Math.round(radiusKm * 1000)));
     }
     return apiFetch<{ data: PlacePrediction[] }>(`/api/v1/maps/place/autocomplete?${params}`);
   },
@@ -641,7 +642,8 @@ export const searchRidesApi = {
     query.set('originLng', String(params.originLng));
     query.set('destinationLat', String(params.destinationLat));
     query.set('destinationLng', String(params.destinationLng));
-    query.set('departureDate', params.departureDate);
+    if (params.departureDate) query.set('departureDate', params.departureDate);
+    if (params.departurePeriod) query.set('departurePeriod', params.departurePeriod);
     if (params.seatsRequired) query.set('seatsRequired', String(params.seatsRequired));
     if (params.femaleOnly) query.set('femaleOnly', 'true');
     if (params.maxPrice) query.set('maxPrice', String(params.maxPrice));
@@ -1185,6 +1187,13 @@ export const contentApi = {
     const suffix = query.toString() ? `?${query}` : '';
     return apiFetch<{ data: ContentPost[] }>(`/api/v1/content/posts${suffix}`);
   },
+
+  subscribeNewsletter(email: string, locale: string) {
+    return apiFetch<{ data: { email: string; consentedAt: string } }>('/api/v1/content/newsletter/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ email, locale }),
+    });
+  },
   getPublishedBySlug(slug: string, locale?: string) {
     const query = new URLSearchParams();
     if (locale) query.set('locale', locale);
@@ -1711,7 +1720,8 @@ export interface SearchRidesParams {
   originLng: number;
   destinationLat: number;
   destinationLng: number;
-  departureDate: string;
+  departureDate?: string;
+  departurePeriod?: 'morning' | 'afternoon' | 'evening';
   seatsRequired?: number;
   femaleOnly?: boolean;
   maxPrice?: number;
@@ -1729,6 +1739,7 @@ export interface SearchRideResult {
     id: string;
     name: string | null;
     avatarUrl: string | null;
+    isVerified?: boolean;
     rating?: number;
     ratingCount?: number;
     successfulPublishedRides?: number;

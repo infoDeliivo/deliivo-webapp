@@ -10,6 +10,7 @@ import { useTranslation } from '@/lib/i18n-context';
 import { getSafeReturnTo } from '@/lib/auth-redirect';
 
 const MINIMUM_BOOKING_AGE_YEARS = 8;
+const PERSON_NAME_PATTERN = /^(?=.*\p{L})[\p{L}\p{M} .'-]+$/u;
 
 function getLatestAllowedDob() {
   const now = new Date();
@@ -45,6 +46,10 @@ function OnboardingForm() {
     setError('');
     if (!dob) {
       setError(t('onboarding.dobRequired', { age: MINIMUM_BOOKING_AGE_YEARS }));
+      return;
+    }
+    if (!PERSON_NAME_PATTERN.test(name.trim())) {
+      setError(t('onboarding.nameInvalid'));
       return;
     }
     if (dob > maxDob) {

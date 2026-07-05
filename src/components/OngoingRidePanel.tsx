@@ -40,8 +40,13 @@ function getDepartureTimeMs(date: string, time: string) {
   const [hours = '0', minutes = '0'] = time.split(':');
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return Number.MAX_SAFE_INTEGER;
-  parsed.setHours(Number(hours), Number(minutes), 0, 0);
-  return parsed.getTime();
+  return Date.UTC(
+    parsed.getUTCFullYear(),
+    parsed.getUTCMonth(),
+    parsed.getUTCDate(),
+    Number(hours),
+    Number(minutes),
+  );
 }
 
 function isWithinNext24Hours(date: string, time: string) {
@@ -173,20 +178,23 @@ export default function OngoingRidePanel() {
     getSocket();
 
     const reload = () => loadRide();
+    const reloadWhenVisible = () => {
+      if (document.visibilityState === 'visible') loadRide();
+    };
     const unsubBooking = onSocketEvent<BookingUpdatedPayload>('booking:updated', reload);
     const unsubRide = onSocketEvent<RideUpdatedPayload>('ride:updated', reload);
     const unsubNotification = onSocketEvent<NotificationPayload>('notification:new', reload);
 
     window.addEventListener('focus', reload);
     window.addEventListener('online', reload);
-    document.addEventListener('visibilitychange', reload);
+    document.addEventListener('visibilitychange', reloadWhenVisible);
     return () => {
       unsubBooking();
       unsubRide();
       unsubNotification();
       window.removeEventListener('focus', reload);
       window.removeEventListener('online', reload);
-      document.removeEventListener('visibilitychange', reload);
+      document.removeEventListener('visibilitychange', reloadWhenVisible);
     };
   }, [hidden, loadRide, user]);
 

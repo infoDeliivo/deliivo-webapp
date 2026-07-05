@@ -15,7 +15,7 @@ type Method = 'email' | 'phone';
 
 export default function SignUpPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, user, loading: authLoading } = useAuth();
 
   const [step, setStep] = useState<Step>('form');
   const [method, setMethod] = useState<Method>('email');
@@ -33,6 +33,12 @@ export default function SignUpPage() {
   useEffect(() => {
     setReturnTo(getSafeReturnTo());
   }, []);
+
+  useEffect(() => {
+    if (!authLoading && user && !loading) {
+      router.replace(returnTo || getSafeReturnTo() || '/');
+    }
+  }, [authLoading, loading, returnTo, router, user]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();

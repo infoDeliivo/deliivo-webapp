@@ -32,7 +32,9 @@ export default function RootLayout({
     sameAs: [
       publicConfig.facebookUrl,
       publicConfig.instagramUrl,
-      'https://linkedin.com',
+      publicConfig.xUrl,
+      publicConfig.tiktokUrl,
+      publicConfig.linkedinUrl,
     ],
   };
 

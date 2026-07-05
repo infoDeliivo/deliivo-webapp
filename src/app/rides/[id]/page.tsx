@@ -995,11 +995,11 @@ function RideDetailContent() {
     <div className="min-h-screen bg-deliivo-cream">
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
-        <div className="mx-auto flex h-14 max-w-5xl items-center px-4">
+        <div className="relative mx-auto flex h-14 max-w-7xl items-center px-4 sm:px-6 lg:px-8">
           <Link href="/search" className="flex items-center gap-1.5 text-sm font-medium text-deliivo-gray hover:text-deliivo-dark">
             <ArrowLeft className="h-4 w-4" /> {t('common.back')}
           </Link>
-          <span className="ml-4 text-sm font-semibold text-deliivo-dark">{t('rideDetail.title')}</span>
+          <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-sm font-semibold text-deliivo-dark">{t('rideDetail.title')}</span>
         </div>
       </div>
 
@@ -1264,7 +1264,7 @@ function RideDetailContent() {
                   <Minus className="h-3.5 w-3.5" />
                 </button>
                 <span className="w-5 text-center font-bold">{seats}</span>
-                <button type="button" disabled={seats >= Math.min(4, ride.availableSeats)} onClick={() => setSeats(s => s + 1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-deliivo-orange bg-deliivo-orange-light text-deliivo-orange disabled:opacity-30">
+                <button type="button" disabled={seats >= Math.min(10, ride.availableSeats)} onClick={() => setSeats(s => s + 1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-deliivo-orange bg-deliivo-orange-light text-deliivo-orange disabled:opacity-30">
                   <Plus className="h-3.5 w-3.5" />
                 </button>
               </div>

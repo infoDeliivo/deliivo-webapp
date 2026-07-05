@@ -7,7 +7,7 @@ import { mapsApi, PlacePrediction } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from '@/lib/i18n-context';
 
-export default function SearchForm() {
+export default function SearchForm({ variant = 'default' }: { variant?: 'default' | 'hero' }) {
   const router = useRouter();
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -98,16 +98,16 @@ export default function SearchForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="w-full rounded-3xl border border-primary-100 bg-white p-7 shadow-xl sm:p-8"
+      className={`w-full min-w-0 max-w-full rounded-3xl border border-primary-100 bg-white shadow-xl ${variant === 'hero' ? 'p-4 sm:p-5' : 'p-7 sm:p-8'}`}
     >
-      <div className="mb-5">
+      <div className={variant === 'hero' ? 'sr-only' : 'mb-5'}>
         <p className="text-sm font-semibold text-deliivo-dark">{t('search.formTitle')}</p>
         <p className="mt-1 text-xs text-deliivo-gray">{t('search.formCopy')}</p>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         {/* Leaving from */}
-        <div className="relative flex-1">
+        <div className="relative min-w-0 w-full flex-1">
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
             {t('search.fromLabel')}
           </label>
@@ -125,7 +125,7 @@ export default function SearchForm() {
             }}
             onFocus={() => fromPredictions.length > 0 && setFromOpen(true)}
             onBlur={() => setTimeout(() => setFromOpen(false), 150)}
-            className="input-field h-14 pl-10 text-base"
+            className="input-field h-14 min-w-0 pl-10 text-base"
           />
           {fromLoading && (
             <div className="absolute inset-y-0 right-3 flex items-center">
@@ -160,7 +160,7 @@ export default function SearchForm() {
         </button>
 
         {/* Going to */}
-        <div className="relative flex-1">
+        <div className="relative min-w-0 w-full flex-1">
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
             {t('search.toLabel')}
           </label>
@@ -178,7 +178,7 @@ export default function SearchForm() {
             }}
             onFocus={() => toPredictions.length > 0 && setToOpen(true)}
             onBlur={() => setTimeout(() => setToOpen(false), 150)}
-            className="input-field h-14 pl-10 text-base"
+            className="input-field h-14 min-w-0 pl-10 text-base"
           />
           {toLoading && (
             <div className="absolute inset-y-0 right-3 flex items-center">
@@ -203,7 +203,7 @@ export default function SearchForm() {
         </div>
 
         {/* Date */}
-        <div className="relative flex-1">
+        <div className="relative min-w-0 w-full flex-1">
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
             {t('search.dateLabel')}
           </label>
@@ -216,11 +216,11 @@ export default function SearchForm() {
             value={date}
             onChange={(e) => setDate(e.target.value)}
             min={today}
-            className="input-field h-14 pl-10 text-base"
+            className="input-field h-14 min-w-0 pl-10 text-base"
           />
         </div>
 
-        <div className="relative w-full sm:w-32">
+        <div className="relative min-w-0 w-full sm:w-32">
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
             {t('search.seatsLabel')}
           </label>
@@ -231,20 +231,25 @@ export default function SearchForm() {
           <select
             value={seats}
             onChange={(e) => setSeats(Number(e.target.value))}
-            className="input-field h-14 pl-10 text-base"
+            className="input-field h-14 min-w-0 pl-10 text-base"
             aria-label={t('search.seats')}
           >
-            {[1, 2, 3, 4].map((count) => (
+            {Array.from({ length: 10 }, (_, index) => index + 1).map((count) => (
               <option key={count} value={count}>
                 {count} {count > 1 ? t('search.seatsPlural') : t('search.seat')}
               </option>
             ))}
           </select>
         </div>
+        {variant === 'hero' && (
+          <button type="submit" className="btn-primary mt-auto h-14 w-full shrink-0 px-7 text-base sm:w-auto">
+            {t('search.submit')}
+          </button>
+        )}
       </div>
 
       {/* Second row: women-only toggle + search button */}
-      <div className="mt-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {(variant === 'default' || canUseWomenOnly) && <div className="mt-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         {canUseWomenOnly ? (
           <label className="flex cursor-pointer items-center gap-2 select-none">
             <button
@@ -271,10 +276,12 @@ export default function SearchForm() {
         )}
 
         {/* Search button */}
-        <button type="submit" className="btn-primary w-full px-10 py-3.5 text-base sm:w-auto">
-          {t('search.submit')}
-        </button>
-      </div>
+        {variant === 'default' && (
+          <button type="submit" className="btn-primary w-full px-10 py-3.5 text-base sm:w-auto">
+            {t('search.submit')}
+          </button>
+        )}
+      </div>}
     </form>
   );
 }

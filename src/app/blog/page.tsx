@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, BookOpen, Loader2, Search, ShieldCheck, Users } from 'lucide-react';
+import { ArrowRight, BookOpen, Lightbulb, Loader2, Mail, Search, ShieldCheck, Users } from 'lucide-react';
 import { contentApi, ContentPost } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n-context';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 const categoryIcon: Record<string, typeof Users> = {
   'Rider guide': Users,
@@ -36,6 +38,8 @@ export default function BlogPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'All' | ContentPost['category']>('All');
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
     setLoading(true);
@@ -47,6 +51,7 @@ export default function BlogPage() {
   }, [locale]);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(posts.map((post) => post.category)))] as const, [posts]);
+  const categoryCounts = useMemo(() => new Map(categories.map((category) => [category, category === 'All' ? posts.length : posts.filter((post) => post.category === category).length])), [categories, posts]);
   const filteredPosts = useMemo(() => {
     const query = search.trim().toLowerCase();
     return posts.filter((post) => {
@@ -60,6 +65,19 @@ export default function BlogPage() {
   }, [posts, search, selectedCategory]);
 
   const [featuredPost, ...remainingPosts] = filteredPosts;
+  const popularPosts = posts.slice(0, 3);
+
+  async function handleNewsletterSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setNewsletterStatus('saving');
+    try {
+      await contentApi.subscribeNewsletter(newsletterEmail, locale);
+      setNewsletterStatus('saved');
+      setNewsletterEmail('');
+    } catch {
+      setNewsletterStatus('error');
+    }
+  }
   const breadcrumbSchema = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -70,7 +88,9 @@ export default function BlogPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#fbfaf8]">
+      <Navbar />
+      <main>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <section className="bg-white border-b border-gray-100">
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -106,6 +126,7 @@ export default function BlogPage() {
                   }`}
                 >
                   {category === 'All' ? 'All articles' : categoryLabel(category)}
+                  <span className="ml-1 opacity-70">{categoryCounts.get(category) || 0}</span>
                 </button>
               ))}
             </div>
@@ -221,6 +242,53 @@ export default function BlogPage() {
           </div>
         )}
       </section>
-    </main>
+      <section className="border-t border-gray-100 bg-white px-4 py-12 sm:px-6 lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[1fr_1fr_0.8fr]">
+          <div className="rounded-3xl border border-gray-200 bg-[#fbfaf8] p-6">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-deliivo-dark"><BookOpen className="h-5 w-5 text-deliivo-orange" /> Browse by category</h2>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              {categories.filter((category) => category !== 'All').map((category) => (
+                <button key={category} type="button" onClick={() => { setSelectedCategory(category); window.scrollTo({ top: 220, behavior: 'smooth' }); }} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-left text-sm font-semibold text-deliivo-dark shadow-sm">
+                  {categoryLabel(category)} <span className="rounded-full bg-orange-50 px-2 py-1 text-xs text-deliivo-orange">{categoryCounts.get(category) || 0}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-gray-200 bg-[#fbfaf8] p-6">
+            <h2 className="text-lg font-bold text-deliivo-dark">Popular posts</h2>
+            <div className="mt-4 space-y-3">
+              {popularPosts.map((post) => (
+                <Link key={post.id} href={`/blog/${post.slug}`} className="block rounded-2xl bg-white px-4 py-3 shadow-sm transition hover:shadow-md">
+                  <p className="line-clamp-2 text-sm font-bold text-deliivo-dark">{post.title}</p>
+                  <p className="mt-1 text-xs text-deliivo-gray">{post.readTime}</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-3xl border border-orange-100 bg-orange-50 p-6">
+              <Lightbulb className="h-6 w-6 text-deliivo-orange" />
+              <h2 className="mt-4 text-lg font-bold text-deliivo-dark">Have a topic in mind?</h2>
+              <p className="mt-2 text-sm leading-6 text-deliivo-gray">Tell our editorial team what riders and drivers should read next.</p>
+              <Link href="/contact?subject=blog-topic" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-deliivo-orange">Suggest a topic <ArrowRight className="h-4 w-4" /></Link>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleNewsletterSubmit} className="mx-auto mt-6 flex max-w-7xl flex-col gap-4 rounded-3xl bg-deliivo-dark p-6 text-white sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3"><Mail className="mt-1 h-5 w-5 text-deliivo-orange" /><div><h2 className="font-bold">Stay updated with Deliivo</h2><p className="mt-1 text-sm text-white/65">Get new travel guidance and product updates by email.</p></div></div>
+          <div className="flex w-full max-w-xl flex-col gap-2 sm:flex-row">
+            <input type="email" required value={newsletterEmail} onChange={(event) => { setNewsletterEmail(event.target.value); setNewsletterStatus('idle'); }} placeholder="you@example.com" className="min-w-0 flex-1 rounded-full border border-white/15 bg-white px-4 py-3 text-sm text-deliivo-dark outline-none" />
+            <button type="submit" disabled={newsletterStatus === 'saving'} className="rounded-full bg-deliivo-orange px-6 py-3 text-sm font-bold text-white disabled:opacity-60">{newsletterStatus === 'saving' ? 'Saving...' : 'Subscribe'}</button>
+          </div>
+          {newsletterStatus === 'saved' && <p className="text-sm font-semibold text-green-300">Subscribed successfully.</p>}
+          {newsletterStatus === 'error' && <p className="text-sm font-semibold text-red-300">Subscription failed. Please try again.</p>}
+        </form>
+      </section>
+      </main>
+      <Footer />
+    </div>
   );
 }

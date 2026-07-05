@@ -1,11 +1,10 @@
 'use client';
 
 import Link from "next/link";
-import { useState, type ComponentType } from "react";
-import { Menu, X, ChevronDown, User, LogOut, Car, Wallet, Bell } from "lucide-react";
+import { useState } from "react";
+import { Menu, X, ChevronDown, User, LogOut, Car, Wallet } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import { featureFlags } from "@/lib/features";
 import { useTranslation } from "@/lib/i18n-context";
 import { useNotificationStore } from "@/lib/notification-store";
 import BrandLogo from "@/components/BrandLogo";
@@ -20,18 +19,24 @@ export default function Navbar() {
   type NavLink = {
     label: string;
     href: string;
-    icon?: ComponentType<{ size?: number }>;
     badge?: number;
   };
 
-  const navLinks: NavLink[] = [
+  const rideLinks: NavLink[] = [
     { label: t('nav.searchRide'), href: "/search" },
     { label: t('nav.offerRide'), href: "/publish" },
-    { label: t('nav.yourRides'), href: "/rides" },
-    { label: t('nav.guides'), href: "/blog" },
-    { label: t('nav.notifications'), href: "/profile/notifications", icon: Bell, badge: unreadCount > 0 ? unreadCount : 0 },
-    ...(featureFlags.webChat ? [{ label: t('nav.messages'), href: "/chat" }] : []),
   ];
+  const publicLinks: NavLink[] = [
+    ...rideLinks,
+    { label: t('nav.howItWorks'), href: "/#how-it-works" },
+    { label: t('nav.guides'), href: "/blog" },
+    { label: t('nav.support'), href: "/contact" },
+  ];
+  const authenticatedLinks: NavLink[] = [
+    { label: t('nav.yourRides'), href: "/rides" },
+    { label: t('nav.notifications'), href: "/profile/notifications", badge: unreadCount > 0 ? unreadCount : 0 },
+  ];
+  const navLinks = user ? [...rideLinks, ...authenticatedLinks] : publicLinks;
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white shadow-sm">

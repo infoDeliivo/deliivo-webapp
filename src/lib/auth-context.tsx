@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { getTokens, clearTokens, setTokens, userApi, UserProfile } from './api';
 
 interface AuthContextType {
@@ -22,24 +22,38 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const lastFetchedAtRef = useRef(0);
+  const fetchInFlightRef = useRef<Promise<void> | null>(null);
 
-  const fetchUser = useCallback(async (throwOnError = false) => {
-    const tokens = getTokens();
-    if (!tokens) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
-    try {
-      const res = await userApi.getMe();
-      setUser(res.data);
-    } catch (error) {
-      clearTokens();
-      setUser(null);
-      if (throwOnError) throw error;
-    } finally {
-      setLoading(false);
-    }
+  const fetchUser = useCallback((throwOnError = false) => {
+    if (fetchInFlightRef.current) return fetchInFlightRef.current;
+
+    const request = (async () => {
+      const tokens = getTokens();
+      if (!tokens) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await userApi.getMe();
+        setUser(res.data);
+      } catch (error) {
+        clearTokens();
+        setUser(null);
+        if (throwOnError) throw error;
+      } finally {
+        lastFetchedAtRef.current = Date.now();
+        setLoading(false);
+      }
+    })();
+
+    fetchInFlightRef.current = request;
+    const clearInFlight = () => {
+      if (fetchInFlightRef.current === request) fetchInFlightRef.current = null;
+    };
+    void request.then(clearInFlight, clearInFlight);
+    return request;
   }, []);
 
   useEffect(() => {
@@ -49,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const refreshOnResume = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && Date.now() - lastFetchedAtRef.current >= 60000) {
         void fetchUser();
       }
     };

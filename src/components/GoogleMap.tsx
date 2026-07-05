@@ -55,7 +55,7 @@ export default function GoogleMap({ polyline, markers, liveLocation, className =
   useEffect(() => {
     if (!loaded || !mapRef.current || mapInstanceRef.current) return;
 
-    const defaultCenter = center || { lat: 56.95, lng: 24.11 }; // Riga, Baltic region
+    const defaultCenter = center || { lat: 58.5953, lng: 25.0136 }; // Estonia
     const map = new google.maps.Map(mapRef.current, {
       center: defaultCenter,
       zoom: zoom || 7,

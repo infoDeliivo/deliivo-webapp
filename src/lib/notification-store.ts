@@ -16,7 +16,7 @@ type NotificationState = {
 };
 
 const STORE_LIMIT = 50;
-const REFRESH_INTERVAL_MS = 20000;
+const REFRESH_INTERVAL_MS = 60000;
 
 let state: NotificationState = {
   items: [],
@@ -73,7 +73,7 @@ function upsertIncoming(item: NotificationRecord) {
 
 async function loadNotifications(force = false) {
   if (!state.activeUserId) return;
-  if (inflightLoad && !force) return inflightLoad;
+  if (inflightLoad) return inflightLoad;
 
   setState({ loading: true, lastSyncAttemptAt: new Date().toISOString() });
   inflightLoad = (async () => {
@@ -163,7 +163,6 @@ function startStoreSync(userId: string) {
 
   const unsubIncoming = onSocketEvent<NotificationPayload>('notification:new', (payload) => {
     upsertIncoming(mapIncomingNotification(payload));
-    void loadNotifications(true);
   });
 
   document.addEventListener('visibilitychange', refreshOnFocus);

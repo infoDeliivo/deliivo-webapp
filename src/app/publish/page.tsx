@@ -95,6 +95,7 @@ const MAX_DESTINATION_DROPOFFS = 3;
 const MAX_STOPOVERS = 3;
 const CITY_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_CITY_POINT_RADIUS_KM || '15');
 const STOPOVER_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_STOPOVER_POINT_RADIUS_KM || '5');
+const ESTONIA_MAP_CENTER = { lat: 58.5953, lng: 25.0136 };
 
 function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
   const toRad = (value: number) => value * Math.PI / 180;
@@ -123,11 +124,13 @@ function PlaceInput({
   onChange,
   placeholder,
   icon,
+  bias,
 }: {
   value: PlaceSelection | null;
   onChange: (place: PlaceSelection) => void;
   placeholder: string;
   icon: React.ReactNode;
+  bias?: { lat: number; lng: number; radiusKm: number };
 }) {
   const [query, setQuery] = useState(value?.address || '');
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
@@ -148,7 +151,7 @@ function PlaceInput({
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await mapsApi.autocomplete(input);
+        const res = await mapsApi.autocomplete(input, bias?.lat, bias?.lng, bias?.radiusKm);
         setPredictions(res.data || []);
         setOpen(true);
       } catch {
@@ -157,7 +160,7 @@ function PlaceInput({
         setLoading(false);
       }
     }, 300);
-  }, []);
+  }, [bias?.lat, bias?.lng, bias?.radiusKm]);
 
   async function selectPlace(prediction: PlacePrediction) {
     setOpen(false);
@@ -232,36 +235,28 @@ function StepRoute({
 }) {
   const { t, locale } = useTranslation();
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="space-y-6 lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-6 lg:space-y-0">
+      <div className="lg:col-start-1 lg:row-start-1">
         <h2 className="text-xl font-bold text-deliivo-dark">{t('publish.whatsYourRoute')}</h2>
         <p className="mt-1 text-sm text-deliivo-gray">{t('publish.searchDepartureDestination')}</p>
       </div>
 
-      {/* Map visualization */}
-      {state.routes.length > 0 && state.selectedRouteIndex !== null && state.routes[state.selectedRouteIndex]?.polyline ? (
-        <GoogleMap
-          polyline={state.routes[state.selectedRouteIndex].polyline}
-          markers={[
-            ...(state.origin ? [{ lat: state.origin.lat, lng: state.origin.lng, color: 'green' as const }] : []),
-            ...(state.destination ? [{ lat: state.destination.lat, lng: state.destination.lng, color: 'red' as const }] : []),
-            ...state.pickups.map(s => ({ lat: s.lat, lng: s.lng, color: 'green' as const })),
-            ...state.dropoffs.map(s => ({ lat: s.lat, lng: s.lng, color: 'red' as const })),
-            ...state.stopovers.map(s => ({ lat: s.lat, lng: s.lng, color: 'blue' as const })),
-          ]}
-          className="h-56 w-full rounded-2xl"
-        />
-      ) : (
-        <div className="relative h-44 w-full overflow-hidden rounded-2xl bg-gradient-to-br from-primary-50 to-deliivo-orange-light flex items-center justify-center border border-primary-100">
-          <div className="flex flex-col items-center gap-2 text-primary-400">
-            <MapPin className="h-8 w-8 opacity-60" />
-            <span className="text-xs font-medium">{t('publish.mapPreview')}</span>
-          </div>
-        </div>
-      )}
+      <GoogleMap
+        polyline={state.selectedRouteIndex !== null ? state.routes[state.selectedRouteIndex]?.polyline : undefined}
+        markers={[
+          ...(state.origin ? [{ lat: state.origin.lat, lng: state.origin.lng, color: 'green' as const }] : []),
+          ...(state.destination ? [{ lat: state.destination.lat, lng: state.destination.lng, color: 'red' as const }] : []),
+          ...state.pickups.map(s => ({ lat: s.lat, lng: s.lng, color: 'green' as const })),
+          ...state.dropoffs.map(s => ({ lat: s.lat, lng: s.lng, color: 'red' as const })),
+          ...state.stopovers.map(s => ({ lat: s.lat, lng: s.lng, color: 'blue' as const })),
+        ]}
+        center={ESTONIA_MAP_CENTER}
+        zoom={7}
+        className="h-56 w-full rounded-2xl lg:col-start-2 lg:row-span-4 lg:row-start-1 lg:h-[420px]"
+      />
 
       {/* Location inputs */}
-      <div className="space-y-3">
+      <div className="space-y-3 lg:col-start-1 lg:row-start-2">
         <PlaceInput
           value={state.origin}
           onChange={(place) => onChange({ origin: place })}
@@ -283,7 +278,7 @@ function StepRoute({
 
       {/* Route options (shown after both places selected) */}
       {state.routes.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-2 lg:col-start-1 lg:row-start-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
             {t('publish.selectRoute')}
           </p>
@@ -326,7 +321,7 @@ function StepRoute({
       )}
 
       {error && (
-        <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-4 py-3">
+        <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-4 py-3 lg:col-start-1 lg:row-start-4">
           <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
           <p className="text-sm text-red-600">{error}</p>
         </div>
@@ -357,6 +352,7 @@ function StepStopovers({
   const [stopoverInputKey, setStopoverInputKey] = useState(0);
   const [activePointSection, setActivePointSection] = useState<'pickups' | 'stopovers' | 'dropoffs'>('pickups');
   const [pointError, setPointError] = useState('');
+  const [pointNotice, setPointNotice] = useState('');
 
   const selectedPolyline = state.selectedRouteIndex !== null ? state.routes[state.selectedRouteIndex]?.polyline : undefined;
 
@@ -396,14 +392,17 @@ function StepStopovers({
   ) {
     if (!place) return;
     setPointError('');
+    setPointNotice('');
     const selected = state[key];
     const exists = selected.some((item) => item.placeId === place.placeId);
     if (exists) {
-      clearDraft();
+      setPointError('This meeting point is already selected.');
       return;
     }
 
     if (selected.length >= maxSelections) {
+      const pointName = key === 'stopovers' ? 'stopover' : key === 'pickups' ? 'pickup' : 'drop-off';
+      setPointError(`You can add up to ${maxSelections} ${pointName} point${maxSelections === 1 ? '' : 's'}.`);
       return;
     }
 
@@ -420,6 +419,7 @@ function StepStopovers({
     }
 
     onChange({ [key]: [...selected, toLocationInput(place, parent)] } as Partial<WizardState>);
+    setPointNotice(`${key === 'stopovers' ? 'Stopover' : key === 'pickups' ? 'Pickup' : 'Drop-off'} point added.`);
     clearDraft();
   }
 
@@ -502,8 +502,28 @@ function StepStopovers({
   }
 
   return (
-    <div className="space-y-5">
-      <div>
+    <div className="space-y-5 lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start lg:gap-6 lg:space-y-0">
+      <div className="lg:hidden">
+        <h2 className="text-xl font-bold text-deliivo-dark">Choose rider meeting points</h2>
+        <p className="mt-1 text-sm text-deliivo-gray">Optional points riders can choose when booking.</p>
+      </div>
+
+      <GoogleMap
+        polyline={selectedPolyline}
+        markers={[
+          ...(state.origin ? [{ lat: state.origin.lat, lng: state.origin.lng, color: 'green' as const }] : []),
+          ...(state.destination ? [{ lat: state.destination.lat, lng: state.destination.lng, color: 'red' as const }] : []),
+          ...state.pickups.map(s => ({ lat: s.lat, lng: s.lng, color: 'green' as const })),
+          ...state.dropoffs.map(s => ({ lat: s.lat, lng: s.lng, color: 'red' as const })),
+          ...state.stopovers.map(s => ({ lat: s.lat, lng: s.lng, color: 'blue' as const })),
+        ]}
+        center={ESTONIA_MAP_CENTER}
+        zoom={7}
+        className="h-56 w-full rounded-2xl lg:col-start-2 lg:row-start-1 lg:h-[520px] lg:self-start"
+      />
+
+      <div className="space-y-5 lg:col-start-1 lg:row-start-1">
+      <div className="hidden lg:block">
         <h2 className="text-xl font-bold text-deliivo-dark">Choose rider meeting points</h2>
         <p className="mt-1 text-sm text-deliivo-gray">Optional points riders can choose when booking.</p>
       </div>
@@ -574,20 +594,6 @@ function StepStopovers({
         </div>
       </div>
 
-      {selectedPolyline && (
-        <GoogleMap
-          polyline={selectedPolyline}
-          markers={[
-            ...(state.origin ? [{ lat: state.origin.lat, lng: state.origin.lng, color: 'green' as const }] : []),
-            ...(state.destination ? [{ lat: state.destination.lat, lng: state.destination.lng, color: 'red' as const }] : []),
-            ...state.pickups.map(s => ({ lat: s.lat, lng: s.lng, color: 'green' as const })),
-            ...state.dropoffs.map(s => ({ lat: s.lat, lng: s.lng, color: 'red' as const })),
-            ...state.stopovers.map(s => ({ lat: s.lat, lng: s.lng, color: 'blue' as const })),
-          ]}
-          className="h-40 w-full rounded-2xl"
-        />
-      )}
-
       <div className="grid grid-cols-3 gap-2 rounded-2xl bg-gray-100 p-1.5">
         {pointSections.map((section, index) => (
           <button
@@ -608,6 +614,11 @@ function StepStopovers({
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {pointError}
           </div>
         )}
+        {pointNotice && (
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 text-xs text-green-700">
+            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" /> {pointNotice}
+          </div>
+        )}
         <section className={`${activePointSection === 'pickups' ? '' : 'hidden'} space-y-3`}>
           {renderStepHeader(
             '1',
@@ -618,6 +629,7 @@ function StepStopovers({
           <div className="rounded-xl bg-green-50 px-3 py-2 text-xs text-green-800">
             <span className="font-semibold">Origin:</span> {state.origin?.address || 'Not selected'} · within {CITY_POINT_RADIUS_KM} km
           </div>
+          {renderSelectedList(state.pickups, 'pickups', t('publish.noPickupPointsSelected'))}
           {state.pickups.length < MAX_ORIGIN_PICKUPS && (
             <div className="space-y-3">
               <PlaceInput
@@ -626,6 +638,7 @@ function StepStopovers({
                 onChange={setPickupDraft}
                 placeholder={t('publish.searchPickupPoint')}
                 icon={<MapPin className="h-4 w-4 text-deliivo-orange" />}
+                bias={state.origin ? { lat: state.origin.lat, lng: state.origin.lng, radiusKm: CITY_POINT_RADIUS_KM } : undefined}
               />
               <button
                 type="button"
@@ -640,7 +653,6 @@ function StepStopovers({
               </button>
             </div>
           )}
-          {renderSelectedList(state.pickups, 'pickups', t('publish.noPickupPointsSelected'))}
         </section>
 
         <section className={`${activePointSection === 'stopovers' ? '' : 'hidden'} space-y-3`}>
@@ -693,6 +705,7 @@ function StepStopovers({
           ) : (
             <p className="text-xs text-deliivo-gray">{t('publish.noSuggestedStopovers')}</p>
           )}
+          {renderSelectedList(state.stopovers, 'stopovers', t('publish.noStopoverSelected'))}
           {state.stopovers.length < MAX_STOPOVERS && (
             <div className="space-y-3">
               {selectedStopoverSuggestion && (
@@ -706,6 +719,7 @@ function StepStopovers({
                 onChange={setStopoverDraft}
                 placeholder={t('publish.searchStopoverPoint')}
                 icon={<MapPin className="h-4 w-4 text-deliivo-orange" />}
+                bias={selectedStopoverSuggestion ? { lat: selectedStopoverSuggestion.lat, lng: selectedStopoverSuggestion.lng, radiusKm: STOPOVER_POINT_RADIUS_KM } : undefined}
               />
               <button
                 type="button"
@@ -721,7 +735,6 @@ function StepStopovers({
               </button>
             </div>
           )}
-          {renderSelectedList(state.stopovers, 'stopovers', t('publish.noStopoverSelected'))}
         </section>
 
         <section className={`${activePointSection === 'dropoffs' ? '' : 'hidden'} space-y-3`}>
@@ -734,6 +747,7 @@ function StepStopovers({
           <div className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-800">
             <span className="font-semibold">Destination:</span> {state.destination?.address || 'Not selected'} · within {CITY_POINT_RADIUS_KM} km
           </div>
+          {renderSelectedList(state.dropoffs, 'dropoffs', t('publish.noDropoffPointsSelected'))}
           {state.dropoffs.length < MAX_DESTINATION_DROPOFFS && (
             <div className="space-y-3">
               <PlaceInput
@@ -742,6 +756,7 @@ function StepStopovers({
                 onChange={setDropoffDraft}
                 placeholder={t('publish.searchDropoffPoint')}
                 icon={<MapPin className="h-4 w-4 text-deliivo-orange" />}
+                bias={state.destination ? { lat: state.destination.lat, lng: state.destination.lng, radiusKm: CITY_POINT_RADIUS_KM } : undefined}
               />
               <button
                 type="button"
@@ -756,7 +771,6 @@ function StepStopovers({
               </button>
             </div>
           )}
-          {renderSelectedList(state.dropoffs, 'dropoffs', t('publish.noDropoffPointsSelected'))}
         </section>
 
         <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
@@ -810,6 +824,7 @@ function StepStopovers({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -952,10 +967,12 @@ function StepSeats({
   state,
   onChange,
   userGender,
+  onLeaveForVehicle,
 }: {
   state: WizardState;
   onChange: (patch: Partial<WizardState>) => void;
   userGender?: string | null;
+  onLeaveForVehicle: () => void;
 }) {
   const { t, locale } = useTranslation();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -1016,7 +1033,7 @@ function StepSeats({
       </div>
 
       <div className="order-3 space-y-3">
-        {counter(t('publish.passengers'), state.seats, 1, 8, () => onChange({ seats: state.seats + 1 }), () => onChange({ seats: state.seats - 1 }), t('publish.seatsAvailableForRiders'))}
+        {counter(t('publish.passengers'), state.seats, 1, 10, () => onChange({ seats: state.seats + 1 }), () => onChange({ seats: state.seats - 1 }), t('publish.seatsAvailableForRiders'))}
         {counter(t('publish.maxLuggage'), state.maxLuggage, 0, 3, () => onChange({ maxLuggage: state.maxLuggage + 1 }), () => onChange({ maxLuggage: state.maxLuggage - 1 }), luggageLabels[state.maxLuggage])}
       </div>
 
@@ -1028,7 +1045,7 @@ function StepSeats({
         <div>
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-deliivo-dark">{t('publish.yourVehicle')}</p>
-            <Link href="/profile/vehicle" className="text-xs font-semibold text-deliivo-orange underline underline-offset-2 hover:text-deliivo-orange-dark">
+            <Link href="/profile/vehicle?returnTo=%2Fpublish" onClick={onLeaveForVehicle} className="text-xs font-semibold text-deliivo-orange underline underline-offset-2 hover:text-deliivo-orange-dark">
               Manage vehicles
             </Link>
           </div>
@@ -1057,7 +1074,7 @@ function StepSeats({
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
           <p className="text-sm font-semibold text-amber-950">{t('publish.noVehicleFound')}</p>
           <p className="mt-1 text-xs text-amber-800">Add a vehicle before setting seats and ride preferences.</p>
-          <Link href="/profile/vehicle" className="mt-3 inline-flex rounded-full bg-deliivo-orange px-4 py-2 text-sm font-semibold text-white hover:bg-deliivo-orange-dark">
+          <Link href="/profile/vehicle?returnTo=%2Fpublish&add=1" onClick={onLeaveForVehicle} className="mt-3 inline-flex rounded-full bg-deliivo-orange px-4 py-2 text-sm font-semibold text-white hover:bg-deliivo-orange-dark">
             {t('profile.addVehicle')}
           </Link>
         </div>
@@ -1422,12 +1439,19 @@ const INITIAL_STATE: WizardState = {
   notes: "",
 };
 
+let vehicleDetourState: { step: number; state: WizardState } | null = null;
+
 function PublishRideWizard() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const router = useRouter();
-  const [step, setStep] = useState(1);
-  const [state, setState] = useState<WizardState>(INITIAL_STATE);
+  const [resumeState] = useState(() => {
+    const saved = vehicleDetourState;
+    vehicleDetourState = null;
+    return saved;
+  });
+  const [step, setStep] = useState(resumeState?.step ?? 1);
+  const [state, setState] = useState<WizardState>(resumeState?.state ?? INITIAL_STATE);
   const [published, setPublished] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -1602,6 +1626,26 @@ function PublishRideWizard() {
     setError('');
   }
 
+  async function selectRouteForPublish() {
+    if (state.selectedRouteIndex === null) return;
+
+    try {
+      await publishRideApi.selectRoute(state.selectedRouteIndex);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (!message.toLowerCase().includes('routes expired')) throw error;
+
+      const refreshed = await publishRideApi.computeRoutes();
+      const routes = refreshed.data.routes || [];
+      const selected = routes.find((route) => route.index === state.selectedRouteIndex && route.isPublishable !== false)
+        || routes.find((route) => route.isPublishable !== false);
+      if (!selected) throw new Error('No publishable road route is available. Please review the route.');
+
+      await publishRideApi.selectRoute(selected.index);
+      setState((previous) => ({ ...previous, routes, selectedRouteIndex: selected.index }));
+    }
+  }
+
   async function handlePublish(tosAccepted: boolean) {
     setLoading(true);
     setError('');
@@ -1617,9 +1661,7 @@ function PublishRideWizard() {
         await authApi.acceptTos('1.0', '1.0');
       }
 
-      if (state.selectedRouteIndex !== null) {
-        await publishRideApi.selectRoute(state.selectedRouteIndex);
-      }
+      await selectRouteForPublish();
 
       await publishRideApi.updatePickups(state.pickups);
       await publishRideApi.updateDropoffs(state.dropoffs);
@@ -1647,6 +1689,7 @@ function PublishRideWizard() {
 
       // Publish
       await publishRideApi.publish();
+      vehicleDetourState = null;
       setPublished(true);
     } catch (err: unknown) {
       let message = err instanceof Error ? err.message : 'Failed to publish ride';
@@ -1675,7 +1718,7 @@ function PublishRideWizard() {
             <Link href="/rides" className="btn-primary w-full py-3 text-base">{t('publish.viewMyRides')}</Link>
           <button
               type="button"
-              onClick={() => { setState(INITIAL_STATE); setStep(1); setPublished(false); setError(''); }}
+              onClick={() => { vehicleDetourState = null; setState(INITIAL_STATE); setStep(1); setPublished(false); setError(''); }}
               className="btn-outline w-full py-3 text-base"
             >
               {t('publish.publishAnotherRide')}
@@ -1690,7 +1733,7 @@ function PublishRideWizard() {
     <div className="flex min-h-screen flex-col bg-deliivo-cream">
       {/* Top bar */}
       <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
-        <div className="mx-auto flex h-14 max-w-lg items-center justify-between px-4">
+        <div className="relative mx-auto flex h-14 max-w-7xl items-center px-4 sm:px-6 lg:px-8">
           {step === 1 ? (
             <Link href="/" className="flex items-center gap-1.5 text-sm font-medium text-deliivo-gray hover:text-deliivo-dark transition-colors">
               <ArrowLeft className="h-4 w-4" /> {t('publish.back')}
@@ -1700,8 +1743,7 @@ function PublishRideWizard() {
               <ArrowLeft className="h-4 w-4" /> {t('publish.back')}
             </button>
           )}
-          <span className="text-sm font-semibold text-deliivo-dark">{t('publish.title')}</span>
-          <div className="w-16" />
+          <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-sm font-semibold text-deliivo-dark">{t('publish.title')}</span>
         </div>
       </div>
 
@@ -1712,37 +1754,20 @@ function PublishRideWizard() {
         </div>
       </div>
 
-      {/* Step icons row */}
-      <div className="bg-white border-b border-gray-100 px-4 pb-3">
-        <div className="mx-auto flex max-w-lg justify-center gap-6">
-          {[
-            { icon: <MapPin className="h-4 w-4" />, label: t('publish.route') },
-            { icon: <Route className="h-4 w-4" />, label: t('publish.stops') },
-            { icon: <Calendar className="h-4 w-4" />, label: t('publish.date') },
-            { icon: <Users className="h-4 w-4" />, label: t('publish.seats') },
-            { icon: <Euro className="h-4 w-4" />, label: t('publish.price') },
-            { icon: <CheckCircle className="h-4 w-4" />, label: t('publish.done') },
-          ].map(({ icon, label }, i) => {
-            const n = i + 1;
-            const active = n === step;
-            const done = n < step;
-            return (
-              <div key={label} className={`flex flex-col items-center gap-0.5 text-xs font-medium transition-colors ${active ? "text-deliivo-orange" : done ? "text-deliivo-orange/60" : "text-gray-300"}`}>
-                {icon}
-                <span className="hidden sm:block">{label}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Main content */}
       <main className="flex-1 px-4 py-6">
-        <div className="mx-auto max-w-lg">
+        <div className={`mx-auto ${step <= 2 ? 'max-w-5xl' : 'max-w-lg'}`}>
           {step === 1 && <StepRoute state={state} onChange={patch} error={error} />}
           {step === 2 && <StepStopovers state={state} onChange={patch} />}
           {step === 3 && <StepDateTime state={state} onChange={patch} />}
-          {step === 4 && <StepSeats state={state} onChange={patch} userGender={user?.gender} />}
+          {step === 4 && (
+            <StepSeats
+              state={state}
+              onChange={patch}
+              userGender={user?.gender}
+              onLeaveForVehicle={() => { vehicleDetourState = { step, state }; }}
+            />
+          )}
           {step === 5 && <StepPrice state={state} onChange={patch} loading={loading} />}
           {step === 6 && (
             <StepConfirm

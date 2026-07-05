@@ -19,6 +19,7 @@ import {
   Bell,
   CheckCircle,
   History,
+  ShieldCheck,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -149,6 +150,11 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
             <Link href={`/profile/users/${ride.driverId}`} className="text-sm font-semibold text-deliivo-dark leading-tight hover:text-deliivo-orange">
               {driverName}
             </Link>
+            {ride.driver?.isVerified && (
+              <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+                <ShieldCheck size={11} /> {t('search.verifiedDriver')}
+              </span>
+            )}
             {ride.driver?.rating ? (
               <div className="mt-0.5 flex items-center gap-1 sm:justify-center">
                 <Star size={13} className="fill-amber-400 text-amber-400" />
@@ -245,13 +251,14 @@ function SearchPageContent() {
   const canUseWomenOnly = user?.gender === 'FEMALE';
   const { t } = useTranslation();
   const searchParams = useSearchParams();
+  const today = new Date().toISOString().split('T')[0];
 
   const [origin, setOrigin] = useState<PlaceSelection | null>(null);
   const [destination, setDestination] = useState<PlaceSelection | null>(null);
   const [date, setDate] = useState(searchParams.get('date') || '');
   const [seats, setSeats] = useState(() => {
     const parsed = Number(searchParams.get('seats') || '1');
-    return Number.isInteger(parsed) && parsed >= 1 && parsed <= 4 ? parsed : 1;
+    return Number.isInteger(parsed) && parsed >= 1 && parsed <= 10 ? parsed : 1;
   });
   const [femaleOnly, setFemaleOnly] = useState(false);
 
@@ -265,6 +272,7 @@ function SearchPageContent() {
   const [showFilters, setShowFilters] = useState(false);
   const [maxPrice, setMaxPrice] = useState<number | ''>('');
   const [sortBy, setSortBy] = useState<'departure' | 'price' | 'distance'>('departure');
+  const [departurePeriod, setDeparturePeriod] = useState<'' | 'morning' | 'afternoon' | 'evening'>('');
 
   // Recent searches
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
@@ -292,7 +300,7 @@ function SearchPageContent() {
     const to = searchParams.get('to');
     const female = searchParams.get('femaleOnly');
     const querySeats = Number(searchParams.get('seats') || '1');
-    const hydratedSeats = Number.isInteger(querySeats) && querySeats >= 1 && querySeats <= 4 ? querySeats : 1;
+    const hydratedSeats = Number.isInteger(querySeats) && querySeats >= 1 && querySeats <= 10 ? querySeats : 1;
     setSeats(hydratedSeats);
     if (female === '1' || female === 'true') setFemaleOnly(true);
     if (!from && !to) return;
@@ -320,7 +328,7 @@ function SearchPageContent() {
     Promise.all([resolvePlace(from), resolvePlace(to)]).then(async ([resolvedFrom, resolvedTo]) => {
       if (resolvedFrom) setOrigin(resolvedFrom);
       if (resolvedTo) setDestination(resolvedTo);
-      if (resolvedFrom?.lat && resolvedTo?.lat && date) {
+      if (resolvedFrom?.lat && resolvedTo?.lat) {
         setLoading(true);
         setError('');
         setSearched(true);
@@ -330,10 +338,11 @@ function SearchPageContent() {
             originLng: resolvedFrom.lng,
             destinationLat: resolvedTo.lat,
             destinationLng: resolvedTo.lng,
-            departureDate: date,
+            departureDate: date || undefined,
             seatsRequired: hydratedSeats,
             femaleOnly: female === '1' || female === 'true' || undefined,
             sortBy,
+            departurePeriod: departurePeriod || undefined,
             limit: 20,
           };
           const res = await searchRidesApi.search(params);
@@ -374,7 +383,7 @@ function SearchPageContent() {
 
   async function handleSearch(e?: React.FormEvent) {
     if (e) e.preventDefault();
-    if (!origin || !destination || !date) {
+    if (!origin || !destination) {
       setError(t('search.requiredError'));
       return;
     }
@@ -389,11 +398,12 @@ function SearchPageContent() {
         originLng: origin.lng,
         destinationLat: destination.lat,
         destinationLng: destination.lng,
-        departureDate: date,
+        departureDate: date || undefined,
         seatsRequired: seats,
         femaleOnly: femaleOnly || undefined,
         maxPrice: maxPrice || undefined,
         sortBy,
+        departurePeriod: departurePeriod || undefined,
         limit: 20,
       };
       const res = await searchRidesApi.search(params);
@@ -445,8 +455,9 @@ function SearchPageContent() {
                 icon={<MapPin size={18} className="text-deliivo-gray" />}
               />
               <div className="relative flex-1">
-                <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-deliivo-gray" size={18} />
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input-field pl-9" />
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('search.dateLabel')}</label>
+                <Calendar className="pointer-events-none absolute bottom-3 left-3 text-deliivo-gray" size={18} />
+                <input type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} className="input-field h-11 pl-9" />
               </div>
             </div>
 
@@ -456,7 +467,7 @@ function SearchPageContent() {
                 <div className="flex items-center gap-2">
                   <Users size={16} className="text-deliivo-gray" />
                   <select value={seats} onChange={(e) => setSeats(Number(e.target.value))} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
-                    {[1,2,3,4].map(n => <option key={n} value={n}>{n} {n > 1 ? t('search.seatsPlural') : t('search.seat')}</option>)}
+                    {Array.from({ length: 10 }, (_, index) => index + 1).map(n => <option key={n} value={n}>{n} {n > 1 ? t('search.seatsPlural') : t('search.seat')}</option>)}
                   </select>
                 </div>
                 {canUseWomenOnly && (
@@ -494,6 +505,15 @@ function SearchPageContent() {
                     <option value="distance">{t('search.sortDistance')}</option>
                   </select>
                 </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-deliivo-gray">{t('search.timeOfDay')}:</label>
+                  <select value={departurePeriod} onChange={(e) => setDeparturePeriod(e.target.value as typeof departurePeriod)} className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm">
+                    <option value="">{t('common.any')}</option>
+                    <option value="morning">{t('search.morning')}</option>
+                    <option value="afternoon">{t('search.afternoon')}</option>
+                    <option value="evening">{t('search.evening')}</option>
+                  </select>
+                </div>
               </div>
             )}
           </form>
@@ -517,6 +537,11 @@ function SearchPageContent() {
                   <p className="mt-0.5 text-sm text-deliivo-gray">
                     {loading ? t('common.searching') : t('search.resultsFound', { total, plural: total !== 1 ? 's' : '' })}
                   </p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-deliivo-gray">
+                    {date && <span className="rounded-full bg-white px-3 py-1 shadow-sm">{new Date(`${date}T00:00:00`).toLocaleDateString()}</span>}
+                    <span className="rounded-full bg-white px-3 py-1 shadow-sm">{seats} {seats === 1 ? t('search.seat') : t('search.seatsPlural')}</span>
+                    {departurePeriod && <span className="rounded-full bg-white px-3 py-1 shadow-sm">{t(`search.${departurePeriod}`)}</span>}
+                  </div>
                 </div>
               </div>
 
