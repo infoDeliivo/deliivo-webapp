@@ -17,14 +17,6 @@ const featuredRoutes = [
   { from: 'Vilnius', to: 'Kaunas', price: 7, duration: '1h 20m', drivers: 15, rating: 4.9 },
 ];
 
-const trustMetrics = [
-  { icon: Users, value: '15,000+', labelKey: 'home.metricVerifiedDrivers' },
-  { icon: Star, value: '4.9/5', labelKey: 'home.metricAverageRating' },
-  { icon: ShieldCheck, value: '95%', labelKey: 'home.metricSuccessfulTrips' },
-  { icon: MapPin, value: '300+', labelKey: 'home.metricCitiesConnected' },
-  { icon: Headphones, value: '< 2h', labelKey: 'home.metricResponseTime' },
-];
-
 const riderSteps = [
   { icon: Search, titleKey: 'home.riderStep1Title', copyKey: 'home.riderStep1Copy' },
   { icon: CreditCard, titleKey: 'home.riderStep2Title', copyKey: 'home.riderStep2Copy' },
@@ -79,20 +71,6 @@ export default function HomepageV2() {
                 <span className="flex items-center gap-2"><Navigation className="h-4 w-4 text-deliivo-orange" />{t('home.liveRideTracking')}</span>
                 <span className="flex items-center gap-2"><Headphones className="h-4 w-4 text-deliivo-orange" />{t('home.support247')}</span>
               </div>
-            </div>
-            <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-orange-100 bg-orange-100 shadow-lg shadow-orange-100/40 sm:grid-cols-5">
-              {trustMetrics.map((metric) => {
-                const Icon = metric.icon;
-                return (
-                  <div key={metric.labelKey} className="flex items-center gap-3 bg-white/95 px-4 py-4 last:col-span-2 sm:col-span-1 sm:justify-center sm:last:col-span-1">
-                    <Icon className="h-5 w-5 shrink-0 text-deliivo-orange" />
-                    <div>
-                      <p className="text-base font-black leading-none text-deliivo-dark">{metric.value}</p>
-                      <p className="mt-1 text-[11px] font-medium leading-tight text-deliivo-gray">{t(metric.labelKey)}</p>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </div>
         </section>
