@@ -15,6 +15,8 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
   const canUseWomenOnly = user?.gender === 'FEMALE';
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [fromLocation, setFromLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [toLocation, setToLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [date, setDate] = useState('');
   const [seats, setSeats] = useState(1);
   const [femaleOnly, setFemaleOnly] = useState(false);
@@ -35,6 +37,8 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
   function swap() {
     setFrom(to);
     setTo(from);
+    setFromLocation(toLocation);
+    setToLocation(fromLocation);
     setFromPredictions([]);
     setToPredictions([]);
     setFromOpen(false);
@@ -60,7 +64,14 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await mapsApi.autocomplete(input);
+        const originBias = kind === 'to' ? fromLocation : null;
+        const res = await mapsApi.autocomplete(
+          input,
+          originBias?.lat,
+          originBias?.lng,
+          originBias ? 50 : undefined,
+          false,
+        );
         setPredictions(res.data || []);
         setOpen((res.data || []).length > 0);
       } catch {
@@ -72,16 +83,27 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
     }, 250);
   }
 
-  function handleSelectPlace(description: string, kind: 'from' | 'to') {
+  async function handleSelectPlace(prediction: PlacePrediction, kind: 'from' | 'to') {
+    const description = prediction.description;
     if (kind === 'from') {
       setFrom(description);
       setFromOpen(false);
       setFromPredictions([]);
-      return;
+    } else {
+      setTo(description);
+      setToOpen(false);
+      setToPredictions([]);
     }
-    setTo(description);
-    setToOpen(false);
-    setToPredictions([]);
+
+    try {
+      const details = await mapsApi.placeDetails(prediction.placeId);
+      const location = details.data.location;
+      if (kind === 'from') setFromLocation(location);
+      else setToLocation(location);
+    } catch {
+      if (kind === 'from') setFromLocation(null);
+      else setToLocation(null);
+    }
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -121,6 +143,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
             value={from}
             onChange={(e) => {
               setFrom(e.target.value);
+              setFromLocation(null);
               searchPlaces(e.target.value, 'from');
             }}
             onFocus={() => fromPredictions.length > 0 && setFromOpen(true)}
@@ -138,7 +161,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
                 <button
                   key={prediction.placeId}
                   type="button"
-                  onMouseDown={() => handleSelectPlace(prediction.description, 'from')}
+                  onMouseDown={() => handleSelectPlace(prediction, 'from')}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-primary-50"
                 >
                   <MapPin className="h-4 w-4 shrink-0 text-deliivo-gray" />
@@ -174,6 +197,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
             value={to}
             onChange={(e) => {
               setTo(e.target.value);
+              setToLocation(null);
               searchPlaces(e.target.value, 'to');
             }}
             onFocus={() => toPredictions.length > 0 && setToOpen(true)}
@@ -191,7 +215,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
                 <button
                   key={prediction.placeId}
                   type="button"
-                  onMouseDown={() => handleSelectPlace(prediction.description, 'to')}
+                  onMouseDown={() => handleSelectPlace(prediction, 'to')}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-primary-50"
                 >
                   <MapPin className="h-4 w-4 shrink-0 text-deliivo-gray" />

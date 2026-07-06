@@ -25,6 +25,7 @@ import {
   ExternalLink,
   CigaretteOff,
   Bike,
+  Car,
 } from "lucide-react";
 import StepIndicator from "@/components/StepIndicator";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -95,6 +96,7 @@ const MAX_DESTINATION_DROPOFFS = 3;
 const MAX_STOPOVERS = 3;
 const CITY_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_CITY_POINT_RADIUS_KM || '15');
 const STOPOVER_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_STOPOVER_POINT_RADIUS_KM || '5');
+const ROUTE_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_ROUTE_POINT_RADIUS_KM || '10');
 const ESTONIA_MAP_CENTER = { lat: 58.5953, lng: 25.0136 };
 
 function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
@@ -105,6 +107,60 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
   const value = Math.sin(dLat / 2) ** 2
     + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+function decodeRoutePolyline(encoded: string) {
+  const points: Array<{ lat: number; lng: number }> = [];
+  let index = 0;
+  let latitude = 0;
+  let longitude = 0;
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20 && index <= encoded.length);
+    latitude += result & 1 ? ~(result >> 1) : result >> 1;
+
+    shift = 0;
+    result = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20 && index <= encoded.length);
+    longitude += result & 1 ? ~(result >> 1) : result >> 1;
+    points.push({ lat: latitude / 1e5, lng: longitude / 1e5 });
+  }
+  return points;
+}
+
+function distanceFromRouteKm(point: { lat: number; lng: number }, encodedPolyline: string) {
+  const path = decodeRoutePolyline(encodedPolyline);
+  let minimumDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const start = path[index];
+    const end = path[index + 1];
+    const meanLatitude = ((start.lat + end.lat + point.lat) / 3) * Math.PI / 180;
+    const longitudeScale = Math.cos(meanLatitude);
+    const segmentX = (end.lng - start.lng) * longitudeScale;
+    const segmentY = end.lat - start.lat;
+    const pointX = (point.lng - start.lng) * longitudeScale;
+    const pointY = point.lat - start.lat;
+    const segmentLengthSquared = segmentX ** 2 + segmentY ** 2;
+    const ratio = segmentLengthSquared === 0
+      ? 0
+      : Math.max(0, Math.min(1, (pointX * segmentX + pointY * segmentY) / segmentLengthSquared));
+    const projection = {
+      lat: start.lat + ratio * (end.lat - start.lat),
+      lng: start.lng + ratio * (end.lng - start.lng),
+    };
+    minimumDistance = Math.min(minimumDistance, distanceKm(point, projection));
+  }
+  return minimumDistance;
 }
 
 // ─── Helper: calendar grid ────────────────────────────────────────────────────
@@ -252,6 +308,7 @@ function StepRoute({
         ]}
         center={ESTONIA_MAP_CENTER}
         zoom={7}
+        snapMarkersToRoute
         className="h-56 w-full rounded-2xl lg:col-start-2 lg:row-span-4 lg:row-start-1 lg:h-[420px]"
       />
 
@@ -417,6 +474,13 @@ function StepStopovers({
       setPointError(`This point is ${selectedDistanceKm.toFixed(1)} km away. Choose a point within ${limitKm} km of ${parent.address.split(',')[0]}.`);
       return;
     }
+    if (selectedPolyline) {
+      const routeDistanceKm = distanceFromRouteKm(place, selectedPolyline);
+      if (routeDistanceKm > ROUTE_POINT_RADIUS_KM) {
+        setPointError(`This point is ${routeDistanceKm.toFixed(1)} km from the selected route. Choose a point within ${ROUTE_POINT_RADIUS_KM} km of the route line.`);
+        return;
+      }
+    }
 
     onChange({ [key]: [...selected, toLocationInput(place, parent)] } as Partial<WizardState>);
     setPointNotice(`${key === 'stopovers' ? 'Stopover' : key === 'pickups' ? 'Pickup' : 'Drop-off'} point added.`);
@@ -505,7 +569,7 @@ function StepStopovers({
     <div className="space-y-5 lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start lg:gap-6 lg:space-y-0">
       <div className="lg:hidden">
         <h2 className="text-xl font-bold text-deliivo-dark">Choose rider meeting points</h2>
-        <p className="mt-1 text-sm text-deliivo-gray">Optional points riders can choose when booking.</p>
+        <p className="mt-1 text-sm text-deliivo-gray">Add where riders can join and leave the ride. Stopovers are optional.</p>
       </div>
 
       <GoogleMap
@@ -519,13 +583,31 @@ function StepStopovers({
         ]}
         center={ESTONIA_MAP_CENTER}
         zoom={7}
+        connectMarkersToRoute
         className="h-56 w-full rounded-2xl lg:col-start-2 lg:row-start-1 lg:h-[520px] lg:self-start"
       />
 
       <div className="space-y-5 lg:col-start-1 lg:row-start-1">
       <div className="hidden lg:block">
         <h2 className="text-xl font-bold text-deliivo-dark">Choose rider meeting points</h2>
-        <p className="mt-1 text-sm text-deliivo-gray">Optional points riders can choose when booking.</p>
+        <p className="mt-1 text-sm text-deliivo-gray">Add where riders can join and leave the ride. Stopovers are optional.</p>
+      </div>
+
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <p className="text-sm font-semibold text-amber-900">{t('publish.meetingPointsRequirement')}</p>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${state.pickups.length > 0 ? 'bg-green-100 text-green-700' : 'bg-white text-amber-800'}`}>
+            {state.pickups.length > 0 ? <CheckCircle className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+            {t('publish.pickupRequired')}
+          </span>
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${state.dropoffs.length > 0 ? 'bg-green-100 text-green-700' : 'bg-white text-amber-800'}`}>
+            {state.dropoffs.length > 0 ? <CheckCircle className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+            {t('publish.dropoffRequired')}
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
+            {t('publish.stopoversOptional')}
+          </span>
+        </div>
       </div>
 
       <div className="hidden">
@@ -675,7 +757,7 @@ function StepStopovers({
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.suggestedStopovers')}</p>
               </div>
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              <div className="grid gap-2 sm:grid-cols-2">
               {stopoverSuggestions.map((suggestion) => {
                 const selected = selectedStopoverSuggestion?.placeId === suggestion.placeId;
                 return (
@@ -683,7 +765,7 @@ function StepStopovers({
                     key={suggestion.placeId}
                     type="button"
                     onClick={() => setSelectedStopoverSuggestion(suggestion)}
-                    className={`flex min-w-44 shrink-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                    className={`flex min-w-0 items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${
                       selected
                         ? 'border-deliivo-orange bg-deliivo-orange-light'
                         : 'border-gray-100 bg-white hover:border-primary-200'
@@ -693,8 +775,8 @@ function StepStopovers({
                       <MapPin className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-deliivo-dark">{suggestion.name}</p>
-                      <p className="truncate text-xs text-deliivo-gray">{suggestion.address}</p>
+                      <p className="break-words text-sm font-medium text-deliivo-dark">{suggestion.name}</p>
+                      <p className="mt-0.5 break-words text-xs leading-4 text-deliivo-gray">{suggestion.address}</p>
                     </div>
                     {selected && <CheckCircle className="h-5 w-5 text-deliivo-orange shrink-0" />}
                   </button>
@@ -1458,6 +1540,7 @@ function PublishRideWizard() {
   const [payoutStatus, setPayoutStatus] = useState<ConnectStatus | null>(null);
   const [payoutStatusLoading, setPayoutStatusLoading] = useState(false);
   const [payoutSetupLoading, setPayoutSetupLoading] = useState(false);
+  const [vehicleStatus, setVehicleStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
 
   function patch(update: Partial<WizardState>) {
     setState((prev) => ({ ...prev, ...update }));
@@ -1467,6 +1550,20 @@ function PublishRideWizard() {
   useEffect(() => {
     loadPayoutStatus();
   }, []);
+
+  const checkVehicleAvailability = useCallback(async () => {
+    setVehicleStatus('loading');
+    try {
+      const res = await vehicleApi.list();
+      setVehicleStatus((res.data?.vehicles || []).length > 0 ? 'ready' : 'missing');
+    } catch {
+      setVehicleStatus('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    void checkVehicleAvailability();
+  }, [checkVehicleAvailability]);
 
   useEffect(() => {
     if (!published) return;
@@ -1504,7 +1601,7 @@ function PublishRideWizard() {
 
   function canContinue(): boolean {
     if (step === 1) return state.origin !== null && state.destination !== null && state.selectedRouteIndex !== null;
-    if (step === 2) return true; // stopovers are optional
+    if (step === 2) return state.pickups.length > 0 && state.dropoffs.length > 0;
     if (step === 3) return state.date.length > 0;
     if (step === 4) return state.seats >= 1;
     if (step === 5) return state.basePricePerSeat > 0;
@@ -1725,6 +1822,49 @@ function PublishRideWizard() {
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (vehicleStatus !== 'ready') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-deliivo-cream px-4 py-10">
+        {vehicleStatus === 'loading' ? (
+          <div className="flex items-center gap-3 text-sm font-medium text-deliivo-gray">
+            <Loader2 className="h-5 w-5 animate-spin text-deliivo-orange" />
+            Checking your vehicle...
+          </div>
+        ) : (
+          <div className="w-full max-w-lg rounded-3xl border border-orange-100 bg-white p-7 text-center shadow-sm sm:p-9">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-deliivo-orange-light text-deliivo-orange">
+              {vehicleStatus === 'missing' ? <Car className="h-6 w-6" /> : <AlertCircle className="h-6 w-6" />}
+            </div>
+            <h1 className="mt-5 text-2xl font-bold text-deliivo-dark">
+              {vehicleStatus === 'missing' ? 'Add a vehicle before offering a ride' : 'We could not check your vehicles'}
+            </h1>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-deliivo-gray">
+              {vehicleStatus === 'missing'
+                ? 'Riders need to know which vehicle they will travel in. Add your vehicle details first, then return here to publish the ride.'
+                : 'Please retry the vehicle check. Your publish flow has not been changed.'}
+            </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Link href="/" className="btn-outline px-6 py-3 text-sm">Back to home</Link>
+              {vehicleStatus === 'missing' ? (
+                <Link
+                  href="/profile/vehicle?returnTo=%2Fpublish&add=1"
+                  onClick={() => { vehicleDetourState = { step, state }; }}
+                  className="btn-primary px-6 py-3 text-sm"
+                >
+                  Add vehicle
+                </Link>
+              ) : (
+                <button type="button" onClick={() => void checkVehicleAvailability()} className="btn-primary px-6 py-3 text-sm">
+                  Try again
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }

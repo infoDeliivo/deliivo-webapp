@@ -66,7 +66,9 @@ function VehicleContent() {
   const fetchVehicles = async () => {
     try {
       const res = await vehicleApi.list();
-      setVehicles(res.data?.vehicles || []);
+      const savedVehicles = res.data?.vehicles || [];
+      setVehicles(savedVehicles);
+      if (savedVehicles.length === 0) setShowAddForm(true);
     } catch {
       // ignore
     } finally {
@@ -193,7 +195,7 @@ function VehicleContent() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
       <div className="mb-6 flex items-start gap-3">
         <Link href={returnTo} className="rounded-full p-2 hover:bg-gray-100">
           <ArrowLeft size={20} />
@@ -204,26 +206,21 @@ function VehicleContent() {
         </div>
       </div>
 
-      <section className="mb-6 rounded-3xl border border-orange-100 bg-gradient-to-br from-white to-orange-50/60 px-6 py-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-deliivo-orange">Vehicle setup</p>
-            <h2 className="mt-1 text-xl font-bold text-deliivo-dark">Keep your ride details clear</h2>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <div className="space-y-6">
+          <section className="rounded-3xl border border-orange-100 bg-gradient-to-br from-white to-orange-50/60 px-6 py-6 shadow-sm">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-deliivo-orange">Vehicle setup</p>
+              <h2 className="mt-1 text-xl font-bold text-deliivo-dark">Keep your ride details clear</h2>
             <p className="mt-2 max-w-2xl text-sm text-deliivo-gray">
-              Add the plate and vehicle details first. Photos and supporting documents are optional.
-            </p>
-          </div>
-          <button onClick={() => setShowAddForm(true)} className="btn-primary gap-2 px-5 py-3 text-sm">
-            <Plus size={18} />
-            {hasVehicles ? 'Add another vehicle' : 'Add vehicle'}
-          </button>
-        </div>
+                Add the plate and vehicle details first. Photos and supporting documents are optional.
+              </p>
+            </div>
+          </section>
 
-      </section>
-
-      {hasVehicles ? (
-        <div className="mb-6 space-y-4">
-          {vehicles.map((v) => (
+          {hasVehicles ? (
+            <div className="space-y-4">
+              {vehicles.map((v) => (
             <div key={v.id} className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
               <div className="flex items-start gap-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
@@ -257,21 +254,23 @@ function VehicleContent() {
                 </button>
               </div>
             </div>
-          ))}
+              ))}
+            </div>
+          ) : (
+            <section className="rounded-3xl border border-dashed border-gray-200 bg-white px-6 py-10 text-center shadow-sm">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-deliivo-orange-light text-deliivo-orange">
+                <Car size={24} />
+              </div>
+              <h2 className="mt-4 text-lg font-bold text-deliivo-dark">No vehicle added yet</h2>
+              <p className="mx-auto mt-2 max-w-lg text-sm text-deliivo-gray">
+                Add one vehicle now so your publish flow is ready and riders can see clearer car details before booking.
+              </p>
+            </section>
+          )}
         </div>
-      ) : (
-        <section className="mb-6 rounded-3xl border border-dashed border-gray-200 bg-white px-6 py-10 text-center shadow-sm">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-deliivo-orange-light text-deliivo-orange">
-            <Car size={24} />
-          </div>
-          <h2 className="mt-4 text-lg font-bold text-deliivo-dark">No vehicle added yet</h2>
-          <p className="mx-auto mt-2 max-w-lg text-sm text-deliivo-gray">
-            Add one vehicle now so your publish flow is ready and riders can see clearer car details before booking.
-          </p>
-        </section>
-      )}
 
-      {showAddForm ? (
+        <div className="lg:sticky lg:top-24">
+        {showAddForm ? (
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -391,7 +390,23 @@ function VehicleContent() {
             </div>
           )}
         </div>
-      ) : null}
+      ) : (
+        <section className="rounded-3xl border border-gray-100 bg-white p-7 shadow-sm">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-deliivo-orange-light text-deliivo-orange">
+            <Plus size={22} />
+          </div>
+          <h2 className="mt-5 text-xl font-bold text-deliivo-dark">Add another vehicle</h2>
+          <p className="mt-2 text-sm leading-6 text-deliivo-gray">
+            Keep multiple vehicles in your profile and use the appropriate one when offering a ride.
+          </p>
+          <button onClick={() => setShowAddForm(true)} className="btn-primary mt-6 w-full gap-2 py-3 text-sm">
+            <Plus size={18} />
+            {hasVehicles ? 'Add another vehicle' : 'Add vehicle'}
+          </button>
+        </section>
+        )}
+        </div>
+      </div>
     </main>
   );
 }

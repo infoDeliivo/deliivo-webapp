@@ -49,12 +49,14 @@ function PlaceInput({
   placeholder,
   label,
   icon,
+  bias,
 }: {
   value: PlaceSelection | null;
   onChange: (place: PlaceSelection | null) => void;
   placeholder: string;
   label: string;
   icon: React.ReactNode;
+  bias?: { lat: number; lng: number };
 }) {
   const [query, setQuery] = useState(value?.address || '');
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
@@ -72,7 +74,7 @@ function PlaceInput({
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await mapsApi.autocomplete(input);
+        const res = await mapsApi.autocomplete(input, bias?.lat, bias?.lng, bias ? 50 : undefined, false);
         setPredictions(res.data || []);
         setOpen(true);
       } catch { setPredictions([]); }
@@ -453,6 +455,7 @@ function SearchPageContent() {
                 placeholder={t('search.toPlaceholder')}
                 label={t('search.toLabel')}
                 icon={<MapPin size={18} className="text-deliivo-gray" />}
+                bias={origin && origin.lat !== 0 && origin.lng !== 0 ? { lat: origin.lat, lng: origin.lng } : undefined}
               />
               <div className="relative flex-1">
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('search.dateLabel')}</label>

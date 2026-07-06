@@ -452,12 +452,13 @@ export const travelPreferencesApi = {
 
 // Maps API
 export const mapsApi = {
-  autocomplete(input: string, lat?: number, lng?: number, radiusKm?: number) {
+  autocomplete(input: string, lat?: number, lng?: number, radiusKm?: number, strictBounds?: boolean) {
     const params = new URLSearchParams({ input });
     if (lat !== undefined && lng !== undefined) {
       params.set('lat', String(lat));
       params.set('lng', String(lng));
       if (radiusKm !== undefined) params.set('radius', String(Math.round(radiusKm * 1000)));
+      if (strictBounds !== undefined) params.set('strictBounds', String(strictBounds));
     }
     return apiFetch<{ data: PlacePrediction[] }>(`/api/v1/maps/place/autocomplete?${params}`);
   },

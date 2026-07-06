@@ -1,10 +1,12 @@
 'use client';
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { dictionaries } from './i18n-dictionaries';
 import {
   DEFAULT_LOCALE,
   getBrowserLocale,
+  getLocaleFromPathname,
   isSupportedLocale,
   LOCALE_CHANGE_EVENT,
   persistLocale,
@@ -30,6 +32,7 @@ function interpolate(value: string, params?: TranslationParams) {
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [locale, setLocaleState] = useState<SupportedLocale>(DEFAULT_LOCALE);
 
   useEffect(() => {
@@ -45,6 +48,14 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener(LOCALE_CHANGE_EVENT, handleLocaleChange);
     return () => window.removeEventListener(LOCALE_CHANGE_EVENT, handleLocaleChange);
   }, []);
+
+  useEffect(() => {
+    const pathLocale = getLocaleFromPathname(pathname);
+    if (pathLocale && pathLocale !== locale) {
+      persistLocale(pathLocale);
+      setLocaleState(pathLocale);
+    }
+  }, [locale, pathname]);
 
   const value = useMemo<I18nContextValue>(() => ({
     locale,
