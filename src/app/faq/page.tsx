@@ -4,6 +4,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { publicConfig } from '@/lib/public-config';
 import { useTranslation } from '@/lib/i18n-context';
+import { localeToUrlCode } from '@/lib/i18n';
 
 const faqs = [
   { q: 'faq.q1', a: 'faq.a1' },
@@ -26,7 +27,8 @@ const quickStarts = [
 ];
 
 export default function FaqPage() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const localePrefix = localeToUrlCode(locale);
   const faqSchema = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
@@ -43,8 +45,8 @@ export default function FaqPage() {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://deliivo.com/' },
-      { '@type': 'ListItem', position: 2, name: 'FAQ', item: 'https://deliivo.com/faq' },
+      { '@type': 'ListItem', position: 1, name: t('common.home'), item: `${publicConfig.siteUrl}/${localePrefix}` },
+      { '@type': 'ListItem', position: 2, name: t('faq.title'), item: `${publicConfig.siteUrl}/${localePrefix}/faq` },
     ],
   };
 

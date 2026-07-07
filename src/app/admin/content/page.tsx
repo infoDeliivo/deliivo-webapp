@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Globe2, Languages, Loader2, PencilLine, Plus, Save, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Bold, BookOpen, Globe2, Heading2, Languages, Link2, List, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import { contentApi, ContentAuditLog, ContentPost, getApiErrorMessage } from '@/lib/api';
 import { showError, showSuccess } from '@/lib/app-feedback';
 
@@ -24,6 +24,7 @@ export default function AdminContentPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<typeof emptyDraft>(emptyDraft);
   const [audit, setAudit] = useState<ContentAuditLog[]>([]);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedPost = useMemo(
     () => posts.find((post) => post.id === selectedId) || null,
@@ -79,6 +80,26 @@ export default function AdminContentPage() {
   function createNew() {
     setSelectedId(null);
     setDraft(emptyDraft);
+  }
+
+  function insertBodyMarkup(before: string, after: string, placeholder: string) {
+    const textarea = bodyRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = draft.body.slice(start, end) || placeholder;
+    const nextBody = `${draft.body.slice(0, start)}${before}${selected}${after}${draft.body.slice(end)}`;
+    setDraft((previous) => ({ ...previous, body: nextBody }));
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
+    });
+  }
+
+  function insertLink() {
+    const url = window.prompt('Link URL', 'https://');
+    if (!url) return;
+    insertBodyMarkup('[', `](${url})`, 'link text');
   }
 
   async function savePost() {
@@ -236,7 +257,11 @@ export default function AdminContentPage() {
               <input value={draft.readTime} onChange={(e) => setDraft((prev) => ({ ...prev, readTime: e.target.value }))} className="input-field" />
             </Field>
             <Field label="Locale">
-              <input value={draft.locale} onChange={(e) => setDraft((prev) => ({ ...prev, locale: e.target.value }))} className="input-field" />
+              <select value={draft.locale} onChange={(e) => setDraft((prev) => ({ ...prev, locale: e.target.value }))} className="input-field">
+                <option value="en">English</option>
+                <option value="et">Eesti</option>
+                <option value="ru">Русский</option>
+              </select>
             </Field>
           </div>
 
@@ -249,7 +274,16 @@ export default function AdminContentPage() {
           </Field>
 
           <Field label="Body" className="mt-4">
-            <textarea value={draft.body} onChange={(e) => setDraft((prev) => ({ ...prev, body: e.target.value }))} rows={10} className="input-field" />
+            <div className="overflow-hidden rounded-xl border border-gray-200 focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100">
+              <div className="flex flex-wrap items-center gap-1 border-b border-gray-200 bg-gray-50 p-2" aria-label="Article formatting controls">
+                <EditorButton label="Bold" onClick={() => insertBodyMarkup('**', '**', 'bold text')}><Bold className="h-4 w-4" /></EditorButton>
+                <EditorButton label="Heading" onClick={() => insertBodyMarkup('## ', '', 'Section heading')}><Heading2 className="h-4 w-4" /></EditorButton>
+                <EditorButton label="Bulleted list" onClick={() => insertBodyMarkup('- ', '', 'List item')}><List className="h-4 w-4" /></EditorButton>
+                <EditorButton label="Add link" onClick={insertLink}><Link2 className="h-4 w-4" /></EditorButton>
+                <span className="ml-2 text-xs text-gray-500">Select text, then apply formatting.</span>
+              </div>
+              <textarea ref={bodyRef} value={draft.body} onChange={(e) => setDraft((prev) => ({ ...prev, body: e.target.value }))} rows={14} className="w-full resize-y px-4 py-3 text-sm text-gray-900 outline-none" />
+            </div>
           </Field>
 
           <div className="mt-6 flex justify-end">
@@ -303,5 +337,13 @@ function Field({ label, children, className = '' }: { label: string; children: R
       <label className="mb-1 block text-xs font-medium text-gray-500">{label}</label>
       {children}
     </div>
+  );
+}
+
+function EditorButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} title={label} aria-label={label} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 hover:bg-white hover:text-orange-600 hover:shadow-sm">
+      {children}
+    </button>
   );
 }

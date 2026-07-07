@@ -25,8 +25,8 @@ export default function RootLayout({
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: 'Deliivo',
-    url: 'https://deliivo.com',
-    logo: 'https://deliivo.com/logo.png',
+    url: publicConfig.siteUrl,
+    logo: `${publicConfig.siteUrl}/logo.png`,
     description: 'Baltic carpooling platform connecting drivers and riders across Estonia, Latvia, and Lithuania.',
     areaServed: ['Estonia', 'Latvia', 'Lithuania'],
     sameAs: [

@@ -101,7 +101,7 @@ function ProfileContent() {
     setEditingProfile(true);
     setProfileName(user?.name || '');
     setProfileNickName(user?.nickName || '');
-    setProfileDob(formatDateInput(fullProfile?.dob || null));
+    setProfileDob(formatDateInput(fullProfile?.user.dob || user?.dob || null));
     setProfileSalutation(user?.salutation || '');
     setProfileGender(user?.gender || '');
   }
@@ -118,7 +118,8 @@ function ProfileContent() {
       if (profileDob) data.dob = profileDob;
       if (profileSalutation) data.salutation = profileSalutation;
       if (profileGender) data.gender = profileGender;
-      await userApi.updateProfile(data);
+      const response = await userApi.updateProfile(data);
+      setFullProfile(response.data);
       await refreshUser();
       setEditingProfile(false);
       showSuccess(t('profile.updated'), t('profile.updatedCopy'));

@@ -7,6 +7,11 @@ import { contentApi, ContentPost } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n-context';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { localeToUrlCode } from '@/lib/i18n';
+import { publicConfig } from '@/lib/public-config';
+
+type Translate = (key: string, params?: Record<string, string | number>) => string;
+type Category = ContentPost['category'];
 
 const categoryIcon: Record<string, typeof Users> = {
   'Rider guide': Users,
@@ -17,20 +22,27 @@ const categoryIcon: Record<string, typeof Users> = {
   'Product update': BookOpen,
 };
 
-const categoryLabel = (category: string) => {
-  if (category === 'Rider guide') return 'Rider blog';
-  if (category === 'Driver guide') return 'Driver blog';
-  if (category === 'Rider blog') return 'Rider blog';
-  if (category === 'Driver blog') return 'Driver blog';
-  return category;
+const categoryLabelKeys: Record<Category, string> = {
+  'Rider guide': 'blog.categoryRider',
+  'Driver guide': 'blog.categoryDriver',
+  Safety: 'blog.categorySafety',
+  'Product update': 'blog.categoryProduct',
 };
 
-const categoryTags: Record<ContentPost['category'], string[]> = {
-  'Rider guide': ['Booking', 'Pickup points', 'Travel tips'],
-  'Driver guide': ['Publishing', 'Earnings', 'Trip prep'],
-  Safety: ['Safety', 'Trust', 'Support'],
-  'Product update': ['Product', 'Release', 'Admin'],
+const categoryTagKeys: Record<Category, string[]> = {
+  'Rider guide': ['blog.tag.booking', 'blog.tag.pickupPoints', 'blog.tag.travelTips'],
+  'Driver guide': ['blog.tag.publishing', 'blog.tag.earnings', 'blog.tag.tripPrep'],
+  Safety: ['blog.tag.safety', 'blog.tag.trust', 'blog.tag.support'],
+  'Product update': ['blog.tag.product', 'blog.tag.release', 'blog.tag.admin'],
 };
+
+function getCategoryLabel(t: Translate, category: string) {
+  return t(categoryLabelKeys[category as Category] || 'blog.categoryProduct');
+}
+
+function getCategoryTags(t: Translate, category: Category) {
+  return categoryTagKeys[category].map((key) => t(key));
+}
 
 export default function BlogPage() {
   const { t, locale } = useTranslation();
@@ -78,12 +90,15 @@ export default function BlogPage() {
       setNewsletterStatus('error');
     }
   }
+  const localePrefix = localeToUrlCode(locale);
+  const blogBasePath = `/${localePrefix}/blog`;
+  const contactPath = `/${localePrefix}/contact?subject=blog-topic`;
   const breadcrumbSchema = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://deliivo.com/' },
-      { '@type': 'ListItem', position: 2, name: 'Blog', item: 'https://deliivo.com/blog' },
+      { '@type': 'ListItem', position: 1, name: t('common.home'), item: `${publicConfig.siteUrl}/${localePrefix}` },
+      { '@type': 'ListItem', position: 2, name: t('nav.guides'), item: `${publicConfig.siteUrl}/${localePrefix}/blog` },
     ],
   };
 
@@ -109,7 +124,7 @@ export default function BlogPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search articles, safety topics, routes, or product updates"
+                placeholder={t('blog.searchPlaceholder')}
                 className="w-full bg-transparent text-sm text-deliivo-dark outline-none placeholder:text-deliivo-gray"
               />
             </label>
@@ -125,7 +140,7 @@ export default function BlogPage() {
                       : 'border border-gray-200 bg-white text-deliivo-gray hover:border-deliivo-orange hover:text-deliivo-orange'
                   }`}
                 >
-                  {category === 'All' ? 'All articles' : categoryLabel(category)}
+                  {category === 'All' ? t('blog.allArticles') : getCategoryLabel(t, category)}
                   <span className="ml-1 opacity-70">{categoryCounts.get(category) || 0}</span>
                 </button>
               ))}
@@ -141,20 +156,20 @@ export default function BlogPage() {
           </div>
         ) : posts.length === 0 ? (
           <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-deliivo-gray shadow-sm">
-            No published blog posts yet.
+            {t('blog.noPostsYet')}
           </div>
         ) : filteredPosts.length === 0 ? (
           <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
-            <p className="text-base font-semibold text-deliivo-dark">No blog posts matched these filters.</p>
-            <p className="mt-2 text-sm text-deliivo-gray">Try a different keyword or clear the category filter.</p>
+            <p className="text-base font-semibold text-deliivo-dark">{t('blog.noMatchesTitle')}</p>
+            <p className="mt-2 text-sm text-deliivo-gray">{t('blog.noMatchesCopy')}</p>
           </div>
         ) : (
           <div className="space-y-6">
             {featuredPost && (
-              <Link href={`/blog/${featuredPost.slug}`} className="block overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+              <Link href={`${blogBasePath}/${featuredPost.slug}`} className="block overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
                 <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
                   <div className="bg-[linear-gradient(135deg,#fff1e6_0%,#ffffff_60%,#f7fafc_100%)] px-6 py-8 sm:px-8">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-deliivo-orange">Featured post</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-deliivo-orange">{t('blog.featuredPost')}</p>
                     <div className="mt-4 flex items-center gap-2 text-sm font-medium text-deliivo-gray">
                       <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-deliivo-orange shadow-sm">
                         {(() => {
@@ -162,12 +177,12 @@ export default function BlogPage() {
                           return <Icon size={18} />;
                         })()}
                       </span>
-                      {categoryLabel(featuredPost.category)}
+                      {getCategoryLabel(t, featuredPost.category)}
                     </div>
                     <h2 className="mt-5 max-w-2xl text-3xl font-bold tracking-tight text-deliivo-dark">{featuredPost.title}</h2>
                     <p className="mt-4 max-w-2xl text-base leading-7 text-deliivo-gray">{featuredPost.excerpt}</p>
                     <div className="mt-5 flex flex-wrap gap-2">
-                      {categoryTags[featuredPost.category].map((tag) => (
+                      {getCategoryTags(t, featuredPost.category).map((tag) => (
                         <span key={tag} className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-deliivo-gray shadow-sm">
                           {tag}
                         </span>
@@ -179,7 +194,7 @@ export default function BlogPage() {
                       <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-deliivo-gray shadow-sm">{featuredPost.locale.toUpperCase()}</span>
                     </div>
                     <span className="mt-7 inline-flex items-center gap-2 rounded-full bg-deliivo-orange px-5 py-3 text-sm font-semibold text-white">
-                      Read featured article
+                      {t('blog.readFeatured')}
                       <ArrowRight size={16} />
                     </span>
                   </div>
@@ -194,19 +209,19 @@ export default function BlogPage() {
             {remainingPosts.map((post) => {
               const Icon = categoryIcon[post.category];
               return (
-                <Link key={post.id} href={`/blog/${post.slug}`} className="block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+                <Link key={post.id} href={`${blogBasePath}/${post.slug}`} className="block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
                   <img src={post.coverImageUrl || '/baltic-hero-v2.png'} alt="" className="h-44 w-full object-cover" />
                   <div className="p-6">
                   <div className="flex items-center gap-2 text-sm font-medium text-deliivo-gray">
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-orange-50 text-deliivo-orange">
                       <Icon size={16} />
                     </span>
-                    {categoryLabel(post.category)}
+                    {getCategoryLabel(t, post.category)}
                   </div>
                   <h2 className="mt-5 text-xl font-semibold text-deliivo-dark">{post.title}</h2>
                   <p className="mt-3 text-sm leading-6 text-deliivo-gray">{post.excerpt}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {categoryTags[post.category].map((tag) => (
+                    {getCategoryTags(t, post.category).map((tag) => (
                       <span key={tag} className="rounded-full bg-orange-50 px-3 py-1 text-[11px] font-semibold text-deliivo-orange">
                         {tag}
                       </span>
@@ -220,7 +235,7 @@ export default function BlogPage() {
                     <span>{post.readTime}</span>
                   </div>
                   <span className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-deliivo-orange">
-                    Open article
+                    {t('blog.openArticle')}
                     <ArrowRight size={15} />
                   </span>
                   </div>
@@ -234,21 +249,21 @@ export default function BlogPage() {
       <section className="border-t border-gray-100 bg-white px-4 py-12 sm:px-6 lg:px-8">
         <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[1fr_1fr_0.8fr]">
           <div className="rounded-3xl border border-gray-200 bg-[#fbfaf8] p-6">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-deliivo-dark"><BookOpen className="h-5 w-5 text-deliivo-orange" /> Browse by category</h2>
+            <h2 className="flex items-center gap-2 text-lg font-bold text-deliivo-dark"><BookOpen className="h-5 w-5 text-deliivo-orange" /> {t('blog.browseByCategory')}</h2>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
               {categories.filter((category) => category !== 'All').map((category) => (
                 <button key={category} type="button" onClick={() => { setSelectedCategory(category); window.scrollTo({ top: 220, behavior: 'smooth' }); }} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-left text-sm font-semibold text-deliivo-dark shadow-sm">
-                  {categoryLabel(category)} <span className="rounded-full bg-orange-50 px-2 py-1 text-xs text-deliivo-orange">{categoryCounts.get(category) || 0}</span>
+                  {getCategoryLabel(t, category)} <span className="rounded-full bg-orange-50 px-2 py-1 text-xs text-deliivo-orange">{categoryCounts.get(category) || 0}</span>
                 </button>
               ))}
             </div>
           </div>
 
           <div className="rounded-3xl border border-gray-200 bg-[#fbfaf8] p-6">
-            <h2 className="text-lg font-bold text-deliivo-dark">Popular posts</h2>
+            <h2 className="text-lg font-bold text-deliivo-dark">{t('blog.popularPosts')}</h2>
             <div className="mt-4 space-y-3">
               {popularPosts.map((post) => (
-                <Link key={post.id} href={`/blog/${post.slug}`} className="block rounded-2xl bg-white px-4 py-3 shadow-sm transition hover:shadow-md">
+                <Link key={post.id} href={`${blogBasePath}/${post.slug}`} className="block rounded-2xl bg-white px-4 py-3 shadow-sm transition hover:shadow-md">
                   <p className="line-clamp-2 text-sm font-bold text-deliivo-dark">{post.title}</p>
                   <p className="mt-1 text-xs text-deliivo-gray">{post.readTime}</p>
                 </Link>
@@ -259,21 +274,21 @@ export default function BlogPage() {
           <div className="space-y-4">
             <div className="rounded-3xl border border-orange-100 bg-orange-50 p-6">
               <Lightbulb className="h-6 w-6 text-deliivo-orange" />
-              <h2 className="mt-4 text-lg font-bold text-deliivo-dark">Have a topic in mind?</h2>
-              <p className="mt-2 text-sm leading-6 text-deliivo-gray">Tell our editorial team what riders and drivers should read next.</p>
-              <Link href="/contact?subject=blog-topic" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-deliivo-orange">Suggest a topic <ArrowRight className="h-4 w-4" /></Link>
+              <h2 className="mt-4 text-lg font-bold text-deliivo-dark">{t('blog.haveTopic')}</h2>
+              <p className="mt-2 text-sm leading-6 text-deliivo-gray">{t('blog.topicCopy')}</p>
+              <Link href={contactPath} className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-deliivo-orange">{t('blog.suggestTopic')} <ArrowRight className="h-4 w-4" /></Link>
             </div>
           </div>
         </div>
 
         <form onSubmit={handleNewsletterSubmit} className="mx-auto mt-6 flex max-w-7xl flex-col gap-4 rounded-3xl bg-deliivo-dark p-6 text-white sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3"><Mail className="mt-1 h-5 w-5 text-deliivo-orange" /><div><h2 className="font-bold">Stay updated with Deliivo</h2><p className="mt-1 text-sm text-white/65">Get new travel guidance and product updates by email.</p></div></div>
+          <div className="flex items-start gap-3"><Mail className="mt-1 h-5 w-5 text-deliivo-orange" /><div><h2 className="font-bold">{t('blog.newsletterTitle')}</h2><p className="mt-1 text-sm text-white/65">{t('blog.newsletterCopy')}</p></div></div>
           <div className="flex w-full max-w-xl flex-col gap-2 sm:flex-row">
-            <input type="email" required value={newsletterEmail} onChange={(event) => { setNewsletterEmail(event.target.value); setNewsletterStatus('idle'); }} placeholder="you@example.com" className="min-w-0 flex-1 rounded-full border border-white/15 bg-white px-4 py-3 text-sm text-deliivo-dark outline-none" />
-            <button type="submit" disabled={newsletterStatus === 'saving'} className="rounded-full bg-deliivo-orange px-6 py-3 text-sm font-bold text-white disabled:opacity-60">{newsletterStatus === 'saving' ? 'Saving...' : 'Subscribe'}</button>
+            <input type="email" required value={newsletterEmail} onChange={(event) => { setNewsletterEmail(event.target.value); setNewsletterStatus('idle'); }} placeholder={t('blog.newsletterPlaceholder')} className="min-w-0 flex-1 rounded-full border border-white/15 bg-white px-4 py-3 text-sm text-deliivo-dark outline-none" />
+            <button type="submit" disabled={newsletterStatus === 'saving'} className="rounded-full bg-deliivo-orange px-6 py-3 text-sm font-bold text-white disabled:opacity-60">{newsletterStatus === 'saving' ? t('blog.newsletterSaving') : t('blog.newsletterSubscribe')}</button>
           </div>
-          {newsletterStatus === 'saved' && <p className="text-sm font-semibold text-green-300">Subscribed successfully.</p>}
-          {newsletterStatus === 'error' && <p className="text-sm font-semibold text-red-300">Subscription failed. Please try again.</p>}
+          {newsletterStatus === 'saved' && <p className="text-sm font-semibold text-green-300">{t('blog.newsletterSuccess')}</p>}
+          {newsletterStatus === 'error' && <p className="text-sm font-semibold text-red-300">{t('blog.newsletterError')}</p>}
         </form>
       </section>
       </main>

@@ -6,6 +6,7 @@ export const publicConfig = {
   instagramUrl: process.env.NEXT_PUBLIC_INSTAGRAM_URL || 'https://www.instagram.com/deliivoapp',
   facebookUrl: process.env.NEXT_PUBLIC_FACEBOOK_URL || 'https://www.facebook.com/deliivoapp',
   xUrl: process.env.NEXT_PUBLIC_X_URL || 'https://x.com/Deliivoapp',
-  tiktokUrl: process.env.NEXT_PUBLIC_TIKTOK_URL || 'https://www.tiktok.com/@deliivoapp',
+  tiktokUrl: process.env.NEXT_PUBLIC_TIKTOK_URL || 'https://www.tiktok.com/@deliivo.app',
   linkedinUrl: process.env.NEXT_PUBLIC_LINKEDIN_URL || 'https://www.linkedin.com/company/deliivo',
+  siteUrl: (process.env.NEXT_PUBLIC_SITE_URL || 'https://deliivo-webapp.vercel.app').replace(/\/$/, ''),
 };

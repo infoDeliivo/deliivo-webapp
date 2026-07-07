@@ -373,7 +373,7 @@ function StepRoute({
                 </p>
                 {route.isPublishable === false && (
                   <p className="mt-1 text-xs font-medium text-red-600">
-                    Ferry or water routes cannot be published
+                    {t('publish.nonRoadRoute')}
                   </p>
                 )}
               </div>
@@ -499,37 +499,50 @@ function StepStopovers({
     const selected = state[key];
     const exists = selected.some((item) => item.placeId === place.placeId);
     if (exists) {
-      setPointError('This meeting point is already selected.');
+      setPointError(t('publish.meetingPointAlreadySelected'));
       return;
     }
 
     if (selected.length >= maxSelections) {
-      const pointName = key === 'stopovers' ? 'stopover' : key === 'pickups' ? 'pickup' : 'drop-off';
-      setPointError(`You can add up to ${maxSelections} ${pointName} point${maxSelections === 1 ? '' : 's'}.`);
+      const pointName = key === 'stopovers'
+        ? t('publish.stopover').toLowerCase()
+        : key === 'pickups'
+          ? t('publish.pickup').toLowerCase()
+          : t('publish.dropoff').toLowerCase();
+      setPointError(t('publish.maxPointLimit', { max: maxSelections, type: pointName }));
       return;
     }
 
     const parent = key === 'pickups' ? state.origin : key === 'dropoffs' ? state.destination : selectedStopoverSuggestion;
     if (!parent) {
-      setPointError('Select the related city or stopover before adding this point.');
+      setPointError(t('publish.selectParentBeforePoint'));
       return;
     }
     const limitKm = key === 'stopovers' ? STOPOVER_POINT_RADIUS_KM : CITY_POINT_RADIUS_KM;
     const selectedDistanceKm = distanceKm(parent, place);
     if (selectedDistanceKm > limitKm) {
-      setPointError(`This point is ${selectedDistanceKm.toFixed(1)} km away. Choose a point within ${limitKm} km of ${parent.address.split(',')[0]}.`);
+      setPointError(t('publish.pointTooFarFromParent', {
+        distance: selectedDistanceKm.toFixed(1),
+        limit: limitKm,
+        parent: parent.address.split(',')[0],
+      }));
       return;
     }
     if (selectedPolyline) {
       const routeDistanceKm = distanceFromRouteKm(place, selectedPolyline);
       if (routeDistanceKm > ROUTE_POINT_RADIUS_KM) {
-        setPointError(`This point is ${routeDistanceKm.toFixed(1)} km from the selected route. Choose a point within ${ROUTE_POINT_RADIUS_KM} km of the route line.`);
+        setPointError(t('publish.pointTooFarFromRoute', {
+          distance: routeDistanceKm.toFixed(1),
+          limit: ROUTE_POINT_RADIUS_KM,
+        }));
         return;
       }
     }
 
     onChange({ [key]: [...selected, toLocationInput(place, parent)] } as Partial<WizardState>);
-    setPointNotice(`${key === 'stopovers' ? 'Stopover' : key === 'pickups' ? 'Pickup' : 'Drop-off'} point added.`);
+    setPointNotice(t('publish.pointAdded', {
+      type: key === 'stopovers' ? t('publish.stopover') : key === 'pickups' ? t('publish.pickup') : t('publish.dropoff'),
+    }));
     clearDraft();
   }
 
@@ -559,7 +572,7 @@ function StepStopovers({
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-deliivo-dark">{item.address}</p>
               {item.parentAddress && (
-                <p className="truncate text-xs text-deliivo-gray">Near {item.parentAddress.split(',')[0]}</p>
+                <p className="truncate text-xs text-deliivo-gray">{t('publish.nearParent', { parent: item.parentAddress.split(',')[0] })}</p>
               )}
             </div>
             <button
@@ -567,7 +580,7 @@ function StepStopovers({
               onClick={() => removeSelection(key, item.placeId)}
               className="rounded-full px-3 py-1 text-xs font-medium text-deliivo-gray transition-colors hover:bg-red-50 hover:text-red-600"
             >
-              Remove
+              {t('common.remove')}
             </button>
           </div>
         ))}
@@ -614,8 +627,8 @@ function StepStopovers({
   return (
     <div className="space-y-5 lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start lg:gap-6 lg:space-y-0">
       <div className="lg:hidden">
-        <h2 className="text-xl font-bold text-deliivo-dark">Choose rider meeting points</h2>
-        <p className="mt-1 text-sm text-deliivo-gray">Add where riders can join and leave the ride. Stopovers are optional.</p>
+        <h2 className="text-xl font-bold text-deliivo-dark">{t('publish.meetingPointsTitle')}</h2>
+        <p className="mt-1 text-sm text-deliivo-gray">{t('publish.meetingPointsCopy')}</p>
       </div>
 
       <div className="relative h-56 w-full lg:col-start-2 lg:row-start-1 lg:h-[520px] lg:self-start">
@@ -634,15 +647,15 @@ function StepStopovers({
         />
         {meetingPointRouteLoading && (
           <span className="absolute right-3 top-3 inline-flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-deliivo-gray shadow-sm">
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-deliivo-orange" /> Updating road path
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-deliivo-orange" /> {t('publish.updatingRoadPath')}
           </span>
         )}
       </div>
 
       <div className="space-y-5 lg:col-start-1 lg:row-start-1">
       <div className="hidden lg:block">
-        <h2 className="text-xl font-bold text-deliivo-dark">Choose rider meeting points</h2>
-        <p className="mt-1 text-sm text-deliivo-gray">Add where riders can join and leave the ride. Stopovers are optional.</p>
+        <h2 className="text-xl font-bold text-deliivo-dark">{t('publish.meetingPointsTitle')}</h2>
+        <p className="mt-1 text-sm text-deliivo-gray">{t('publish.meetingPointsCopy')}</p>
       </div>
 
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
@@ -761,7 +774,7 @@ function StepStopovers({
             t('publish.selectedCount', { count: state.pickups.length, max: MAX_ORIGIN_PICKUPS }),
           )}
           <div className="rounded-xl bg-green-50 px-3 py-2 text-xs text-green-800">
-            <span className="font-semibold">Origin:</span> {state.origin?.address || 'Not selected'} · within {CITY_POINT_RADIUS_KM} km
+            <span className="font-semibold">{t('publish.originContext')}:</span> {state.origin?.address || t('publish.notSelected')} | {t('publish.withinRadiusKm', { radius: CITY_POINT_RADIUS_KM })}
           </div>
           {renderSelectedList(state.pickups, 'pickups', t('publish.noPickupPointsSelected'))}
           {state.pickups.length < MAX_ORIGIN_PICKUPS && (
@@ -797,7 +810,7 @@ function StepStopovers({
             t('publish.selectedCount', { count: state.stopovers.length, max: MAX_STOPOVERS }),
           )}
           <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-800">
-            <span className="font-semibold">Selected stopover:</span> {selectedStopoverSuggestion?.address || 'Choose a suggested stopover below'} · within {STOPOVER_POINT_RADIUS_KM} km
+            <span className="font-semibold">{t('publish.selectedStopoverContext')}:</span> {selectedStopoverSuggestion?.address || t('publish.chooseSuggestedStopover')} | {t('publish.withinRadiusKm', { radius: STOPOVER_POINT_RADIUS_KM })}
           </div>
           {loadingStopoverSuggestions ? (
             <div className="flex items-center gap-2 py-2 text-sm text-deliivo-gray">
@@ -879,7 +892,7 @@ function StepStopovers({
             t('publish.selectedCount', { count: state.dropoffs.length, max: MAX_DESTINATION_DROPOFFS }),
           )}
           <div className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-800">
-            <span className="font-semibold">Destination:</span> {state.destination?.address || 'Not selected'} · within {CITY_POINT_RADIUS_KM} km
+            <span className="font-semibold">{t('publish.destinationContext')}:</span> {state.destination?.address || t('publish.notSelected')} | {t('publish.withinRadiusKm', { radius: CITY_POINT_RADIUS_KM })}
           </div>
           {renderSelectedList(state.dropoffs, 'dropoffs', t('publish.noDropoffPointsSelected'))}
           {state.dropoffs.length < MAX_DESTINATION_DROPOFFS && (
@@ -1187,7 +1200,7 @@ function StepSeats({
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-deliivo-dark">{t('publish.yourVehicle')}</p>
             <Link href="/profile/vehicle?returnTo=%2Fpublish" onClick={onLeaveForVehicle} className="text-xs font-semibold text-deliivo-orange underline underline-offset-2 hover:text-deliivo-orange-dark">
-              Manage vehicles
+              {t('publish.manageVehicles')}
             </Link>
           </div>
           <div className="rounded-2xl border border-deliivo-orange bg-deliivo-orange-light px-4 py-4">
@@ -1199,22 +1212,22 @@ function StepSeats({
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-medium text-deliivo-dark">{[vehicles[0].brand, vehicles[0].model_name].filter(Boolean).join(' ') || t('publish.vehicleFallback')}</p>
                   <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${vehicles[0].isVerified ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-                    {vehicles[0].isVerified ? 'Verified vehicle' : 'Not verified yet'}
+                    {vehicles[0].isVerified ? t('publish.verifiedVehicle') : t('publish.notVerifiedYet')}
                   </span>
                 </div>
                 <p className="text-xs text-deliivo-gray">{[vehicles[0].color, vehicles[0].year].filter(Boolean).join(' · ')}</p>
               </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2 text-xs text-deliivo-gray">
-              <span className="rounded-full bg-white/80 px-3 py-1">{vehicles.length} saved vehicle{vehicles.length === 1 ? '' : 's'}</span>
-              <span className="rounded-full bg-white/80 px-3 py-1">Publish flow attaches your saved vehicle automatically</span>
+              <span className="rounded-full bg-white/80 px-3 py-1">{t('publish.savedVehicleCount', { count: vehicles.length })}</span>
+              <span className="rounded-full bg-white/80 px-3 py-1">{t('publish.savedVehicleFlow')}</span>
             </div>
           </div>
         </div>
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
           <p className="text-sm font-semibold text-amber-950">{t('publish.noVehicleFound')}</p>
-          <p className="mt-1 text-xs text-amber-800">Add a vehicle before setting seats and ride preferences.</p>
+          <p className="mt-1 text-xs text-amber-800">{t('publish.addVehicleBeforeSeats')}</p>
           <Link href="/profile/vehicle?returnTo=%2Fpublish&add=1" onClick={onLeaveForVehicle} className="mt-3 inline-flex rounded-full bg-deliivo-orange px-4 py-2 text-sm font-semibold text-white hover:bg-deliivo-orange-dark">
             {t('profile.addVehicle')}
           </Link>
@@ -1653,7 +1666,7 @@ function PublishRideWizard() {
       const res = await paymentsApi.connectOnboard();
       window.location.href = res.data.url;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to start payout setup');
+      setError(err instanceof Error ? err.message : t('publish.failedStartPayoutSetup'));
       setPayoutSetupLoading(false);
     }
   }
@@ -1719,7 +1732,7 @@ function PublishRideWizard() {
         selectedRouteIndex: firstPublishableRoute?.index ?? null,
       }));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to compute routes';
+      const message = err instanceof Error ? err.message : t('publish.failedComputeRoutes');
       setError(message);
     } finally {
       setLoading(false);
@@ -1770,7 +1783,7 @@ function PublishRideWizard() {
 
       setStep((s) => s + 1);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Something went wrong';
+      const message = err instanceof Error ? err.message : t('publish.genericError');
       setError(message);
     } finally {
       setLoading(false);
@@ -1795,7 +1808,7 @@ function PublishRideWizard() {
       const routes = refreshed.data.routes || [];
       const selected = routes.find((route) => route.index === state.selectedRouteIndex && route.isPublishable !== false)
         || routes.find((route) => route.isPublishable !== false);
-      if (!selected) throw new Error('No publishable road route is available. Please review the route.');
+      if (!selected) throw new Error(t('publish.noPublishableRoadRoute'));
 
       await publishRideApi.selectRoute(selected.index);
       setState((previous) => ({ ...previous, routes, selectedRouteIndex: selected.index }));
@@ -1848,12 +1861,12 @@ function PublishRideWizard() {
       vehicleDetourState = null;
       setPublished(true);
     } catch (err: unknown) {
-      let message = err instanceof Error ? err.message : 'Failed to publish ride';
-      if (message.includes('TOS_NOT_ACCEPTED')) message = 'Please accept the Terms of Service to continue.';
-      if (message.includes('DRIVER_NOT_VERIFIED')) message = 'Your driving license must be verified before publishing a ride.';
-      if (message.includes('NO_STRIPE_ACCOUNT') || message.includes('PAYOUT')) message = 'Set up your payout details before publishing a ride.';
-      if (message.includes('FEMALE_ONLY_NOT_ALLOWED')) message = 'Only female drivers can publish women-only rides.';
-      if (message.includes('NON_ROAD_ROUTE_NOT_ALLOWED')) message = 'Ferry or water routes cannot be published.';
+      let message = err instanceof Error ? err.message : t('publish.failedPublishRide');
+      if (message.includes('TOS_NOT_ACCEPTED')) message = t('publish.acceptTermsError');
+      if (message.includes('DRIVER_NOT_VERIFIED')) message = t('publish.driverVerificationRequired');
+      if (message.includes('NO_STRIPE_ACCOUNT') || message.includes('PAYOUT')) message = t('publish.payoutRequiredBeforePublish');
+      if (message.includes('FEMALE_ONLY_NOT_ALLOWED')) message = t('publish.femaleOnlyNotAllowed');
+      if (message.includes('NON_ROAD_ROUTE_NOT_ALLOWED')) message = t('publish.nonRoadRoute');
       setError(message);
     } finally {
       setLoading(false);
@@ -1891,7 +1904,7 @@ function PublishRideWizard() {
         {vehicleStatus === 'loading' ? (
           <div className="flex items-center gap-3 text-sm font-medium text-deliivo-gray">
             <Loader2 className="h-5 w-5 animate-spin text-deliivo-orange" />
-            Checking your vehicle...
+            {t('publish.checkingVehicle')}
           </div>
         ) : (
           <div className="w-full max-w-lg rounded-3xl border border-orange-100 bg-white p-7 text-center shadow-sm sm:p-9">
@@ -1899,26 +1912,26 @@ function PublishRideWizard() {
               {vehicleStatus === 'missing' ? <Car className="h-6 w-6" /> : <AlertCircle className="h-6 w-6" />}
             </div>
             <h1 className="mt-5 text-2xl font-bold text-deliivo-dark">
-              {vehicleStatus === 'missing' ? 'Add a vehicle before offering a ride' : 'We could not check your vehicles'}
+              {vehicleStatus === 'missing' ? t('publish.vehicleGateMissingTitle') : t('publish.vehicleGateErrorTitle')}
             </h1>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-deliivo-gray">
               {vehicleStatus === 'missing'
-                ? 'Riders need to know which vehicle they will travel in. Add your vehicle details first, then return here to publish the ride.'
-                : 'Please retry the vehicle check. Your publish flow has not been changed.'}
+                ? t('publish.vehicleGateMissingCopy')
+                : t('publish.vehicleGateErrorCopy')}
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <Link href="/" className="btn-outline px-6 py-3 text-sm">Back to home</Link>
+              <Link href="/" className="btn-outline px-6 py-3 text-sm">{t('common.backHome')}</Link>
               {vehicleStatus === 'missing' ? (
                 <Link
                   href="/profile/vehicle?returnTo=%2Fpublish&add=1"
                   onClick={() => { vehicleDetourState = { step, state }; }}
                   className="btn-primary px-6 py-3 text-sm"
                 >
-                  Add vehicle
+                  {t('profile.addVehicle')}
                 </Link>
               ) : (
                 <button type="button" onClick={() => void checkVehicleAvailability()} className="btn-primary px-6 py-3 text-sm">
-                  Try again
+                  {t('common.retry')}
                 </button>
               )}
             </div>

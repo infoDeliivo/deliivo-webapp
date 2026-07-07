@@ -338,7 +338,7 @@ export const userApi = {
   },
 
   updateProfile(data: Partial<UserProfileUpdate>) {
-    return apiFetch('/api/v1/users/me/profile', {
+    return apiFetch<{ data: UserFullProfile }>('/api/v1/users/me/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
     });
@@ -2140,6 +2140,7 @@ export interface UserProfile {
   nickName?: string;
   salutation?: string | null;
   gender?: 'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER' | 'PREFER_NOT_TO_SAY' | null;
+  dob?: string | null;
   avatarUrl?: string;
   role: 'USER' | 'ADMIN';
   onboardingStatus: 'PENDING' | 'COMPLETED';
@@ -2148,21 +2149,26 @@ export interface UserProfile {
   privacyAcceptedAt?: string | null;
 }
 
-export interface UserFullProfile extends UserProfile {
-  salutation?: string;
-  gender?: 'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER' | 'PREFER_NOT_TO_SAY' | null;
-  dob?: string;
+export interface UserFullProfile {
+  user: Omit<UserProfile, 'email' | 'phone'> & {
+    email?: { value: string | null; isVerified: boolean };
+    phone?: { value: string | null; isVerified: boolean };
+    createdAt?: string;
+    memberSince?: string;
+  };
   travelPreference?: {
     chattiness: string | null;
     pets: string | null;
   };
-  vehicles?: Array<{
+  vehicle?: {
     id: string;
-    brand: string;
-    model: string;
-    color: string;
-    yearMake: number;
-  }>;
+    brand: string | null;
+    model_num: string | null;
+    type: string | null;
+    color: string | null;
+    imageUrl?: string | null;
+    isVerified: boolean;
+  } | null;
   stats?: {
     totalRides: number;
     totalBookings: number;

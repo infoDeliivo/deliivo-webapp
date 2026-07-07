@@ -103,11 +103,13 @@ export default function SignInPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,#fff1e6_0%,#fffaf5_45%,#f7f7f5_100%)] px-4 py-8 sm:py-12">
       <div className="grid w-full max-w-5xl overflow-hidden rounded-[2rem] bg-white shadow-xl ring-1 ring-black/5 lg:grid-cols-[1.12fr_0.88fr]">
-        <aside className="relative hidden min-h-[680px] bg-[#f97316] lg:block">
-          <img src="/signin-baltic-carpooling.png" alt="A shared ride travelling through the Baltics" className="h-full w-full object-cover" />
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-8 pb-8 pt-24 text-white">
-            <p className="text-2xl font-bold">Travel together across the Baltics</p>
-            <p className="mt-2 max-w-md text-sm text-white/85">Verified profiles, clear pickup points, and simple city-to-city rides.</p>
+        <aside className="hidden min-h-[680px] bg-gradient-to-br from-[#fb7a20] via-[#ef6412] to-[#d94b08] p-8 lg:flex lg:flex-col lg:justify-center">
+          <div className="overflow-hidden rounded-[1.75rem] bg-orange-100 shadow-2xl ring-1 ring-white/30 aspect-[2.58/1]">
+            <img src="/signin-baltic-carpooling.png" alt="A shared ride travelling through the Baltics" className="h-auto w-full" />
+          </div>
+          <div className="mt-9 text-white">
+            <p className="text-3xl font-bold tracking-tight">Travel together across the Baltics</p>
+            <p className="mt-3 max-w-md text-base leading-7 text-orange-50">Verified profiles, clear pickup points, and simple city-to-city rides.</p>
           </div>
         </aside>
 
@@ -119,8 +121,8 @@ export default function SignInPage() {
 
         <div>
           {/* Illustration */}
-          <div className="mb-7 overflow-hidden rounded-2xl lg:hidden">
-            <img src="/signin-baltic-carpooling.png" alt="Baltic carpooling" className="h-40 w-full object-cover" />
+          <div className="mb-7 aspect-[2.4/1] overflow-hidden rounded-2xl bg-orange-100 shadow-sm lg:hidden">
+            <img src="/signin-baltic-carpooling.png" alt="Baltic carpooling" className="h-auto w-full" />
           </div>
 
           {step === 'identifier' ? (
