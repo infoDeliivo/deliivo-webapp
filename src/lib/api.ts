@@ -252,6 +252,21 @@ export function getApiErrorMessage(error: unknown, fallback = 'Request failed') 
 
 // Auth API
 export const authApi = {
+  google(idToken: string) {
+    return apiFetch<{
+      message: string;
+      data: {
+        accessToken: string;
+        refreshToken: string;
+        user: { id: string; email?: string; role: string };
+        next: 'onboarding' | 'home';
+      };
+    }>('/api/v1/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+    });
+  },
+
   signup(method: 'email' | 'phone', identifier: string) {
     const body = method === 'email'
       ? { method, email: identifier }
@@ -467,6 +482,26 @@ export const mapsApi = {
     return apiFetch<{ data: { name: string; address: string; location: { lat: number; lng: number } } }>(
       `/api/v1/maps/place/place-details?placeId=${encodeURIComponent(placeId)}`
     );
+  },
+
+  computeRoute(data: {
+    origin: { latitude: number; longitude: number };
+    destination: { latitude: number; longitude: number };
+    waypoints?: Array<{ latitude: number; longitude: number }>;
+    travelMode?: 'DRIVE' | 'WALK' | 'BICYCLE';
+  }) {
+    return apiFetch<{
+      data: Array<{
+        routes?: Array<{
+          duration?: string;
+          distanceMeters?: number;
+          polyline?: { encodedPolyline?: string };
+        }>;
+      }>;
+    }>('/api/v1/maps/routes/compute', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 };
 
@@ -1662,6 +1697,7 @@ export interface ContentPost {
   title: string;
   excerpt: string;
   body: string;
+  coverImageUrl: string | null;
   category: 'Rider guide' | 'Driver guide' | 'Safety' | 'Product update';
   status: 'DRAFT' | 'PUBLISHED';
   publishedAt: string | null;

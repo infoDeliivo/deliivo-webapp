@@ -29,8 +29,8 @@ export default function Footer() {
       heading: t('footer.drivers'),
       links: [
         { label: t('footer.publishRide'), href: "/publish" },
-        { label: t('nav.yourRides'), href: "/rides" },
         { label: t('footer.vehicle'), href: "/profile/vehicle" },
+        { label: t('nav.earnings'), href: "/profile/earnings" },
       ],
     },
     {

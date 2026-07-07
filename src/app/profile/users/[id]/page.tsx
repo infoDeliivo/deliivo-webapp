@@ -74,6 +74,16 @@ function PublicProfileContent() {
   const initials = name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
   const memberSinceSource = profile.user.memberSince || profile.stats?.memberSince;
   const memberSince = memberSinceSource ? new Date(memberSinceSource).getFullYear() : 'recently';
+  const chattinessLabels: Record<string, string> = {
+    quiet: t('profile.quiet'),
+    chatty_when_comfortable: t('profile.chattyComfortable'),
+    chatterbox: t('profile.chatterbox'),
+  };
+  const petLabels: Record<string, string> = {
+    love_pets: t('profile.lovePets'),
+    no_pets: t('profile.noPets'),
+    depends_on_animal: t('profile.dependsOnAnimal'),
+  };
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
@@ -120,8 +130,8 @@ function PublicProfileContent() {
         <div className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-deliivo-dark">{t('profile.travelPreference')}</h2>
           <div className="mt-3 space-y-2 text-sm text-deliivo-dark">
-            <p className="flex items-center gap-2"><MessageCircle className="h-4 w-4 text-deliivo-gray" /> {profile.travelPreference?.chattiness?.replace(/_/g, ' ') || t('profile.chattinessNotSet')}</p>
-            <p className="flex items-center gap-2"><PawPrint className="h-4 w-4 text-deliivo-gray" /> {profile.travelPreference?.pets?.replace(/_/g, ' ') || t('profile.petsNotSet')}</p>
+            <p className="flex items-center gap-2"><MessageCircle className="h-4 w-4 text-deliivo-gray" /> {profile.travelPreference?.chattiness ? chattinessLabels[profile.travelPreference.chattiness] : t('profile.chattinessNotSet')}</p>
+            <p className="flex items-center gap-2"><PawPrint className="h-4 w-4 text-deliivo-gray" /> {profile.travelPreference?.pets ? petLabels[profile.travelPreference.pets] : t('profile.petsNotSet')}</p>
           </div>
         </div>
       </section>

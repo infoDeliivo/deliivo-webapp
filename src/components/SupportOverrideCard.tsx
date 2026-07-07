@@ -30,14 +30,14 @@ export default function SupportOverrideCard({
   const visibleIdentifiers = identifiers.filter((item) => item.value);
 
   return (
-    <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm">
+    <div className="max-w-full overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/80 p-3 shadow-sm sm:p-4">
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
           <ShieldAlert className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div>
+          <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:justify-between">
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-amber-950">{title}</p>
               <p className="mt-1 text-xs leading-5 text-amber-900">{copy}</p>
             </div>
@@ -57,7 +57,7 @@ export default function SupportOverrideCard({
                   key={`${item.label}-${item.value}`}
                   type="button"
                   onClick={() => handleCopy(item.value!)}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-white px-3 py-2 text-left hover:bg-amber-100/60"
+                  className="flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-amber-200 bg-white px-3 py-2 text-left hover:bg-amber-100/60"
                 >
                   <div className="min-w-0">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">{item.label}</p>
@@ -69,8 +69,8 @@ export default function SupportOverrideCard({
             </div>
           )}
 
-          <p className="mt-3 text-[11px] text-amber-800">
-            Email: <a className="font-semibold underline" href={`mailto:${publicConfig.supportEmail}`}>{publicConfig.supportEmail}</a>
+          <p className="mt-3 min-w-0 break-words text-[11px] text-amber-800">
+            Email: <a className="break-all font-semibold underline" href={`mailto:${publicConfig.supportEmail}`}>{publicConfig.supportEmail}</a>
           </p>
         </div>
       </div>

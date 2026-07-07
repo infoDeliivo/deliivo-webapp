@@ -24,7 +24,6 @@ interface GoogleMapProps {
   zoom?: number;
   center?: { lat: number; lng: number };
   snapMarkersToRoute?: boolean;
-  connectMarkersToRoute?: boolean;
 }
 
 type MapPoint = { lat: number; lng: number };
@@ -73,31 +72,7 @@ function nearestPointOnPath(
   return projectPointOnPath(point, path).point;
 }
 
-function connectPointsToRoute(path: MapPoint[], markers: MapPoint[]) {
-  if (path.length < 2 || markers.length === 0) return path;
-
-  const pointsBySegment = new Map<number, Array<{ marker: MapPoint; projected: MapPoint; ratio: number; distanceSquared: number }>>();
-  markers.forEach((marker) => {
-    const projection = projectPointOnPath(marker, path);
-    const segmentPoints = pointsBySegment.get(projection.segmentIndex) || [];
-    segmentPoints.push({ marker, projected: projection.point, ratio: projection.segmentRatio, distanceSquared: projection.distanceSquared });
-    pointsBySegment.set(projection.segmentIndex, segmentPoints);
-  });
-
-  const connectedPath: MapPoint[] = [path[0]];
-  for (let index = 0; index < path.length - 1; index += 1) {
-    const segmentPoints = (pointsBySegment.get(index) || []).sort((a, b) => a.ratio - b.ratio);
-    segmentPoints.forEach(({ marker, projected, distanceSquared }) => {
-      connectedPath.push(projected);
-      // Keep points on their real coordinates and add a visible return leg to the base route.
-      if (distanceSquared > 1e-12) connectedPath.push(marker, projected);
-    });
-    connectedPath.push(path[index + 1]);
-  }
-  return connectedPath;
-}
-
-export default function GoogleMap({ polyline, markers, liveLocation, className = 'h-64 w-full rounded-2xl', zoom, center, snapMarkersToRoute = false, connectMarkersToRoute = false }: GoogleMapProps) {
+export default function GoogleMap({ polyline, markers, liveLocation, className = 'h-64 w-full rounded-2xl', zoom, center, snapMarkersToRoute = false }: GoogleMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const polylineRef = useRef<google.maps.Polyline | null>(null);
@@ -167,11 +142,8 @@ export default function GoogleMap({ polyline, markers, liveLocation, className =
           ...nearestPointOnPath(marker, pathLiterals),
         }));
       }
-      const displayPath = connectMarkersToRoute
-        ? connectPointsToRoute(pathLiterals, markerPositions)
-        : path;
       const poly = new google.maps.Polyline({
-        path: displayPath,
+        path,
         strokeColor: '#F97316',
         strokeOpacity: 0.9,
         strokeWeight: 4,
@@ -182,7 +154,7 @@ export default function GoogleMap({ polyline, markers, liveLocation, className =
 
       // Fit bounds to polyline + markers
       const bounds = new google.maps.LatLngBounds();
-      displayPath.forEach(p => bounds.extend(p));
+      path.forEach(p => bounds.extend(p));
       markerPositions.forEach(m => bounds.extend({ lat: m.lat, lng: m.lng }));
       map.fitBounds(bounds, 40);
     } else if (markers && markers.length > 0) {
@@ -211,7 +183,7 @@ export default function GoogleMap({ polyline, markers, liveLocation, className =
         markersRef.current.push(marker);
       });
     }
-  }, [loaded, polyline, markers, snapMarkersToRoute, connectMarkersToRoute]);
+  }, [loaded, polyline, markers, snapMarkersToRoute]);
 
   // Update live location marker
   useEffect(() => {

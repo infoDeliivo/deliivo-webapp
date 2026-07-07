@@ -94,6 +94,24 @@ function isWithinConfirmedCancellationWindow(ride: RideDetails, booking: Booking
   return departureAt - Date.now() <= 3 * 60 * 60 * 1000;
 }
 
+function isBookingWindowClosed(ride: RideDetails) {
+  const date = new Date(ride.departureDate);
+  const [hours, minutes] = ride.departureTime.split(':').map(Number);
+  const departureAt = Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    hours,
+    minutes,
+  );
+  const now = new Date();
+  const sameUtcDay = date.getUTCFullYear() === now.getUTCFullYear()
+    && date.getUTCMonth() === now.getUTCMonth()
+    && date.getUTCDate() === now.getUTCDate();
+  return departureAt <= now.getTime()
+    || (sameUtcDay && departureAt - now.getTime() < 3 * 60 * 60 * 1000);
+}
+
 type LiveSharingLinksCardProps = {
   trackingLinks: TrackingLink[];
   trackingBusy: boolean;
@@ -781,6 +799,10 @@ function RideDetailContent() {
 
   async function handleBook() {
     if (!ride) return;
+    if (isBookingWindowClosed(ride)) {
+      setBookError('Same-day rides must be booked at least 3 hours before departure.');
+      return;
+    }
     if (isStripeConfigured() && paymentMethods.length === 0) {
       setBookError(t('rideDetail.addPaymentCardBeforeBooking'));
       setShowAddPaymentMethod(true);
@@ -941,6 +963,7 @@ function RideDetailContent() {
   const openDispute = myDisputes.find((dispute) => ['OPEN', 'EVIDENCE_COLLECTED', 'NEEDS_MANUAL_REVIEW', 'WAITING_FOR_USER_RESPONSE', 'ESCALATED'].includes(dispute.status));
   const isDriverConfirmedBooking = Boolean(myBooking && !['PENDING', 'PAYMENT_PENDING', 'DRIVER_PENDING', 'PAYMENT_FAILED', 'REJECTED', 'CANCELLED'].includes(myBooking.status));
   const cancellationWindowClosed = isWithinConfirmedCancellationWindow(ride, myBooking);
+  const bookingWindowClosed = isBookingWindowClosed(ride);
 
   function pointKindLabel(kind: RiderPointKind) {
     if (kind === 'origin') return t('rideDetail.mainDeparture');
@@ -992,7 +1015,7 @@ function RideDetailContent() {
   }
 
   return (
-    <div className="min-h-screen bg-deliivo-cream">
+    <div className="min-h-screen min-w-0 overflow-x-clip bg-deliivo-cream">
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
         <div className="relative mx-auto flex h-14 max-w-7xl items-center px-4 sm:px-6 lg:px-8">
@@ -1044,7 +1067,7 @@ function RideDetailContent() {
         </div>
 
         {/* Driver card */}
-        <div className="rounded-2xl bg-white shadow-sm p-5 flex items-center gap-4">
+        <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-white p-4 shadow-sm sm:gap-4 sm:p-5">
           <div className="h-14 w-14 shrink-0 rounded-full bg-primary-100 flex items-center justify-center">
             {ride.driver?.avatarUrl ? (
               <img src={ride.driver.avatarUrl} alt={driverName} className="h-full w-full rounded-full object-cover" />
@@ -1052,7 +1075,7 @@ function RideDetailContent() {
               <span className="text-lg font-semibold text-primary-600">{initials}</span>
             )}
           </div>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <p className="text-base font-semibold text-deliivo-dark">{driverName}</p>
             {ride.driver?.rating && (
               <div className="flex items-center gap-1 mt-0.5">
@@ -1062,8 +1085,8 @@ function RideDetailContent() {
             )}
           </div>
           {vehicleLabel && (
-            <div className="text-right text-sm">
-              <p className="font-medium text-deliivo-dark flex items-center gap-1"><Car size={14} /> {vehicleLabel}</p>
+            <div className="min-w-0 max-w-[45%] text-right text-sm">
+              <p className="flex min-w-0 items-start justify-end gap-1 break-words font-medium text-deliivo-dark"><Car size={14} className="mt-0.5 shrink-0" /> {vehicleLabel}</p>
               {ride.vehicle?.color && <p className="text-xs text-deliivo-gray mt-0.5">{ride.vehicle.color}</p>}
             </div>
           )}
@@ -1142,7 +1165,14 @@ function RideDetailContent() {
       </div>
 
         {/* Booking section */}
-        {!user && !isOwnRide && !myBooking && ride.availableSeats > 0 && (
+        {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-amber-950">Booking closed for this departure</h3>
+            <p className="mt-2 text-sm text-amber-800">Same-day rides must be booked at least 3 hours before departure.</p>
+          </div>
+        )}
+
+        {!user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed && (
           <div className="rounded-2xl border border-primary-100 bg-primary-50 p-5 shadow-sm">
             <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
             <p className="mt-2 text-sm text-deliivo-gray">{t('rideDetail.signInToChoosePickup')}</p>
@@ -1157,7 +1187,7 @@ function RideDetailContent() {
           </div>
         )}
 
-        {user && !isOwnRide && !myBooking && ride.availableSeats > 0 && (
+        {user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed && (
           <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
             <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
 
@@ -1270,12 +1300,12 @@ function RideDetailContent() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <span className="text-sm text-deliivo-dark">{t('rideDetail.requestExpires')}</span>
               <select
                 value={responseExpiryOption}
                 onChange={(e) => setResponseExpiryOption(e.target.value as typeof responseExpiryOption)}
-                className="min-w-44 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-deliivo-dark focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
+                className="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-deliivo-dark focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20 sm:w-auto sm:min-w-44"
               >
                 {requestExpiryOptions.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -1843,7 +1873,7 @@ function RideDetailContent() {
                     Use these when the booking is blocked but the ride should continue. Each action carries a reason into the dispute evidence.
                   </p>
                   {!allowManualOverride && (
-                    <p className="mt-1 text-[11px] font-medium text-amber-800">
+                    <p className="mt-1 break-all text-[11px] font-medium text-amber-800">
                       Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
                     </p>
                   )}

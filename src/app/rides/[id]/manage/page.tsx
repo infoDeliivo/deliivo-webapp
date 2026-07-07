@@ -64,6 +64,7 @@ const [error, setError] = useState('');
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [tracking, setTracking] = useState(false);
   const watchIdRef = useRef<number | null>(null);
+  const lastLocationSubmitAtRef = useRef(0);
 
   const startTracking = useCallback(() => {
     if (!navigator.geolocation || tracking) return;
@@ -73,8 +74,12 @@ const [error, setError] = useState('');
       (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
         setDriverLocation({ lat, lng });
-        // Submit to backend
-        rideOpsApi.submitLocation(id, lat, lng).catch(() => {});
+        // Persist evidence at a bounded rate; sockets remain real-time for active viewers.
+        const now = Date.now();
+        if (now - lastLocationSubmitAtRef.current >= 10000) {
+          lastLocationSubmitAtRef.current = now;
+          rideOpsApi.submitLocation(id, lat, lng).catch(() => {});
+        }
         // Emit via socket for real-time
         const socket = getSocket();
         if (socket) {
@@ -530,7 +535,7 @@ const [error, setError] = useState('');
   const startWindowOpen = allowRideSimulation || clockNow >= departureAt - 10 * 60 * 1000;
 
   return (
-    <div className="min-h-screen bg-deliivo-cream">
+    <div className="min-h-screen min-w-0 overflow-x-clip bg-deliivo-cream">
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-5xl items-center px-4">
@@ -545,14 +550,14 @@ const [error, setError] = useState('');
         {/* Ride status card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
           <div className={`px-5 py-4 ${phase === 'in_progress' ? 'bg-gradient-to-r from-green-500 to-green-600' : phase === 'completed' ? 'bg-gradient-to-r from-gray-500 to-gray-600' : phase === 'cancelled' ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-deliivo-orange to-primary-600'}`}>
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <p className="text-sm text-white/80">{t('manageRide.dateAtTime', { date: dateLabel, time: ride.departureTime })}</p>
-                <p className="text-lg font-bold text-white mt-0.5">
+                <p className="break-words text-lg font-bold text-white mt-0.5">
                   {ride.originAddress.split(',')[0]} → {ride.destinationAddress.split(',')[0]}
                 </p>
               </div>
-              <span className={`text-xs font-bold px-3 py-1.5 rounded-full bg-white/20 text-white`}>
+              <span className="shrink-0 rounded-full bg-white/20 px-3 py-1.5 text-xs font-bold text-white">
                 {phase === 'in_progress' ? t('rides.inProgress') : phase === 'completed' ? t('rides.completed') : phase === 'cancelled' ? t('rides.cancelled') : t('rides.published')}
               </span>
             </div>
@@ -881,7 +886,7 @@ const [error, setError] = useState('');
                     Use these only when the normal ride-day control is blocked. Every action is written into the dispute evidence trail.
                   </p>
                   {!allowManualOverride && (
-                    <p className="mt-1 text-[11px] font-medium text-amber-800">
+                    <p className="mt-1 break-all text-[11px] font-medium text-amber-800">
                       Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
                     </p>
                   )}
@@ -1174,19 +1179,19 @@ function PassengerCard({
 
   return (
     <>
-    <div className="flex items-center justify-between rounded-xl border border-gray-100 p-4">
-      <div>
+    <div className="flex min-w-0 flex-col items-start gap-3 rounded-xl border border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
         <p className="text-sm font-semibold text-deliivo-dark">
           {booking.passenger?.name || t('manageRide.passenger')}
         </p>
         <p className="text-xs text-deliivo-gray">
           {t('ride.seatsCount', { count: booking.seatsBooked, plural: booking.seatsBooked > 1 ? 's' : '' })} &middot; {statusLabel[booking.status] || booking.status}
         </p>
-        <p className="text-[11px] text-deliivo-gray">
+        <p className="break-words text-[11px] text-deliivo-gray">
           {booking.pickupLocation?.address || t('manageRide.pickupNotSet')} → {booking.dropoffLocation?.address || t('manageRide.dropoffNotSet')}
         </p>
       </div>
-      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
         booking.status === 'ONBOARD' || booking.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border border-green-200'
         : booking.status === 'NO_SHOW' || booking.status === 'DRIVER_MISSED_PICKUP' ? 'bg-red-50 text-red-700 border border-red-200'
         : booking.status === 'DROP_PENDING' ? 'bg-purple-50 text-purple-700 border border-purple-200'

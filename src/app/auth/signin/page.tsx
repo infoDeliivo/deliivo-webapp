@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
-import { FaGoogle, FaApple, FaPhone } from "react-icons/fa";
-import { authApi, apiFetch } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { FaPhone } from "react-icons/fa";
+import { authApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import BrandLogo from "@/components/BrandLogo";
 import { buildE164PhoneNumber, PHONE_COUNTRY_OPTIONS, sanitizePhoneLocalNumber } from "@/lib/phone-auth";
 import { getSafeReturnTo, withReturnTo } from "@/lib/auth-redirect";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 type Step = 'identifier' | 'otp';
 type Method = 'email' | 'phone';
@@ -26,7 +27,6 @@ export default function SignInPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const normalizedIdentifier = method === 'email' ? identifier.trim() : buildE164PhoneNumber(phoneCountryCode, phone);
 
@@ -35,63 +35,15 @@ export default function SignInPage() {
     router.replace(next === 'onboarding' ? withReturnTo('/onboarding', destination) : (destination || '/'));
   }
 
-  // Google OAuth setup
-  const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
-
   useEffect(() => {
     setReturnTo(getSafeReturnTo());
   }, []);
 
   useEffect(() => {
-    if (!authLoading && user && !loading && !googleLoading) {
+    if (!authLoading && user && !loading) {
       router.replace(returnTo || getSafeReturnTo() || '/');
     }
-  }, [authLoading, googleLoading, loading, returnTo, router, user]);
-
-  const handleGoogleCallback = useCallback(async (response: { credential: string }) => {
-    setGoogleLoading(true);
-    setError('');
-    try {
-      const res = await apiFetch<{
-        data: { accessToken: string; refreshToken: string; next: 'onboarding' | 'home' };
-      }>('/api/v1/auth/google', {
-        method: 'POST',
-        body: JSON.stringify({ idToken: response.credential }),
-      });
-      await login(res.data.accessToken, res.data.refreshToken);
-      redirectAfterLogin(res.data.next);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Google sign-in failed');
-    } finally {
-      setGoogleLoading(false);
-    }
-  }, [login, router]);
-
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID || typeof window === 'undefined') return;
-    // Load Google Identity Services script
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      (window as unknown as { google: { accounts: { id: { initialize: (config: unknown) => void } } } }).google?.accounts?.id?.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleCallback,
-      });
-    };
-    document.head.appendChild(script);
-    return () => { document.head.removeChild(script); };
-  }, [GOOGLE_CLIENT_ID, handleGoogleCallback]);
-
-  function triggerGoogleSignIn() {
-    const google = (window as unknown as { google?: { accounts?: { id?: { prompt: () => void } } } }).google;
-    if (google?.accounts?.id?.prompt) {
-      google.accounts.id.prompt();
-    } else {
-      setError('Google Sign-In not available. Check API key configuration.');
-    }
-  }
+  }, [authLoading, loading, returnTo, router, user]);
 
   const handleSubmitIdentifier = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -270,25 +222,7 @@ export default function SignInPage() {
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  onClick={triggerGoogleSignIn}
-                  disabled={googleLoading || !GOOGLE_CLIENT_ID}
-                  className="flex w-full items-center justify-center gap-2.5 rounded-full border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-deliivo-dark transition-colors hover:bg-gray-50 disabled:opacity-50"
-                >
-                  <FaGoogle className="h-4 w-4 shrink-0 text-[#4285F4]" />
-                  {googleLoading ? 'Signing in...' : 'Continue with Google'}
-                </button>
-
-                <button
-                  type="button"
-                  disabled
-                  className="flex w-full items-center justify-center gap-2.5 rounded-full border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-deliivo-dark transition-colors hover:bg-gray-50 disabled:opacity-50"
-                  title="Apple Sign-In coming soon"
-                >
-                  <FaApple className="h-4 w-4 shrink-0" />
-                  Continue with Apple
-                </button>
+                <GoogleSignInButton returnTo={returnTo} />
               </div>
             </>
           ) : (

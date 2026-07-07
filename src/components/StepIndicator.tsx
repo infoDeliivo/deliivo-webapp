@@ -6,18 +6,18 @@ interface StepIndicatorProps {
 
 export default function StepIndicator({ steps, current, labels }: StepIndicatorProps) {
   return (
-    <div className="flex items-center justify-center gap-0">
+    <div className="flex w-full min-w-0 items-center justify-center gap-0 overflow-hidden px-1">
       {Array.from({ length: steps }, (_, i) => {
         const stepNum = i + 1;
         const isCompleted = stepNum < current;
         const isActive = stepNum === current;
 
         return (
-          <div key={stepNum} className="flex items-center">
+          <div key={stepNum} className="flex min-w-0 items-center">
             {/* Connector line before (skip for first) */}
             {stepNum > 1 && (
               <div
-                className={`h-0.5 w-8 sm:w-12 transition-colors duration-300 ${
+                className={`h-0.5 w-3 min-[360px]:w-5 sm:w-12 transition-colors duration-300 ${
                   isCompleted ? "bg-deliivo-orange" : "bg-gray-200"
                 }`}
               />
@@ -26,7 +26,7 @@ export default function StepIndicator({ steps, current, labels }: StepIndicatorP
             {/* Step dot */}
             <div className="flex flex-col items-center gap-1.5">
               <div
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all duration-300 ${
+                className={`flex h-7 w-7 min-[360px]:h-8 min-[360px]:w-8 items-center justify-center rounded-full text-xs font-bold transition-all duration-300 ${
                   isActive
                     ? "bg-deliivo-orange text-white shadow-md shadow-deliivo-orange/30 scale-110"
                     : isCompleted

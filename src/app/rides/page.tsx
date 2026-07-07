@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import LoadFailureCard from '@/components/LoadFailureCard';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
 import { bookingsApi, publishRideApi, Booking, PublishedRide, Pagination, getApiErrorMessage } from '@/lib/api';
 import { getSocket, onSocketEvent, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
 import { useAuth } from '@/lib/auth-context';
@@ -425,15 +427,11 @@ function RidesContent() {
   }
 
   return (
-    <div className="min-h-screen bg-deliivo-cream">
-      <header className="bg-white border-b border-orange-100 px-6 py-4 flex items-center gap-3">
-        <Link href="/" className="flex items-center gap-1 text-sm text-gray-600 hover:text-deliivo-orange transition-colors">
-          <ChevronLeft className="w-4 h-4" /> {t('common.home')}
-        </Link>
-        <h1 className="text-lg font-semibold text-gray-900 ml-2">{t('rides.myRides')}</h1>
-      </header>
+    <div className="flex min-h-screen flex-col bg-deliivo-cream">
+      <Navbar />
 
-      <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-5">
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 px-4 py-6">
+        <h1 className="text-2xl font-bold text-deliivo-dark">{t('rides.myRides')}</h1>
         <div className="bg-white rounded-2xl p-1.5 shadow-sm flex">
           <button
             type="button"
@@ -578,7 +576,8 @@ function RidesContent() {
             <PaginationControls pagination={publishedPagination} onPageChange={setPublishedPage} />
           </div>
         )}
-      </div>
+      </main>
+      <Footer />
     </div>
   );
 }

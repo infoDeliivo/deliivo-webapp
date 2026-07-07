@@ -98,6 +98,14 @@ const CITY_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_CITY_POINT_R
 const STOPOVER_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_STOPOVER_POINT_RADIUS_KM || '5');
 const ROUTE_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_ROUTE_POINT_RADIUS_KM || '10');
 const ESTONIA_MAP_CENTER = { lat: 58.5953, lng: 25.0136 };
+const MINIMUM_PUBLISH_LEAD_MS = 3 * 60 * 60 * 1000;
+
+function isPublishScheduleTooSoon(date: string, hour: number, minute: number) {
+  if (!date) return true;
+  const [year, month, day] = date.split('-').map(Number);
+  const departureAt = Date.UTC(year, month - 1, day, hour, minute);
+  return departureAt - Date.now() < MINIMUM_PUBLISH_LEAD_MS;
+}
 
 function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
   const toRad = (value: number) => value * Math.PI / 180;
@@ -412,6 +420,44 @@ function StepStopovers({
   const [pointNotice, setPointNotice] = useState('');
 
   const selectedPolyline = state.selectedRouteIndex !== null ? state.routes[state.selectedRouteIndex]?.polyline : undefined;
+  const [meetingPointPolyline, setMeetingPointPolyline] = useState(selectedPolyline);
+  const [meetingPointRouteLoading, setMeetingPointRouteLoading] = useState(false);
+
+  useEffect(() => {
+    setMeetingPointPolyline(selectedPolyline);
+    const meetingPoints = [...state.pickups, ...state.stopovers, ...state.dropoffs];
+    if (!state.origin || !state.destination || meetingPoints.length === 0) {
+      setMeetingPointRouteLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setMeetingPointRouteLoading(true);
+    const timeoutId = window.setTimeout(() => {
+      mapsApi.computeRoute({
+        origin: { latitude: state.origin!.lat, longitude: state.origin!.lng },
+        destination: { latitude: state.destination!.lat, longitude: state.destination!.lng },
+        waypoints: meetingPoints.map((point) => ({ latitude: point.lat, longitude: point.lng })),
+        travelMode: 'DRIVE',
+      })
+        .then((response) => {
+          if (cancelled) return;
+          const routedPolyline = response.data?.[0]?.routes?.[0]?.polyline?.encodedPolyline;
+          setMeetingPointPolyline(routedPolyline || selectedPolyline);
+        })
+        .catch(() => {
+          if (!cancelled) setMeetingPointPolyline(selectedPolyline);
+        })
+        .finally(() => {
+          if (!cancelled) setMeetingPointRouteLoading(false);
+        });
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [selectedPolyline, state.origin, state.destination, state.pickups, state.stopovers, state.dropoffs]);
 
   useEffect(() => {
     if (!loadedStopoverSuggestions) {
@@ -572,20 +618,26 @@ function StepStopovers({
         <p className="mt-1 text-sm text-deliivo-gray">Add where riders can join and leave the ride. Stopovers are optional.</p>
       </div>
 
-      <GoogleMap
-        polyline={selectedPolyline}
-        markers={[
-          ...(state.origin ? [{ lat: state.origin.lat, lng: state.origin.lng, color: 'green' as const }] : []),
-          ...(state.destination ? [{ lat: state.destination.lat, lng: state.destination.lng, color: 'red' as const }] : []),
-          ...state.pickups.map(s => ({ lat: s.lat, lng: s.lng, color: 'green' as const })),
-          ...state.dropoffs.map(s => ({ lat: s.lat, lng: s.lng, color: 'red' as const })),
-          ...state.stopovers.map(s => ({ lat: s.lat, lng: s.lng, color: 'blue' as const })),
-        ]}
-        center={ESTONIA_MAP_CENTER}
-        zoom={7}
-        connectMarkersToRoute
-        className="h-56 w-full rounded-2xl lg:col-start-2 lg:row-start-1 lg:h-[520px] lg:self-start"
-      />
+      <div className="relative h-56 w-full lg:col-start-2 lg:row-start-1 lg:h-[520px] lg:self-start">
+        <GoogleMap
+          polyline={meetingPointPolyline}
+          markers={[
+            ...(state.origin ? [{ lat: state.origin.lat, lng: state.origin.lng, color: 'green' as const }] : []),
+            ...(state.destination ? [{ lat: state.destination.lat, lng: state.destination.lng, color: 'red' as const }] : []),
+            ...state.pickups.map(s => ({ lat: s.lat, lng: s.lng, color: 'green' as const })),
+            ...state.dropoffs.map(s => ({ lat: s.lat, lng: s.lng, color: 'red' as const })),
+            ...state.stopovers.map(s => ({ lat: s.lat, lng: s.lng, color: 'blue' as const })),
+          ]}
+          center={ESTONIA_MAP_CENTER}
+          zoom={7}
+          className="h-full w-full rounded-2xl"
+        />
+        {meetingPointRouteLoading && (
+          <span className="absolute right-3 top-3 inline-flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-deliivo-gray shadow-sm">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-deliivo-orange" /> Updating road path
+          </span>
+        )}
+      </div>
 
       <div className="space-y-5 lg:col-start-1 lg:row-start-1">
       <div className="hidden lg:block">
@@ -963,6 +1015,7 @@ function StepDateTime({
     const date = new Date(2024, 0, 7 + index);
     return dayFormatter.format(date);
   });
+  const departureTooSoon = isPublishScheduleTooSoon(state.date, state.hour, state.minute);
 
   return (
     <div className="space-y-6">
@@ -1038,6 +1091,12 @@ function StepDateTime({
             </select>
           </div>
         </div>
+        {state.date && departureTooSoon && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            Select a departure time at least 3 hours from now. You can publish a ride for today when this lead time is available.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1602,7 +1661,7 @@ function PublishRideWizard() {
   function canContinue(): boolean {
     if (step === 1) return state.origin !== null && state.destination !== null && state.selectedRouteIndex !== null;
     if (step === 2) return state.pickups.length > 0 && state.dropoffs.length > 0;
-    if (step === 3) return state.date.length > 0;
+    if (step === 3) return state.date.length > 0 && !isPublishScheduleTooSoon(state.date, state.hour, state.minute);
     if (step === 4) return state.seats >= 1;
     if (step === 5) return state.basePricePerSeat > 0;
     return true;
@@ -1870,7 +1929,7 @@ function PublishRideWizard() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-deliivo-cream">
+    <div className="flex min-h-screen min-w-0 flex-col overflow-x-clip bg-deliivo-cream">
       {/* Top bar */}
       <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
         <div className="relative mx-auto flex h-14 max-w-7xl items-center px-4 sm:px-6 lg:px-8">

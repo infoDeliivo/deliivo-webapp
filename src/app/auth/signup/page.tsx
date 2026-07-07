@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { FaGoogle, FaApple } from "react-icons/fa";
 import { authApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import BrandLogo from "@/components/BrandLogo";
 import { buildE164PhoneNumber, PHONE_COUNTRY_OPTIONS, sanitizePhoneLocalNumber } from "@/lib/phone-auth";
 import { getSafeReturnTo, withReturnTo } from "@/lib/auth-redirect";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 type Step = 'form' | 'otp';
 type Method = 'email' | 'phone';
@@ -203,23 +203,7 @@ export default function SignUpPage() {
                 <div className="h-px flex-1 bg-gray-200" />
               </div>
 
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-center gap-2.5 rounded-full border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-deliivo-dark transition-colors hover:bg-gray-50"
-                >
-                  <FaGoogle className="h-4 w-4 shrink-0 text-[#4285F4]" />
-                  Continue with Google
-                </button>
-
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-center gap-2.5 rounded-full border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-deliivo-dark transition-colors hover:bg-gray-50"
-                >
-                  <FaApple className="h-4 w-4 shrink-0" />
-                  Continue with Apple
-                </button>
-              </div>
+              <GoogleSignInButton returnTo={returnTo} />
 
               <p className="mt-6 text-center text-xs text-deliivo-gray">
                 By signing up, you agree to our{" "}

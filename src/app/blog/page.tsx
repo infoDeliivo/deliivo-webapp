@@ -183,22 +183,8 @@ export default function BlogPage() {
                       <ArrowRight size={16} />
                     </span>
                   </div>
-                  <div className="border-t border-gray-100 px-6 py-8 lg:border-l lg:border-t-0">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">Why this matters</p>
-                    <div className="mt-4 space-y-3">
-                      <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                        <p className="text-sm font-semibold text-deliivo-dark">Operational content</p>
-                        <p className="mt-1 text-xs leading-5 text-deliivo-gray">These posts support booking decisions, ride-day expectations, safety, and support follow-up.</p>
-                      </div>
-                      <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                        <p className="text-sm font-semibold text-deliivo-dark">Category signal</p>
-                        <p className="mt-1 text-xs leading-5 text-deliivo-gray">Use rider, driver, safety, and product categories to find the right article faster.</p>
-                      </div>
-                      <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                        <p className="text-sm font-semibold text-deliivo-dark">Discovery count</p>
-                        <p className="mt-1 text-xs leading-5 text-deliivo-gray">{filteredPosts.length} published article{filteredPosts.length === 1 ? '' : 's'} currently match your filters.</p>
-                      </div>
-                    </div>
+                  <div className="min-h-72 overflow-hidden border-t border-gray-100 lg:border-l lg:border-t-0">
+                    <img src={featuredPost.coverImageUrl || '/baltic-hero-v2.png'} alt="" className="h-full min-h-72 w-full object-cover" />
                   </div>
                 </div>
               </Link>
@@ -208,7 +194,9 @@ export default function BlogPage() {
             {remainingPosts.map((post) => {
               const Icon = categoryIcon[post.category];
               return (
-                <Link key={post.id} href={`/blog/${post.slug}`} className="block rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
+                <Link key={post.id} href={`/blog/${post.slug}`} className="block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+                  <img src={post.coverImageUrl || '/baltic-hero-v2.png'} alt="" className="h-44 w-full object-cover" />
+                  <div className="p-6">
                   <div className="flex items-center gap-2 text-sm font-medium text-deliivo-gray">
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-orange-50 text-deliivo-orange">
                       <Icon size={16} />
@@ -235,6 +223,7 @@ export default function BlogPage() {
                     Open article
                     <ArrowRight size={15} />
                   </span>
+                  </div>
                 </Link>
               );
             })}

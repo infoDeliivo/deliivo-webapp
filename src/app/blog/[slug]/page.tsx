@@ -6,6 +6,8 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft, BookOpen, Loader2, ShieldCheck, Users } from 'lucide-react';
 import { contentApi, ContentPost } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n-context';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 const categoryIcon: Record<string, typeof Users> = {
   'Rider guide': Users,
@@ -88,7 +90,8 @@ export default function BlogDetailPage() {
   }
 
   const Icon = categoryIcon[post.category];
-  const authorLabel = post.updatedBy || post.createdBy || 'Deliivo editorial team';
+  const rawAuthor = post.updatedBy || post.createdBy || '';
+  const authorLabel = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(rawAuthor) ? 'Deliivo Blog Editorial' : (rawAuthor || 'Deliivo Blog Editorial');
   const articleUrl = `https://deliivo.com/blog/${post.slug}`;
   const articleSchema = {
     '@context': 'https://schema.org',
@@ -125,7 +128,9 @@ export default function BlogDetailPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
+    <Navbar />
+    <main>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <section className="border-b border-gray-100 bg-white">
@@ -153,6 +158,7 @@ export default function BlogDetailPage() {
             <span>{new Date(post.publishedAt || post.updatedAt).toLocaleDateString()}</span>
             <span>{post.readTime}</span>
           </div>
+          <img src={post.coverImageUrl || '/baltic-hero-v2.png'} alt="" className="mt-8 h-64 w-full rounded-3xl object-cover sm:h-96" />
         </div>
       </section>
 
@@ -195,5 +201,7 @@ export default function BlogDetailPage() {
         )}
       </section>
     </main>
+    <Footer />
+    </div>
   );
 }

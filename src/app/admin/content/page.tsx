@@ -10,6 +10,7 @@ const emptyDraft = {
   slug: '',
   excerpt: '',
   body: '',
+  coverImageUrl: '',
   category: 'Rider guide' as ContentPost['category'],
   status: 'DRAFT' as ContentPost['status'],
   readTime: '4 min read',
@@ -66,6 +67,7 @@ export default function AdminContentPage() {
       slug: post.slug,
       excerpt: post.excerpt,
       body: post.body,
+      coverImageUrl: post.coverImageUrl || '',
       category: post.category,
       status: post.status,
       readTime: post.readTime,
@@ -240,6 +242,10 @@ export default function AdminContentPage() {
 
           <Field label="Excerpt" className="mt-4">
             <textarea value={draft.excerpt} onChange={(e) => setDraft((prev) => ({ ...prev, excerpt: e.target.value }))} rows={3} className="input-field" />
+          </Field>
+
+          <Field label="Cover image URL" className="mt-4">
+            <input value={draft.coverImageUrl} onChange={(e) => setDraft((prev) => ({ ...prev, coverImageUrl: e.target.value }))} placeholder="https://images.example.com/article.jpg" className="input-field" />
           </Field>
 
           <Field label="Body" className="mt-4">

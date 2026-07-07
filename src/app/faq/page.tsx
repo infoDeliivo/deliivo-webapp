@@ -14,6 +14,17 @@ const faqs = [
   { q: 'faq.q6', a: 'faq.a6' },
 ];
 
+const quickStarts = [
+  {
+    title: 'faq.bookQuickStart',
+    steps: ['faq.bookStep1', 'faq.bookStep2', 'faq.bookStep3', 'faq.bookStep4'],
+  },
+  {
+    title: 'faq.publishQuickStart',
+    steps: ['faq.publishStep1', 'faq.publishStep2', 'faq.publishStep3', 'faq.publishStep4'],
+  },
+];
+
 export default function FaqPage() {
   const { t } = useTranslation();
   const faqSchema = {
@@ -47,6 +58,26 @@ export default function FaqPage() {
           <p className="text-sm font-semibold uppercase text-deliivo-orange">{t('faq.kicker')}</p>
           <h1 className="mt-2 text-3xl font-bold text-deliivo-dark">{t('faq.title')}</h1>
         </div>
+
+        <section className="mb-10 grid gap-4 md:grid-cols-2" aria-labelledby="quick-start-title">
+          <div className="md:col-span-2">
+            <h2 id="quick-start-title" className="text-2xl font-bold text-deliivo-dark">{t('faq.quickStart')}</h2>
+            <p className="mt-1 text-sm text-deliivo-gray">{t('faq.quickStartIntro')}</p>
+          </div>
+          {quickStarts.map((guide) => (
+            <article key={guide.title} className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
+              <h3 className="text-lg font-semibold text-deliivo-dark">{t(guide.title)}</h3>
+              <ol className="mt-4 space-y-3">
+                {guide.steps.map((step, index) => (
+                  <li key={step} className="flex gap-3 text-sm leading-6 text-deliivo-gray">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-50 text-xs font-bold text-deliivo-orange">{index + 1}</span>
+                    <span>{t(step)}</span>
+                  </li>
+                ))}
+              </ol>
+            </article>
+          ))}
+        </section>
 
         <div className="space-y-4">
           {faqs.map((item) => (
