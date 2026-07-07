@@ -6,6 +6,7 @@ import {
   LOCALE_COOKIE_NAME,
   urlCodeToLocale,
 } from './lib/i18n';
+import { SEO_HEADER_INTERNAL_PATH, SEO_HEADER_LOCALIZED_PATH, SEO_HEADER_LOCALE } from './lib/seo';
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -15,7 +16,13 @@ export function proxy(request: NextRequest) {
   if (pathLocale) {
     const rewrittenUrl = request.nextUrl.clone();
     rewrittenUrl.pathname = segments.length > 1 ? `/${segments.slice(1).join('/')}` : '/';
-    const response = NextResponse.rewrite(rewrittenUrl);
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set(SEO_HEADER_LOCALE, pathLocale);
+    requestHeaders.set(SEO_HEADER_LOCALIZED_PATH, pathname);
+    requestHeaders.set(SEO_HEADER_INTERNAL_PATH, rewrittenUrl.pathname);
+    const response = NextResponse.rewrite(rewrittenUrl, {
+      request: { headers: requestHeaders },
+    });
     response.cookies.set(LOCALE_COOKIE_NAME, pathLocale, {
       path: '/',
       maxAge: 60 * 60 * 24 * 365,
