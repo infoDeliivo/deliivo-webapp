@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { userApi } from '@/lib/api';
@@ -29,17 +29,26 @@ export default function OnboardingPage() {
 
 function OnboardingForm() {
   const router = useRouter();
-  const { refreshUser } = useAuth();
+  const { refreshUser, user } = useAuth();
   const { t } = useTranslation();
 
-  const [name, setName] = useState('');
-  const [nickName, setNickName] = useState('');
-  const [dob, setDob] = useState('');
-  const [salutation, setSalutation] = useState('');
-  const [gender, setGender] = useState<'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER' | 'PREFER_NOT_TO_SAY' | ''>('');
+  const [name, setName] = useState(user?.name ?? '');
+  const [nickName, setNickName] = useState(user?.nickName ?? '');
+  const [dob, setDob] = useState(user?.dob?.slice(0, 10) ?? '');
+  const [salutation, setSalutation] = useState(user?.salutation ?? '');
+  const [gender, setGender] = useState<'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER' | 'PREFER_NOT_TO_SAY' | ''>(user?.gender ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const maxDob = getLatestAllowedDob();
+
+  useEffect(() => {
+    if (!user) return;
+    setName((current) => current || user.name || '');
+    setNickName((current) => current || user.nickName || '');
+    setDob((current) => current || user.dob?.slice(0, 10) || '');
+    setSalutation((current) => current || user.salutation || '');
+    setGender((current) => current || user.gender || '');
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

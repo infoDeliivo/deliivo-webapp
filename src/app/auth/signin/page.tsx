@@ -10,6 +10,7 @@ import BrandLogo from "@/components/BrandLogo";
 import { buildE164PhoneNumber, PHONE_COUNTRY_OPTIONS, sanitizePhoneLocalNumber } from "@/lib/phone-auth";
 import { getSafeReturnTo, withReturnTo } from "@/lib/auth-redirect";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import { isOnboardingComplete } from "@/lib/onboarding";
 
 type Step = 'identifier' | 'otp';
 type Method = 'email' | 'phone';
@@ -41,7 +42,8 @@ export default function SignInPage() {
 
   useEffect(() => {
     if (!authLoading && user && !loading) {
-      router.replace(returnTo || getSafeReturnTo() || '/');
+      const destination = returnTo || getSafeReturnTo();
+      router.replace(isOnboardingComplete(user) ? (destination || '/') : withReturnTo('/onboarding', destination));
     }
   }, [authLoading, loading, returnTo, router, user]);
 

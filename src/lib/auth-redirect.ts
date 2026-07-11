@@ -5,6 +5,7 @@ export function getSafeReturnTo(search?: string): string | null {
   const returnTo = new URLSearchParams(query).get('returnTo');
   if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) return null;
   if (returnTo.startsWith('/auth/')) return null;
+  if (returnTo === '/onboarding' || returnTo.startsWith('/onboarding?') || returnTo.startsWith('/onboarding/')) return null;
   return returnTo;
 }
 
