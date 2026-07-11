@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Car, Plus, Trash2, ArrowLeft, Upload, CheckCircle } from 'lucide-react';
-import { vehicleApi, Vehicle, VehicleType } from '@/lib/api';
+import { Car, Plus, Trash2, ArrowLeft, Upload, CheckCircle, Camera, Eye, Loader2 } from 'lucide-react';
+import { vehicleApi, Vehicle, VehicleType, VehicleDocument, validateImageFile } from '@/lib/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { useTranslation } from '@/lib/i18n-context';
@@ -24,6 +24,59 @@ const VEHICLE_DOCUMENT_OPTIONS = [
   { key: 'INSURANCE_DOCUMENT', label: 'Insurance document' },
 ] as const;
 
+// KYC documents stored privately (no public URL) — viewed via a short-lived
+// signed URL fetched on demand from previewKey.
+const PRIVATE_DOC_TYPES = new Set(['DRIVING_LICENSE', 'INSURANCE_DOCUMENT']);
+const isPrivateDocType = (documentType: string) => PRIVATE_DOC_TYPES.has(documentType);
+
+const DOC_TYPE_LABEL: Record<string, string> =
+  Object.fromEntries(VEHICLE_DOCUMENT_OPTIONS.map((o) => [o.key, o.label]));
+
+// Renders a private KYC document. The signed view URL (300 s TTL) is fetched on
+// demand when the user clicks View and is never cached.
+function PrivateDocImage({ doc }: { doc: VehicleDocument }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const view = async () => {
+    if (!doc.previewKey || loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await vehicleApi.getDocumentReadUrl(doc.previewKey);
+      setUrl(res.data.url);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not load document');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const label = DOC_TYPE_LABEL[doc.documentType] || doc.documentType;
+
+  return (
+    <div className="rounded-xl border border-gray-200 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-deliivo-dark">{label}</span>
+        {!url && (
+          <button
+            type="button"
+            onClick={view}
+            disabled={loading || !doc.previewKey}
+            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-deliivo-orange hover:bg-deliivo-orange-light disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />}
+            {loading ? 'Loading' : 'View'}
+          </button>
+        )}
+      </div>
+      {url && <img src={url} alt={label} className="mt-2 max-h-48 w-full rounded-lg object-contain" />}
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 function formatVehicleLabel(vehicle: Vehicle) {
   return [vehicle.brand, vehicle.model_name || vehicle.model_num].filter(Boolean).join(' ') || 'Vehicle';
 }
@@ -36,6 +89,10 @@ function VehicleContent() {
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  // Existing-vehicle uploads (presigned flow)
+  const [uploadingImageFor, setUploadingImageFor] = useState<string | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null); // `${vehicleId}:${type}`
+  const [uploadedDocs, setUploadedDocs] = useState<Record<string, string[]>>({}); // vehicleId -> documentTypes
 
   // Draft form state
   const [step, setStep] = useState(1);
@@ -90,8 +147,9 @@ function VehicleContent() {
     }
   };
 
-  // Document upload state
-  const [documents, setDocuments] = useState<{ imageUrl: string; documentType: string }[]>([]);
+  // Document upload state. Public docs (VEHICLE_IMAGE) carry an imageUrl; private
+  // KYC docs are attached by key and have no public URL.
+  const [documents, setDocuments] = useState<{ documentType: string; imageUrl?: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const vehicleTypes: { value: VehicleType; label: string }[] = [
     { value: 'sedan', label: t('profile.vehicleTypeSedan') },
@@ -120,19 +178,24 @@ function VehicleContent() {
   };
 
   const handleDocUpload = async (file: File, documentType: string) => {
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setError('Only JPG, PNG, and WEBP images are allowed.');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Images must be 5 MB or smaller.');
+    const invalid = validateImageFile(file);
+    if (invalid) {
+      setError(invalid);
       return;
     }
     setUploading(true);
     setError('');
     try {
-      const res = await vehicleApi.uploadDraftDocument(file, documentType);
-      setDocuments(prev => [...prev, { imageUrl: res.data.imageUrl, documentType: res.data.documentType }]);
+      if (isPrivateDocType(documentType)) {
+        // KYC (licence/insurance): private target, attached by key. No public URL,
+        // so track completion by the known documentType.
+        await vehicleApi.uploadDraftPrivateDocument(file, documentType);
+        setDocuments(prev => [...prev, { documentType }]);
+      } else {
+        // Public car photo: keeps its confirmed URL for preview.
+        const res = await vehicleApi.uploadDraftDocument(file, documentType);
+        setDocuments(prev => [...prev, { documentType: res.data.documentType, imageUrl: res.data.imageUrl }]);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('profile.vehicleUploadFailed'));
     } finally {
@@ -168,6 +231,42 @@ function VehicleContent() {
       // ignore
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const handleVehicleImageUpload = async (id: string, file: File) => {
+    const invalid = validateImageFile(file);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+    setUploadingImageFor(id);
+    setError('');
+    try {
+      const res = await vehicleApi.uploadImage(id, file);
+      setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, imageUrl: res.data.imageUrl } : v)));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('profile.vehicleUploadFailed'));
+    } finally {
+      setUploadingImageFor(null);
+    }
+  };
+
+  const handleVehicleDocUpload = async (id: string, file: File, documentType: string) => {
+    const invalid = validateImageFile(file);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+    setUploadingDoc(`${id}:${documentType}`);
+    setError('');
+    try {
+      await vehicleApi.uploadDocument(id, file, documentType);
+      setUploadedDocs((prev) => ({ ...prev, [id]: [...(prev[id] || []), documentType] }));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('profile.vehicleUploadFailed'));
+    } finally {
+      setUploadingDoc(null);
     }
   };
 
@@ -223,13 +322,31 @@ function VehicleContent() {
               {vehicles.map((v) => (
             <div key={v.id} className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
               <div className="flex items-start gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
+                <label className="relative flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-gray-100 overflow-hidden group">
                 {v.imageUrl ? (
                   <img src={v.imageUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
                 ) : (
                   <Car size={24} className="text-deliivo-gray" />
                 )}
-                </div>
+                <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {uploadingImageFor === v.id ? (
+                    <span className="text-[10px] font-semibold text-white">...</span>
+                  ) : (
+                    <Camera size={18} className="text-white" />
+                  )}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploadingImageFor === v.id}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleVehicleImageUpload(v.id, f);
+                    e.target.value = '';
+                  }}
+                />
+                </label>
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-lg font-semibold text-deliivo-dark">{formatVehicleLabel(v)}</h3>
@@ -252,6 +369,24 @@ function VehicleContent() {
                 >
                   <Trash2 size={18} />
                 </button>
+              </div>
+
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">Documents</p>
+         
+                {(() => {
+                  const privateDocs = (v.documents || []).filter(
+                    (d) => isPrivateDocType(d.documentType) && d.previewKey,
+                  );
+                  if (privateDocs.length === 0) return null;
+                  return (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {privateDocs.map((d) => (
+                        <PrivateDocImage key={d.id} doc={d} />
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
               ))}

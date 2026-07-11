@@ -22,7 +22,7 @@ import {
   Route,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { getApiErrorMessage, userApi, travelPreferencesApi, TravelPreference, UserFullProfile } from '@/lib/api';
+import { getApiErrorMessage, userApi, travelPreferencesApi, TravelPreference, UserFullProfile, validateImageFile } from '@/lib/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { showError, showSuccess } from '@/lib/app-feedback';
@@ -86,6 +86,12 @@ function ProfileContent() {
   async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const invalid = validateImageFile(file);
+    if (invalid) {
+      showError(t('profile.photoUploadFailed'), invalid);
+      e.target.value = '';
+      return;
+    }
     setAvatarUploading(true);
     try {
       await userApi.uploadAvatar(file);
