@@ -23,6 +23,7 @@ import {
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import EmergencySosButton from '@/components/EmergencySosButton';
 import SupportOverrideCard from '@/components/SupportOverrideCard';
+import FlowGuide, { FlowGuideStep } from '@/components/FlowGuide';
 import { authApi, searchRidesApi, bookingsApi, rideOpsApi, ratingsApi, trackingApi, disputesApi, paymentMethodsApi, RideDetails, PricePreview, Booking, TrackingLink, Dispute, PaymentMethod, getApiErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { emitSocketEvent, getSocket, onSocketEvent, LocationUpdate, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
@@ -35,6 +36,28 @@ import { enqueueRecoveryAction, isRecoverableServerFailure } from '@/lib/recover
 
 const TOS_VERSION = '1.0';
 const PRIVACY_VERSION = '1.0';
+
+function getBookingGuide(isSignedIn: boolean): { title: string; steps: FlowGuideStep[] } {
+  if (!isSignedIn) {
+    return {
+      title: 'Booking takes only a few steps after sign in.',
+      steps: [
+        { title: 'Sign in', copy: 'Create or use your account so the driver can review your request.' },
+        { title: 'Choose points', copy: 'Pick where you want to join and leave the ride.' },
+        { title: 'Send request', copy: 'The driver accepts the request before the ride is confirmed.' },
+      ],
+    };
+  }
+
+  return {
+    title: 'Request this ride in a simple order.',
+    steps: [
+      { title: 'Pickup and drop-off', copy: 'Choose the best available meeting points for your trip.' },
+      { title: 'Seats and card', copy: 'Select seats and a payment card. Payment is authorized when needed.' },
+      { title: 'Request to book', copy: 'Send the request. The driver reviews and confirms your booking.' },
+    ],
+  };
+}
 
 type RiderPointKind = 'origin' | 'pickup' | 'stopover' | 'dropoff' | 'destination';
 
@@ -953,6 +976,7 @@ function RideDetailContent() {
   const filteredPickupOptions = pickupOptions.filter((option) => option.position < selectedDropoffOption.position);
   const filteredDropoffOptions = dropoffOptions.filter((option) => option.position > selectedPickupOption.position);
   const isOwnRide = user?.id === ride.driverId;
+  const bookingGuide = getBookingGuide(Boolean(user));
   const needsTosAcceptance = !user?.tosAcceptedAt || !user?.privacyAcceptedAt;
   const allowRideSimulation = process.env.NEXT_PUBLIC_ALLOW_RIDE_SIMULATION === 'true';
   const isTrackableBooking = myBooking && ['IN_PROGRESS', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'ONBOARD', 'DROP_PENDING'].includes(myBooking.status);
@@ -1173,22 +1197,36 @@ function RideDetailContent() {
         )}
 
         {!user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed && (
-          <div className="rounded-2xl border border-primary-100 bg-primary-50 p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
-            <p className="mt-2 text-sm text-deliivo-gray">{t('rideDetail.signInToChoosePickup')}</p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Link href={withReturnTo('/auth/signin', rideReturnTo)} className="btn-primary px-5 py-2.5 text-sm">
-                {t('nav.signIn')}
-              </Link>
-              <Link href={withReturnTo('/auth/signup', rideReturnTo)} className="btn-outline px-5 py-2.5 text-sm">
-                {t('nav.signUp')}
-              </Link>
+          <div className="space-y-4">
+            <FlowGuide
+              storageKey="deliivo.booking.quick-guide.v1"
+              eyebrow="Booking guide"
+              title={bookingGuide.title}
+              steps={bookingGuide.steps}
+            />
+            <div className="rounded-2xl border border-primary-100 bg-primary-50 p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
+              <p className="mt-2 text-sm text-deliivo-gray">{t('rideDetail.signInToChoosePickup')}</p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Link href={withReturnTo('/auth/signin', rideReturnTo)} className="btn-primary px-5 py-2.5 text-sm">
+                  {t('nav.signIn')}
+                </Link>
+                <Link href={withReturnTo('/auth/signup', rideReturnTo)} className="btn-outline px-5 py-2.5 text-sm">
+                  {t('nav.signUp')}
+                </Link>
+              </div>
             </div>
           </div>
         )}
 
         {user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed && (
           <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
+            <FlowGuide
+              storageKey="deliivo.booking.quick-guide.v1"
+              eyebrow="Booking guide"
+              title={bookingGuide.title}
+              steps={bookingGuide.steps}
+            />
             <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
 
             <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">

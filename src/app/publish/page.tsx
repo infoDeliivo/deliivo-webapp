@@ -28,6 +28,7 @@ import {
   Car,
 } from "lucide-react";
 import StepIndicator from "@/components/StepIndicator";
+import FlowGuide, { FlowGuideStep } from "@/components/FlowGuide";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import GoogleMap from "@/components/GoogleMap";
 import { useAuth } from "@/lib/auth-context";
@@ -99,6 +100,65 @@ const STOPOVER_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_STOPOVER
 const ROUTE_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_ROUTE_POINT_RADIUS_KM || '10');
 const ESTONIA_MAP_CENTER = { lat: 58.5953, lng: 25.0136 };
 const MINIMUM_PUBLISH_LEAD_MS = 3 * 60 * 60 * 1000;
+
+function getPublishGuide(step: number): { title: string; steps: FlowGuideStep[] } {
+  switch (step) {
+    case 1:
+      return {
+        title: 'Start with the route. We will calculate the rest.',
+        steps: [
+          { title: 'Choose cities', copy: 'Pick where you leave from and where you are going.' },
+          { title: 'Select road route', copy: 'Use a road route only. Ferry or water routes cannot be published.' },
+          { title: 'Check the map', copy: 'The map shows the path riders will understand before booking.' },
+        ],
+      };
+    case 2:
+      return {
+        title: 'Add simple meeting points riders can choose.',
+        steps: [
+          { title: 'Pickup point', copy: 'Add at least one clear point near your starting city.' },
+          { title: 'Optional stops', copy: 'Add stopover points only if you are happy to pick/drop riders there.' },
+          { title: 'Drop-off point', copy: 'Add at least one clear point near your destination.' },
+        ],
+      };
+    case 3:
+      return {
+        title: 'Set when the ride actually starts.',
+        steps: [
+          { title: 'Pick date', copy: 'Same-day publishing is allowed only if departure is at least 3 hours away.' },
+          { title: 'Pick exact time', copy: 'Use the real departure time so pickup estimates make sense.' },
+          { title: 'Review warning', copy: 'If the continue button is disabled, the time is too soon.' },
+        ],
+      };
+    case 4:
+      return {
+        title: 'Tell riders what kind of ride this is.',
+        steps: [
+          { title: 'Seats', copy: 'Choose how many passenger seats you can actually offer.' },
+          { title: 'Vehicle', copy: 'A vehicle is required before publishing.' },
+          { title: 'Preferences', copy: 'Women-only, no smoking, alcohol-free and child-seat notes are shown to riders.' },
+        ],
+      };
+    case 5:
+      return {
+        title: 'Use the suggested price unless you have a reason.',
+        steps: [
+          { title: 'Distance based', copy: 'The recommendation uses the active admin pricing rule.' },
+          { title: 'Allowed range', copy: 'Keep your price inside the min/max guidance.' },
+          { title: 'Per seat', copy: 'This is the amount one rider pays for the selected ride.' },
+        ],
+      };
+    default:
+      return {
+        title: 'Review once, then publish.',
+        steps: [
+          { title: 'Route', copy: 'Confirm origin, destination, meeting points and stopovers.' },
+          { title: 'Schedule', copy: 'Check date, time, seats and preferences.' },
+          { title: 'Publish', copy: 'After publishing, riders can request to book from the ride details page.' },
+        ],
+      };
+  }
+}
 
 function isPublishScheduleTooSoon(date: string, hour: number, minute: number) {
   if (!date) return true;
@@ -1613,6 +1673,7 @@ function PublishRideWizard() {
   const [payoutStatusLoading, setPayoutStatusLoading] = useState(false);
   const [payoutSetupLoading, setPayoutSetupLoading] = useState(false);
   const [vehicleStatus, setVehicleStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
+  const publishGuide = getPublishGuide(step);
 
   function patch(update: Partial<WizardState>) {
     setState((prev) => ({ ...prev, ...update }));
@@ -1969,6 +2030,13 @@ function PublishRideWizard() {
       {/* Main content */}
       <main className="flex-1 px-4 py-6">
         <div className={`mx-auto ${step <= 2 ? 'max-w-5xl' : 'max-w-lg'}`}>
+          <FlowGuide
+            storageKey="deliivo.publish.quick-guide.v1"
+            eyebrow={`Step ${step} of ${TOTAL_STEPS}`}
+            title={publishGuide.title}
+            steps={publishGuide.steps}
+            className="mb-5"
+          />
           {step === 1 && <StepRoute state={state} onChange={patch} error={error} />}
           {step === 2 && <StepStopovers state={state} onChange={patch} />}
           {step === 3 && <StepDateTime state={state} onChange={patch} />}
