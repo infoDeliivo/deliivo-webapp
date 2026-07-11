@@ -36,6 +36,14 @@ const formatInputDate = (value?: string | null) => {
   return value.slice(0, 16);
 };
 
+const parsePositiveAmount = (label: string, value: string) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${label} must be a positive number`);
+  }
+  return parsed;
+};
+
 export default function AdminPricingPage() {
   const [configs, setConfigs] = useState<AdminPricingConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,13 +113,22 @@ export default function AdminPricingPage() {
     setSaving(true);
     setError('');
     try {
+      const minRatePerKm = parsePositiveAmount('Min rate / km', form.minRatePerKm);
+      const recommendedRatePerKm = parsePositiveAmount('Recommended rate / km', form.recommendedRatePerKm);
+      const maxRatePerKm = parsePositiveAmount('Max rate / km', form.maxRatePerKm);
+      const minimumSeatPrice = parsePositiveAmount('Minimum seat price', form.minimumSeatPrice);
+
+      if (minRatePerKm > recommendedRatePerKm || recommendedRatePerKm > maxRatePerKm) {
+        throw new Error('Pricing rates must be ordered as min <= recommended <= max');
+      }
+
       const payload = {
         regionCode: form.regionCode.trim(),
-        currency: form.currency.trim().toUpperCase(),
-        minRatePerKm: Number(form.minRatePerKm),
-        recommendedRatePerKm: Number(form.recommendedRatePerKm),
-        maxRatePerKm: Number(form.maxRatePerKm),
-        minimumSeatPrice: Number(form.minimumSeatPrice),
+        currency: 'EUR',
+        minRatePerKm,
+        recommendedRatePerKm,
+        maxRatePerKm,
+        minimumSeatPrice,
         roundingStrategy: form.roundingStrategy,
         active: form.active,
         ...(form.validFrom ? { validFrom: new Date(form.validFrom).toISOString() } : {}),
@@ -244,10 +261,10 @@ export default function AdminPricingPage() {
               <p className="text-xs font-semibold text-gray-600">Currency</p>
               <div className="mt-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700">EUR</div>
             </div>
-            <Field label="Min rate / km" type="number" value={form.minRatePerKm} onChange={(value) => setForm((prev) => ({ ...prev, minRatePerKm: value }))} />
-            <Field label="Recommended rate / km" type="number" value={form.recommendedRatePerKm} onChange={(value) => setForm((prev) => ({ ...prev, recommendedRatePerKm: value }))} />
-            <Field label="Max rate / km" type="number" value={form.maxRatePerKm} onChange={(value) => setForm((prev) => ({ ...prev, maxRatePerKm: value }))} />
-            <Field label="Minimum seat price" type="number" value={form.minimumSeatPrice} onChange={(value) => setForm((prev) => ({ ...prev, minimumSeatPrice: value }))} />
+            <Field label="Min rate / km" type="number" step="0.01" value={form.minRatePerKm} onChange={(value) => setForm((prev) => ({ ...prev, minRatePerKm: value }))} />
+            <Field label="Recommended rate / km" type="number" step="0.01" value={form.recommendedRatePerKm} onChange={(value) => setForm((prev) => ({ ...prev, recommendedRatePerKm: value }))} />
+            <Field label="Max rate / km" type="number" step="0.01" value={form.maxRatePerKm} onChange={(value) => setForm((prev) => ({ ...prev, maxRatePerKm: value }))} />
+            <Field label="Minimum seat price" type="number" step="0.01" value={form.minimumSeatPrice} onChange={(value) => setForm((prev) => ({ ...prev, minimumSeatPrice: value }))} />
             <label className="block">
               <span className="text-xs font-medium text-gray-500">Rounding strategy</span>
               <select
@@ -300,17 +317,20 @@ function Field({
   value,
   onChange,
   type = 'text',
+  step,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  step?: string;
 }) {
   return (
     <label className="block">
       <span className="text-xs font-medium text-gray-500">{label}</span>
       <input
         type={type}
+        step={step}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#F97316]"

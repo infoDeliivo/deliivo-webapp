@@ -164,18 +164,8 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
               </div>
             ) : <p className="mt-0.5 text-xs text-deliivo-gray">{t('ride.noRatings')}</p>}
             <p className="mt-1 text-[11px] text-deliivo-gray">
-              {ride.driver?.successfulPublishedRides || 0} driven • {ride.driver?.successfulCompletedRides || 0} ridden
+              {ride.driver?.successfulPublishedRides || 0} {t('ride.driverTrips').toLowerCase()}
             </p>
-            <div className="mt-2 grid grid-cols-1 gap-1 text-center sm:grid-cols-2 sm:w-full">
-              <div className="rounded-lg bg-gray-50 px-2 py-1">
-                <p className="text-[11px] font-semibold text-deliivo-dark">{ride.driver?.successfulPublishedRides || 0}</p>
-                <p className="text-[10px] text-deliivo-gray">{t('ride.driverTrips')}</p>
-              </div>
-              <div className="rounded-lg bg-gray-50 px-2 py-1">
-                <p className="text-[11px] font-semibold text-deliivo-dark">{ride.driver?.successfulCompletedRides || 0}</p>
-                <p className="text-[10px] text-deliivo-gray">{t('ride.riderTrips')}</p>
-              </div>
-            </div>
             <Link href={`/profile/users/${ride.driverId}`} className="mt-1 inline-flex text-[11px] font-semibold text-deliivo-orange hover:underline">
               {t('ride.viewProfile')}
             </Link>

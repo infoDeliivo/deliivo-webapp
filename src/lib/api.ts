@@ -117,7 +117,13 @@ async function parseApiResponse(res: Response): Promise<{ json: unknown; rawText
 
 function getResponseMessage(json: unknown, rawText: string, status: number): string {
   if (json && typeof json === 'object') {
-    const body = json as { message?: string; error?: string };
+    const body = json as { message?: string; error?: string; errors?: Array<{ field?: string; message?: string }> };
+    const firstFieldError = Array.isArray(body.errors) ? body.errors.find((item) => item?.message) : undefined;
+    if (body.message && firstFieldError?.message) {
+      return firstFieldError.field
+        ? `${body.message}: ${firstFieldError.field} - ${firstFieldError.message}`
+        : `${body.message}: ${firstFieldError.message}`;
+    }
     if (body.message) return body.message;
     if (body.error) return body.error;
   }
