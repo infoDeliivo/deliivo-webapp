@@ -250,6 +250,98 @@ export function getApiErrorMessage(error: unknown, fallback = 'Request failed') 
   return fallback;
 }
 
+// ---- Presigned uploads (presign -> PUT direct to storage -> confirm) ----
+// Backend contract: docs/uploads-frontend-integration.md.
+export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+export const UPLOAD_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+
+// Client-side pre-check mirroring backend confirm limits. Returns an error
+// message, or null when the file is acceptable.
+export function validateImageFile(file: File): string | null {
+  if (!UPLOAD_MIME.includes(file.type)) return 'Only JPG, PNG, and WEBP images are allowed.';
+  if (file.size > UPLOAD_MAX_BYTES) return 'Images must be 5 MB or smaller.';
+  return null;
+}
+
+const MIME_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+function fileExtension(file: File): string {
+  const fromName = file.name.split('.').pop()?.toLowerCase();
+  if (fromName && ['jpg', 'jpeg', 'png', 'webp'].includes(fromName)) return fromName;
+  return MIME_EXT[file.type] || 'jpg';
+}
+
+export interface PresignData {
+  key: string;
+  uploadUrl: string;
+  method: string;
+  headers: Record<string, string>;
+  expiresIn: number;
+}
+
+type UploadTarget =
+  | 'avatar'
+  | 'vehicle_image'
+  | 'vehicle_document'
+  | 'vehicle_draft_document'
+  | 'vehicle_draft_document_private'
+  | 'chat_image';
+
+interface PresignBody {
+  target: UploadTarget;
+  contentType: string;
+  fileExtension: string;
+  vehicleId?: string;
+  documentType?: string;
+}
+
+interface ConfirmExtra {
+  vehicleId?: string;
+  documentType?: string;
+}
+
+// Runs the full 3-step flow. presign + confirm go through apiFetch (auth +
+// refresh + retry); the middle PUT goes DIRECT to storage with a bare fetch —
+// it must not carry the auth header or hit the proxy (apiFetch also rejects the
+// non-JSON/empty PUT response). Returns the confirm step's `data`.
+async function uploadViaPresign<T>(
+  target: UploadTarget,
+  file: File,
+  extra: ConfirmExtra = {},
+): Promise<T> {
+  const presignBody: PresignBody = {
+    target,
+    contentType: file.type,
+    fileExtension: fileExtension(file),
+    ...extra,
+  };
+  const presign = await apiFetch<{ data: PresignData }>('/api/v1/uploads/presign', {
+    method: 'POST',
+    body: JSON.stringify(presignBody),
+  });
+  const { key, uploadUrl, method, headers } = presign.data;
+
+  let putRes: Response;
+  try {
+    putRes = await fetch(uploadUrl, { method, headers, body: file });
+  } catch (err) {
+    throw new ApiError('Upload failed — could not reach storage.', 0, err instanceof Error ? err.message : err);
+  }
+  if (!putRes.ok) {
+    throw new ApiError(`Upload failed (${putRes.status}).`, putRes.status, await putRes.text().catch(() => ''));
+  }
+
+  const confirm = await apiFetch<{ data: T }>('/api/v1/uploads/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ target, key, ...extra }),
+  });
+  return confirm.data;
+}
+
 // Auth API
 export const authApi = {
   google(idToken: string) {
@@ -351,14 +443,9 @@ export const userApi = {
     });
   },
 
-  uploadAvatar(file: File) {
-    const formData = new FormData();
-    formData.append('image', file);
-    return apiFetch<{ data: { avatarUrl: string } }>('/api/v1/users/me/avatar', {
-      method: 'POST',
-      headers: {},
-      body: formData,
-    });
+  async uploadAvatar(file: File) {
+    const data = await uploadViaPresign<{ avatarUrl: string }>('avatar', file);
+    return { data };
   },
 };
 
@@ -418,25 +505,62 @@ export const vehicleApi = {
     });
   },
 
-  uploadImage(id: string, file: File) {
-    const formData = new FormData();
-    formData.append('image', file);
-    return apiFetch<{ data: { imageUrl: string } }>(`/api/v1/vehicles/${id}/image`, {
-      method: 'POST',
-      headers: {},
-      body: formData,
-    });
+  // Public image for an existing vehicle: presign -> PUT -> confirm persists imageUrl.
+  async uploadImage(id: string, file: File) {
+    const data = await uploadViaPresign<{ imageUrl: string }>('vehicle_image', file, { vehicleId: id });
+    return { data };
   },
 
-  uploadDraftDocument(file: File, documentType: string) {
-    const formData = new FormData();
-    formData.append('image', file);
-    formData.append('documentType', documentType);
-    return apiFetch<{ data: { imageUrl: string; documentType: string } }>('/api/v1/vehicles/draft/upload-document', {
-      method: 'POST',
-      headers: {},
-      body: formData,
-    });
+  // Draft wizard PUBLIC document (VEHICLE_IMAGE only): one-shot upload returns
+  // { url, key }, then attach the confirmed URL + type to the Redis draft via
+  // /draft/upload-document (JSON, imageUrl branch).
+  async uploadDraftDocument(file: File, documentType: string) {
+    const uploaded = await uploadViaPresign<{ url: string; key: string }>('vehicle_draft_document', file);
+    const res = await apiFetch<{ data: { imageUrl: string; documentType: string } }>(
+      '/api/v1/vehicles/draft/upload-document',
+      { method: 'POST', body: JSON.stringify({ imageUrl: uploaded.url, documentType }) },
+    );
+    return res;
+  },
+
+  // Draft wizard PRIVATE KYC document (DRIVING_LICENSE / INSURANCE_DOCUMENT):
+  // confirm returns only { key } (no public URL); attach it to the draft by
+  // imageKey. /draft/upload-document requires exactly one of imageUrl | imageKey.
+  async uploadDraftPrivateDocument(file: File, documentType: string) {
+    const uploaded = await uploadViaPresign<{ key: string }>('vehicle_draft_document_private', file);
+    const res = await apiFetch<{ data: { documentType: string } }>(
+      '/api/v1/vehicles/draft/upload-document',
+      { method: 'POST', body: JSON.stringify({ imageKey: uploaded.key, documentType }) },
+    );
+    return res;
+  },
+
+  // Private document for an existing vehicle: confirm persists a VehicleDocument
+  // row and returns { documentId, documentType } (201). No public URL.
+  async uploadDocument(id: string, file: File, documentType: string) {
+    const data = await uploadViaPresign<{ documentId: string; documentType: string }>(
+      'vehicle_document',
+      file,
+      { vehicleId: id, documentType },
+    );
+    return { data };
+  },
+
+  // Short-lived signed GET URL for a private document (expires in ~300 s — fetch
+  // on demand, never cache). Authorized by the owner id embedded in the key, so
+  // the backend takes `key` alone (readSchema is .strict() — extra params 400).
+  getDocumentReadUrl(key: string) {
+    const q = new URLSearchParams({ key });
+    return apiFetch<{ data: { url: string; expiresIn: number } }>(`/api/v1/uploads/read?${q.toString()}`);
+  },
+
+  // Delete a persisted upload. avatar/vehicle_image need no key; vehicle_document
+  // needs vehicleId + key.
+  deleteUpload(target: 'avatar' | 'vehicle_image' | 'vehicle_document', opts: { vehicleId?: string; key?: string } = {}) {
+    const q = new URLSearchParams({ target });
+    if (opts.vehicleId) q.set('vehicleId', opts.vehicleId);
+    if (opts.key) q.set('key', opts.key);
+    return apiFetch(`/api/v1/uploads?${q.toString()}`, { method: 'DELETE' });
   },
 
   delete(id: string) {
@@ -895,6 +1019,21 @@ export const chatApi = {
       method: 'POST', body: JSON.stringify({ receiverId, text, clientMsgId, type: 'TEXT' }),
     });
   },
+  // Upload an image via the presigned flow (target=chat_image), then send it as
+  // an IMAGE message with the confirmed public URL.
+  async uploadAndSendImage(receiverId: string, file: File, clientMsgId: string) {
+    const uploaded = await uploadViaPresign<{ url: string; key: string }>('chat_image', file);
+    return apiFetch<{ data: ChatMessage }>('/api/v1/chat/send-image', {
+      method: 'POST',
+      body: JSON.stringify({
+        receiverId,
+        clientMsgId,
+        imageUrl: uploaded.url,
+        mimeType: file.type,
+        fileSize: file.size,
+      }),
+    });
+  },
   getUnreadCount() {
     return apiFetch<{ data: { count: number } }>('/api/v1/chat/unread-count');
   },
@@ -1002,6 +1141,9 @@ export interface ChatMessage {
   text: string | null;
   clientMsgId: string | null;
   createdAt: string;
+  // Present on non-TEXT messages. For type === 'IMAGE' it carries the confirmed
+  // public image URL (backend ImagePayload).
+  payloadJson?: { imageUrl?: string } | null;
 }
 
 // Payments / Stripe Connect API
@@ -2194,6 +2336,17 @@ export interface OnboardingData {
   dob?: string;
 }
 
+// A persisted vehicle document row. Private KYC docs (DRIVING_LICENSE,
+// INSURANCE_DOCUMENT) have `image: null` and are viewed via `previewKey` ->
+// getDocumentReadUrl. Public docs (VEHICLE_IMAGE) carry a plain `image` URL.
+export interface VehicleDocument {
+  id: string;
+  documentType: string;
+  previewKey: string | null;
+  image: string | null;
+  createdAt?: string;
+}
+
 export interface Vehicle {
   id: string;
   brand: string | null;
@@ -2206,6 +2359,7 @@ export interface Vehicle {
   isVerified: boolean;
   licenseCountry?: string;
   licenseNumber?: string;
+  documents?: VehicleDocument[];
 }
 
 export interface VehicleDraft {
