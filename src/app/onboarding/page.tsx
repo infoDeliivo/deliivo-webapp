@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { userApi } from '@/lib/api';
 import BrandLogo from '@/components/BrandLogo';
-import ProtectedRoute from '@/components/ProtectedRoute';
 import { useTranslation } from '@/lib/i18n-context';
 import { getSafeReturnTo } from '@/lib/auth-redirect';
+import { isOnboardingComplete } from '@/lib/onboarding';
 
 const MINIMUM_BOOKING_AGE_YEARS = 8;
 const PERSON_NAME_PATTERN = /^(?=.*\p{L})[\p{L}\p{M} .'-]+$/u;
@@ -20,10 +20,30 @@ function getLatestAllowedDob() {
 }
 
 export default function OnboardingPage() {
+  const router = useRouter();
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (loading) return;
+    if (!user) {
+      router.replace('/auth/signin?returnTo=/onboarding');
+      return;
+    }
+    if (isOnboardingComplete(user)) {
+      router.replace(getSafeReturnTo() || '/');
+    }
+  }, [loading, router, user]);
+
+  if (loading || !user || isOnboardingComplete(user)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-deliivo-cream">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-500" />
+      </div>
+    );
+  }
+
   return (
-    <ProtectedRoute>
-      <OnboardingForm />
-    </ProtectedRoute>
+    <OnboardingForm />
   );
 }
 

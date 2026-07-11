@@ -24,27 +24,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const lastFetchedAtRef = useRef(0);
   const fetchInFlightRef = useRef<Promise<void> | null>(null);
+  const fetchRequestIdRef = useRef(0);
 
-  const fetchUser = useCallback((throwOnError = false) => {
-    if (fetchInFlightRef.current) return fetchInFlightRef.current;
+  const fetchUser = useCallback((throwOnError = false, force = false) => {
+    if (fetchInFlightRef.current && !force) return fetchInFlightRef.current;
+    const requestId = ++fetchRequestIdRef.current;
 
     const request = (async () => {
       const tokens = getTokens();
       if (!tokens) {
-        setUser(null);
-        setLoading(false);
+        if (requestId === fetchRequestIdRef.current) {
+          setUser(null);
+          setLoading(false);
+        }
         return;
       }
       try {
         const res = await userApi.getMe();
-        setUser(res.data);
+        if (requestId === fetchRequestIdRef.current) {
+          setUser(res.data);
+        }
       } catch (error) {
-        clearTokens();
-        setUser(null);
+        if (requestId === fetchRequestIdRef.current) {
+          clearTokens();
+          setUser(null);
+        }
         if (throwOnError) throw error;
       } finally {
-        lastFetchedAtRef.current = Date.now();
-        setLoading(false);
+        if (requestId === fetchRequestIdRef.current) {
+          lastFetchedAtRef.current = Date.now();
+          setLoading(false);
+        }
       }
     })();
 
@@ -78,8 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUser]);
 
   const login = async (accessToken: string, refreshToken: string) => {
+    setLoading(true);
     setTokens({ accessToken, refreshToken });
-    await fetchUser(true);
+    await fetchUser(true, true);
   };
 
   const logout = () => {
