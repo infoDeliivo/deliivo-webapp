@@ -29,9 +29,15 @@ const quickStarts = [
 export default function FaqPage() {
   const { t, locale } = useTranslation();
   const localePrefix = localeToUrlCode(locale);
+  const homeUrl = `${publicConfig.siteUrl}/${localePrefix}`;
+  const faqUrl = `${publicConfig.siteUrl}/${localePrefix}/faq`;
   const faqSchema = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
+    '@id': `${faqUrl}#faq`,
+    url: faqUrl,
+    name: t('faq.title'),
+    inLanguage: locale,
     mainEntity: faqs.map((item) => ({
       '@type': 'Question',
       name: t(item.q),
@@ -44,9 +50,10 @@ export default function FaqPage() {
   const breadcrumbSchema = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
+    '@id': `${faqUrl}#breadcrumb`,
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: t('common.home'), item: `${publicConfig.siteUrl}/${localePrefix}` },
-      { '@type': 'ListItem', position: 2, name: t('faq.title'), item: `${publicConfig.siteUrl}/${localePrefix}/faq` },
+      { '@type': 'ListItem', position: 1, name: t('common.home'), item: homeUrl },
+      { '@type': 'ListItem', position: 2, name: t('faq.title'), item: faqUrl },
     ],
   };
 

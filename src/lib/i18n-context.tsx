@@ -33,7 +33,7 @@ function interpolate(value: string, params?: TranslationParams) {
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [locale, setLocaleState] = useState<SupportedLocale>(DEFAULT_LOCALE);
+  const [locale, setLocaleState] = useState<SupportedLocale>(() => getLocaleFromPathname(pathname) || DEFAULT_LOCALE);
 
   useEffect(() => {
     const resolved = getBrowserLocale();

@@ -302,12 +302,19 @@ function RideDetailContent() {
     { value: 'BEFORE_DEPARTURE', label: t('rideDetail.expiryBeforeDeparture') },
   ] as const;
   const allowManualOverride = process.env.NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE === 'true';
+  const childSeatControlsEnabled = Boolean(ride?.childSeatAvailable);
 
   useEffect(() => {
     if (!ride) return;
     setSelectedPickupValue(myBooking?.pickupWaypointId || ride.bookingContext?.pickupWaypointId || 'origin');
     setSelectedDropoffValue(myBooking?.dropoffWaypointId || ride.bookingContext?.dropoffWaypointId || 'destination');
   }, [ride?.id, ride?.bookingContext?.pickupWaypointId, ride?.bookingContext?.dropoffWaypointId, myBooking?.id, myBooking?.pickupWaypointId, myBooking?.dropoffWaypointId]);
+
+  useEffect(() => {
+    if (childSeatControlsEnabled) return;
+    setTravelingWithChildUnderTwo(false);
+    setBringingOwnChildSeat(false);
+  }, [childSeatControlsEnabled]);
 
   useEffect(() => {
     if (!id) return;
@@ -766,8 +773,8 @@ function RideDetailContent() {
       const res = await bookingsApi.pricePreview({
         rideId: ride.id,
         seatsBooked: seats,
-        travelingWithChildUnderTwo,
-        bringingOwnChildSeat,
+        travelingWithChildUnderTwo: childSeatControlsEnabled ? travelingWithChildUnderTwo : false,
+        bringingOwnChildSeat: childSeatControlsEnabled ? bringingOwnChildSeat : false,
         pickupWaypointId,
         dropoffWaypointId,
       });
@@ -781,7 +788,7 @@ function RideDetailContent() {
 
   useEffect(() => {
     if (ride) loadPricePreview();
-  }, [ride, seats, travelingWithChildUnderTwo, bringingOwnChildSeat, selectedPickupValue, selectedDropoffValue]);
+  }, [ride, seats, travelingWithChildUnderTwo, bringingOwnChildSeat, selectedPickupValue, selectedDropoffValue, childSeatControlsEnabled]);
 
   async function confirmStripeBookingPayment(targetBooking: Booking) {
     if (!targetBooking.payment?.clientSecret) return targetBooking;
@@ -839,7 +846,7 @@ function RideDetailContent() {
     setBookError('');
     setPaymentMessage('');
     try {
-      if (travelingWithChildUnderTwo && !bringingOwnChildSeat) {
+      if (childSeatControlsEnabled && travelingWithChildUnderTwo && !bringingOwnChildSeat) {
         throw new Error('Please confirm that you will bring your own child seat.');
       }
       if (needsTosAcceptance) {
@@ -849,8 +856,8 @@ function RideDetailContent() {
       const res = await bookingsApi.create({
         rideId: ride.id,
         seatsBooked: seats,
-        travelingWithChildUnderTwo,
-        bringingOwnChildSeat,
+        travelingWithChildUnderTwo: childSeatControlsEnabled ? travelingWithChildUnderTwo : false,
+        bringingOwnChildSeat: childSeatControlsEnabled ? bringingOwnChildSeat : false,
         pickupWaypointId: selectedPickupValue !== 'origin' ? selectedPickupValue : undefined,
         dropoffWaypointId: selectedDropoffValue !== 'destination' ? selectedDropoffValue : undefined,
         responseExpiryOption,
@@ -1158,7 +1165,7 @@ function RideDetailContent() {
               <p className="text-sm text-deliivo-dark">{ride.notes}</p>
             </div>
           )}
-        {(ride.femaleOnly || ride.noSmoking || ride.alcoholFreeRide || ride.noBicycles) && (
+        {(ride.femaleOnly || ride.noSmoking || ride.alcoholFreeRide || ride.noBicycles || ride.childSeatAvailable) && (
           <div className="flex flex-wrap gap-2">
             {ride.femaleOnly && (
               <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-600">
@@ -1180,12 +1187,19 @@ function RideDetailContent() {
                 <CheckCircle className="h-3 w-3" /> {t('ride.noBicycles')}
               </span>
             )}
+            {ride.childSeatAvailable && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                <CheckCircle className="h-3 w-3" /> {t('ride.childSeat')}
+              </span>
+            )}
           </div>
         )}
-        <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-          <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.childSeatPolicyTitle')}</p>
-          <p className="mt-1 text-xs text-deliivo-gray">{t('rideDetail.childSeatPolicyCopy')}</p>
-        </div>
+        {ride.childSeatAvailable && (
+          <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+            <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.childSeatPolicyTitle')}</p>
+            <p className="mt-1 text-xs text-deliivo-gray">{t('rideDetail.childSeatPolicyCopy')}</p>
+          </div>
+        )}
       </div>
 
         {/* Booking section */}
@@ -1351,37 +1365,41 @@ function RideDetailContent() {
               </select>
             </div>
 
-            <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-              <input
-                type="checkbox"
-                checked={travelingWithChildUnderTwo}
-                onChange={(event) => {
-                  const checked = event.target.checked;
-                  setTravelingWithChildUnderTwo(checked);
-                  if (!checked) setBringingOwnChildSeat(false);
-                }}
-                className="mt-1 h-4 w-4 rounded border-gray-300 text-deliivo-orange focus:ring-deliivo-orange"
-              />
-              <span className="text-sm text-deliivo-dark">
-                Travelling with a child aged 2 or younger.
-                <span className="mt-1 block text-xs text-deliivo-gray">
-                  Riders must bring their own child seat. Drivers are not assumed to provide one.
-                </span>
-              </span>
-            </label>
+            {ride.childSeatAvailable && (
+              <>
+                <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={travelingWithChildUnderTwo}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setTravelingWithChildUnderTwo(checked);
+                      if (!checked) setBringingOwnChildSeat(false);
+                    }}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-deliivo-orange focus:ring-deliivo-orange"
+                  />
+                  <span className="text-sm text-deliivo-dark">
+                    Travelling with a child aged 2 or younger.
+                    <span className="mt-1 block text-xs text-deliivo-gray">
+                      Riders must bring their own child seat. Drivers are not assumed to provide one.
+                    </span>
+                  </span>
+                </label>
 
-            {travelingWithChildUnderTwo && (
-              <label className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
-                <input
-                  type="checkbox"
-                  checked={bringingOwnChildSeat}
-                  onChange={(event) => setBringingOwnChildSeat(event.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-orange-300 text-deliivo-orange focus:ring-deliivo-orange"
-                />
-                <span className="text-sm text-deliivo-dark">
-                  I confirm that I will bring the child seat for this trip.
-                </span>
-              </label>
+                {travelingWithChildUnderTwo && (
+                  <label className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={bringingOwnChildSeat}
+                      onChange={(event) => setBringingOwnChildSeat(event.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-orange-300 text-deliivo-orange focus:ring-deliivo-orange"
+                    />
+                    <span className="text-sm text-deliivo-dark">
+                      I confirm that I will bring the child seat for this trip.
+                    </span>
+                  </label>
+                )}
+              </>
             )}
 
             {isStripeConfigured() ? (
@@ -1508,7 +1526,7 @@ function RideDetailContent() {
             <button
               type="button"
               onClick={handleBook}
-              disabled={booking || paymentMethodsLoading || (isStripeConfigured() && (!selectedPaymentMethodId || showAddPaymentMethod)) || (needsTosAcceptance && !tosAcceptedForBooking) || (travelingWithChildUnderTwo && !bringingOwnChildSeat)}
+              disabled={booking || paymentMethodsLoading || (isStripeConfigured() && (!selectedPaymentMethodId || showAddPaymentMethod)) || (needsTosAcceptance && !tosAcceptedForBooking) || (childSeatControlsEnabled && travelingWithChildUnderTwo && !bringingOwnChildSeat)}
               className="btn-primary w-full py-3.5 text-base gap-2 disabled:opacity-60"
             >
               {booking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-5 w-5" />}

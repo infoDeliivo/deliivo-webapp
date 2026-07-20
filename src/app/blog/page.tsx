@@ -54,12 +54,21 @@ export default function BlogPage() {
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
     contentApi.listPublished(locale).then((res) => {
+      if (!active) return;
       setPosts(res.data || []);
     }).catch(() => {
+      if (!active) return;
       setPosts([]);
-    }).finally(() => setLoading(false));
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
   }, [locale]);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(posts.map((post) => post.category)))] as const, [posts]);
@@ -92,13 +101,16 @@ export default function BlogPage() {
   }
   const localePrefix = localeToUrlCode(locale);
   const blogBasePath = `/${localePrefix}/blog`;
+  const homeUrl = `${publicConfig.siteUrl}/${localePrefix}`;
+  const blogUrl = `${publicConfig.siteUrl}${blogBasePath}`;
   const contactPath = `/${localePrefix}/contact?subject=blog-topic`;
   const breadcrumbSchema = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
+    '@id': `${blogUrl}#breadcrumb`,
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: t('common.home'), item: `${publicConfig.siteUrl}/${localePrefix}` },
-      { '@type': 'ListItem', position: 2, name: t('nav.guides'), item: `${publicConfig.siteUrl}/${localePrefix}/blog` },
+      { '@type': 'ListItem', position: 1, name: t('common.home'), item: homeUrl },
+      { '@type': 'ListItem', position: 2, name: t('nav.guides'), item: blogUrl },
     ],
   };
 
@@ -226,9 +238,6 @@ export default function BlogPage() {
                         {tag}
                       </span>
                     ))}
-                  </div>
-                  <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-deliivo-gray line-clamp-4">
-                    {post.body}
                   </div>
                   <div className="mt-5 flex items-center justify-between text-xs text-gray-500">
                     <span>{new Date(post.publishedAt || post.updatedAt).toLocaleDateString()}</span>

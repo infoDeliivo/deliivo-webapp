@@ -249,12 +249,14 @@ function PlaceInput({
   placeholder,
   icon,
   bias,
+  scope = 'baltic',
 }: {
   value: PlaceSelection | null;
   onChange: (place: PlaceSelection) => void;
   placeholder: string;
   icon: React.ReactNode;
   bias?: { lat: number; lng: number; radiusKm: number };
+  scope?: 'baltic' | 'europe';
 }) {
   const [query, setQuery] = useState(value?.address || '');
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
@@ -275,7 +277,7 @@ function PlaceInput({
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await mapsApi.autocomplete(input, bias?.lat, bias?.lng, bias?.radiusKm);
+        const res = await mapsApi.autocomplete(input, bias?.lat, bias?.lng, bias?.radiusKm, undefined, scope);
         setPredictions(res.data || []);
         setOpen(true);
       } catch {
@@ -284,7 +286,7 @@ function PlaceInput({
         setLoading(false);
       }
     }, 300);
-  }, [bias?.lat, bias?.lng, bias?.radiusKm]);
+  }, [bias?.lat, bias?.lng, bias?.radiusKm, scope]);
 
   async function selectPlace(prediction: PlacePrediction) {
     setOpen(false);
@@ -398,6 +400,7 @@ function StepRoute({
           onChange={(place) => onChange({ destination: place })}
           placeholder={t('publish.goingTo')}
           icon={<MapPin className="h-4 w-4 text-deliivo-orange-dark" />}
+          scope="europe"
         />
       </div>
 
@@ -927,6 +930,7 @@ function StepStopovers({
                 placeholder={t('publish.searchStopoverPoint')}
                 icon={<MapPin className="h-4 w-4 text-deliivo-orange" />}
                 bias={selectedStopoverSuggestion ? { lat: selectedStopoverSuggestion.lat, lng: selectedStopoverSuggestion.lng, radiusKm: STOPOVER_POINT_RADIUS_KM } : undefined}
+                scope="europe"
               />
               <button
                 type="button"
@@ -964,6 +968,7 @@ function StepStopovers({
                 placeholder={t('publish.searchDropoffPoint')}
                 icon={<MapPin className="h-4 w-4 text-deliivo-orange" />}
                 bias={state.destination ? { lat: state.destination.lat, lng: state.destination.lng, radiusKm: CITY_POINT_RADIUS_KM } : undefined}
+                scope="europe"
               />
               <button
                 type="button"

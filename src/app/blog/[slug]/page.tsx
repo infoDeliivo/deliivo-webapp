@@ -83,6 +83,7 @@ export default function BlogDetailPage() {
 
   useEffect(() => {
     if (!slug) return;
+    let active = true;
     setLoading(true);
     setError('');
     Promise.all([
@@ -90,11 +91,20 @@ export default function BlogDetailPage() {
       contentApi.listPublished(locale),
     ])
       .then(([postRes, listRes]) => {
+        if (!active) return;
         setPost(postRes.data);
         setPosts(listRes.data || []);
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load article'))
-      .finally(() => setLoading(false));
+      .catch((err: unknown) => {
+        if (active) setError(err instanceof Error ? err.message : 'Failed to load article');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [slug, locale]);
 
   const relatedPosts = useMemo(
@@ -134,10 +144,13 @@ export default function BlogDetailPage() {
   const authorLabel = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(rawAuthor) ? t('blog.editorial') : (rawAuthor || t('blog.editorial'));
   const localePrefix = localeToUrlCode(locale);
   const blogBasePath = `/${localePrefix}/blog`;
+  const homeUrl = `${publicConfig.siteUrl}/${localePrefix}`;
+  const blogUrl = `${publicConfig.siteUrl}${blogBasePath}`;
   const articleUrl = `${publicConfig.siteUrl}/${localePrefix}/blog/${post.slug}`;
   const articleSchema = {
     '@context': 'https://schema.org',
     '@type': 'Article',
+    '@id': `${articleUrl}#article`,
     headline: post.title,
     description: post.excerpt,
     articleSection: getCategoryLabel(t, post.category),
@@ -150,22 +163,27 @@ export default function BlogDetailPage() {
     },
     publisher: {
       '@type': 'Organization',
+      '@id': `${publicConfig.siteUrl}/#organization`,
       name: 'Deliivo',
       logo: {
         '@type': 'ImageObject',
         url: `${publicConfig.siteUrl}/logo.png`,
       },
     },
-    mainEntityOfPage: articleUrl,
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': articleUrl,
+    },
     url: articleUrl,
     image: post.coverImageUrl || `${publicConfig.siteUrl}/baltic-hero-v2.png`,
   };
   const breadcrumbSchema = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
+    '@id': `${articleUrl}#breadcrumb`,
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: t('common.home'), item: `${publicConfig.siteUrl}/${localePrefix}` },
-      { '@type': 'ListItem', position: 2, name: t('nav.guides'), item: `${publicConfig.siteUrl}/${localePrefix}/blog` },
+      { '@type': 'ListItem', position: 1, name: t('common.home'), item: homeUrl },
+      { '@type': 'ListItem', position: 2, name: t('nav.guides'), item: blogUrl },
       { '@type': 'ListItem', position: 3, name: post.title, item: articleUrl },
     ],
   };

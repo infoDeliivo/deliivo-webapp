@@ -71,6 +71,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
           originBias?.lng,
           originBias ? 50 : undefined,
           false,
+          kind === 'to' ? 'europe' : 'baltic',
         );
         setPredictions(res.data || []);
         setOpen((res.data || []).length > 0);

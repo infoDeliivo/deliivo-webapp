@@ -597,8 +597,9 @@ export const travelPreferencesApi = {
 
 // Maps API
 export const mapsApi = {
-  autocomplete(input: string, lat?: number, lng?: number, radiusKm?: number, strictBounds?: boolean) {
+  autocomplete(input: string, lat?: number, lng?: number, radiusKm?: number, strictBounds?: boolean, scope: 'baltic' | 'europe' = 'baltic') {
     const params = new URLSearchParams({ input });
+    params.set('scope', scope);
     if (lat !== undefined && lng !== undefined) {
       params.set('lat', String(lat));
       params.set('lng', String(lng));

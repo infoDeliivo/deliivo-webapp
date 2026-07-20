@@ -50,6 +50,7 @@ function PlaceInput({
   label,
   icon,
   bias,
+  scope = 'baltic',
 }: {
   value: PlaceSelection | null;
   onChange: (place: PlaceSelection | null) => void;
@@ -57,6 +58,7 @@ function PlaceInput({
   label: string;
   icon: React.ReactNode;
   bias?: { lat: number; lng: number };
+  scope?: 'baltic' | 'europe';
 }) {
   const [query, setQuery] = useState(value?.address || '');
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
@@ -74,7 +76,7 @@ function PlaceInput({
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await mapsApi.autocomplete(input, bias?.lat, bias?.lng, bias ? 50 : undefined, false);
+        const res = await mapsApi.autocomplete(input, bias?.lat, bias?.lng, bias ? 50 : undefined, false, scope);
         setPredictions(res.data || []);
         setOpen(true);
       } catch { setPredictions([]); }
@@ -182,16 +184,19 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
               <span className="ml-1 rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-600">{t('ride.womenOnly')}</span>
             )}
           </div>
-          {(ride.noSmoking || ride.alcoholFreeRide || ride.noBicycles) && (
+          {(ride.noSmoking || ride.alcoholFreeRide || ride.noBicycles || ride.childSeatAvailable) && (
             <div className="flex flex-wrap gap-1.5">
               {ride.noSmoking && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-deliivo-orange">{t('ride.noSmoking')}</span>}
               {ride.alcoholFreeRide && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-deliivo-orange">{t('ride.alcoholFreeRide')}</span>}
               {ride.noBicycles && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-deliivo-orange">{t('ride.noBicycles')}</span>}
+              {ride.childSeatAvailable && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">{t('ride.childSeat')}</span>}
             </div>
           )}
-          <p className="text-xs text-deliivo-gray">
-            {t('ride.childSeatPolicy')}
-          </p>
+          {ride.childSeatAvailable && (
+            <p className="text-xs text-deliivo-gray">
+              {t('ride.childSeatPolicy')}
+            </p>
+          )}
 
           {/* Route */}
           <div className="flex items-stretch gap-3">
@@ -297,10 +302,10 @@ function SearchPageContent() {
     if (female === '1' || female === 'true') setFemaleOnly(true);
     if (!from && !to) return;
 
-    async function resolvePlace(input: string | null): Promise<PlaceSelection | null> {
+    async function resolvePlace(input: string | null, scope: 'baltic' | 'europe'): Promise<PlaceSelection | null> {
       if (!input) return null;
       try {
-        const predictions = await mapsApi.autocomplete(input);
+        const predictions = await mapsApi.autocomplete(input, undefined, undefined, undefined, undefined, scope);
         const first = predictions.data?.[0];
         if (!first) {
           return { placeId: '', address: input, lat: 0, lng: 0 };
@@ -317,7 +322,7 @@ function SearchPageContent() {
       }
     }
 
-    Promise.all([resolvePlace(from), resolvePlace(to)]).then(async ([resolvedFrom, resolvedTo]) => {
+    Promise.all([resolvePlace(from, 'baltic'), resolvePlace(to, 'europe')]).then(async ([resolvedFrom, resolvedTo]) => {
       if (resolvedFrom) setOrigin(resolvedFrom);
       if (resolvedTo) setDestination(resolvedTo);
       if (resolvedFrom?.lat && resolvedTo?.lat) {
@@ -446,6 +451,7 @@ function SearchPageContent() {
                 label={t('search.toLabel')}
                 icon={<MapPin size={18} className="text-deliivo-gray" />}
                 bias={origin && origin.lat !== 0 && origin.lng !== 0 ? { lat: origin.lat, lng: origin.lng } : undefined}
+                scope="europe"
               />
               <div className="relative flex-1">
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('search.dateLabel')}</label>
