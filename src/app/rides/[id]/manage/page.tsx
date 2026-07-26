@@ -791,7 +791,7 @@ const [error, setError] = useState('');
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-deliivo-dark">
-                          {booking.passenger?.name || t('manageRide.passenger')} <span className="text-xs font-normal text-deliivo-gray">#{booking.id.slice(0, 8)}</span>
+                          {booking.passenger?.firstName || t('manageRide.passenger')} <span className="text-xs font-normal text-deliivo-gray">#{booking.id.slice(0, 8)}</span>
                         </p>
                         <p className="text-xs text-deliivo-gray">
                           {t('manageRide.status')}: {booking.status}
@@ -1090,7 +1090,7 @@ function BookingRequestCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-deliivo-dark">
-            {booking.passenger?.name || t('manageRide.passengerRequest')}
+            {booking.passenger?.firstName || t('manageRide.passengerRequest')}
           </p>
           <p className="text-xs text-deliivo-gray">
             {t('manageRide.seatsRequested', { count: booking.seatsBooked, plural: booking.seatsBooked > 1 ? 's' : '' })}
@@ -1182,7 +1182,7 @@ function PassengerCard({
     <div className="flex min-w-0 flex-col items-start gap-3 rounded-xl border border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-deliivo-dark">
-          {booking.passenger?.name || t('manageRide.passenger')}
+          {booking.passenger?.firstName || t('manageRide.passenger')}
         </p>
         <p className="text-xs text-deliivo-gray">
           {t('ride.seatsCount', { count: booking.seatsBooked, plural: booking.seatsBooked > 1 ? 's' : '' })} &middot; {statusLabel[booking.status] || booking.status}

@@ -133,7 +133,7 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
         day: 'numeric',
       })
     : '';
-  const driverName = ride?.driver?.name || 'Driver';
+  const driverName = ride?.driver?.firstName || 'Driver';
   const initials = driverName
     .split(' ')
     .map((n) => n[0])

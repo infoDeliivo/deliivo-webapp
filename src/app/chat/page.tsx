@@ -80,12 +80,12 @@ function ChatListContent() {
                   <div className="bg-white rounded-xl p-4 flex items-center gap-3 hover:shadow-sm transition-shadow">
                     <div className="h-11 w-11 shrink-0 rounded-full bg-primary-100 flex items-center justify-center">
                       <span className="text-sm font-semibold text-primary-600">
-                        {(conv.peer.name || '?').slice(0, 2).toUpperCase()}
+                        {(conv.peer.firstName || '?').slice(0, 2).toUpperCase()}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-deliivo-dark truncate">{conv.peer.name || 'User'}</p>
+                        <p className="text-sm font-semibold text-deliivo-dark truncate">{conv.peer.firstName || 'User'}</p>
                         <span className="text-xs text-deliivo-gray shrink-0">{time}</span>
                       </div>
                       <p className="text-xs text-deliivo-gray truncate mt-0.5">

@@ -13,6 +13,7 @@ import {
   Newspaper,
   Siren,
   Activity,
+  BadgeCheck,
 } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
 
@@ -20,6 +21,7 @@ const navItems = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Users', href: '/admin/users', icon: Users },
   { label: 'Rides', href: '/admin/rides', icon: Car },
+  { label: 'Vehicles', href: '/admin/vehicles', icon: BadgeCheck },
   { label: 'SOS', href: '/admin/sos', icon: Siren },
   { label: 'Disputes', href: '/admin/reports', icon: Flag },
   { label: 'Payouts', href: '/admin/payouts', icon: Banknote },

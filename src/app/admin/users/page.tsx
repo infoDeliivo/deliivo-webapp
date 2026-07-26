@@ -147,7 +147,7 @@ export default function AdminUsersPage() {
                 </thead>
                 <tbody>
                   {users.map((u) => {
-                    const initials = (u.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+                    const initials = (u.firstName || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
                     return (
                       <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                         <td className="px-6 py-3">
@@ -156,7 +156,7 @@ export default function AdminUsersPage() {
                               {initials}
                             </div>
                             <div>
-                              <p className="font-medium text-gray-900">{u.name || 'Unnamed'}</p>
+                              <p className="font-medium text-gray-900">{u.firstName || 'Unnamed'}</p>
                               <p className="text-xs text-gray-400">{u.email || '-'}</p>
                             </div>
                           </div>

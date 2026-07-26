@@ -78,7 +78,7 @@ export default function Navbar() {
                     <User size={14} />
                   )}
                 </span>
-                <span className="max-w-[120px] truncate">{user.name || user.email || 'User'}</span>
+                <span className="max-w-[120px] truncate">{user.firstName || user.email || 'User'}</span>
                 <ChevronDown size={14} className={`transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
               </button>
 

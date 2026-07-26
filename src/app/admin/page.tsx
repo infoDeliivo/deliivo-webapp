@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Users, Car, Euro, CalendarCheck, TrendingUp, Loader2, Database, BellRing, CreditCard, Activity, ShieldCheck, FileWarning, BookOpen, ArrowRight } from 'lucide-react'
+import { Users, Car, Euro, CalendarCheck, TrendingUp, Loader2, Database, BellRing, CreditCard, Activity, ShieldCheck, FileWarning, BookOpen, ArrowRight, BadgeCheck } from 'lucide-react'
 import { adminApi, AdminStats, AdminOperationsSummary } from '@/lib/api'
 import LoadFailureCard from '@/components/LoadFailureCard'
 
@@ -75,14 +75,22 @@ export default function AdminDashboardPage() {
 
       {ops && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
             <OpsCard label="Backend health" value={ops.checks.database && ops.checks.redis ? 'Healthy' : 'Degraded'} icon={Database} tone={ops.checks.database && ops.checks.redis ? 'green' : 'red'} copy={`DB ${ops.checks.database ? 'ok' : 'down'} | Redis ${ops.checks.redis ? 'ok' : 'down'}`} />
             <OpsCard label="Notification readiness" value={ops.configuration.firebaseConfigured ? 'Ready' : 'Missing'} icon={BellRing} tone={ops.configuration.firebaseConfigured ? 'green' : 'amber'} copy="Firebase admin configuration" />
             <OpsCard label="Stripe readiness" value={ops.configuration.stripeSecretConfigured && ops.configuration.stripeWebhookConfigured ? 'Ready' : 'Partial'} icon={CreditCard} tone={ops.configuration.stripeSecretConfigured && ops.configuration.stripeWebhookConfigured ? 'green' : 'amber'} copy={`Webhook events 24h: ${ops.operations.webhookEvents24h}`} />
             <OpsCard label="Open reconciliation" value={String(ops.operations.openReconciliationIssues)} icon={Activity} tone={ops.operations.openReconciliationIssues === 0 ? 'green' : 'amber'} copy={`${ops.operations.pendingPaymentRecords} pending payment records`} />
+            <OpsCard label="Vehicles pending review" value={String(ops.operations.pendingVehicles)} icon={BadgeCheck} tone={ops.operations.pendingVehicles === 0 ? 'green' : 'amber'} copy="Drivers blocked from publishing until approved" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+            <QuickLinkCard
+              title="Vehicle verification"
+              copy="Review driver vehicles and their registry documents, then approve or send them back with a reason."
+              href="/admin/vehicles"
+              icon={BadgeCheck}
+              meta={`${ops.operations.pendingVehicles} pending`}
+            />
             <QuickLinkCard
               title="Ride operations"
               copy="Inspect ride lifecycle, support overrides, refunds, and rider or driver state mismatches."

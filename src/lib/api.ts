@@ -636,8 +636,46 @@ export const mapsApi = {
   },
 };
 
+// Everything a driver must satisfy before a ride can go live. The backend owns this
+// list (driver-eligibility.service.ts) and evaluates it again at publish time, so the
+// app renders whatever comes back rather than re-deriving the rules.
+export type PublishRequirementKey =
+  | 'TOS'
+  | 'DL_VERIFICATION'
+  | 'IDENTITY_MATCH'
+  | 'BANK_ACCOUNT'
+  | 'VEHICLE'
+  | 'VEHICLE_VERIFICATION';
+
+export interface PublishRequirement {
+  key: PublishRequirementKey;
+  satisfied: boolean;
+  /** True when a backend environment flag disabled this gate. */
+  skipped: boolean;
+  /** Error code when unsatisfied, null otherwise. */
+  reason: string | null;
+  /** Backend endpoint that resolves it — an API path, not an app route. */
+  actionUrl: string | null;
+  /**
+   * Set only on an unsatisfied VEHICLE_VERIFICATION. A reason code cannot carry the
+   * admin's free-text note, so it travels alongside.
+   */
+  vehicle?: { verificationStatus: VehicleVerificationStatus; rejectionReason: string | null };
+}
+
+export interface PublishEligibility {
+  eligible: boolean;
+  requirements: PublishRequirement[];
+}
+
 // Publish Ride API (Draft wizard flow)
 export const publishRideApi = {
+  // Step 0: What the driver still needs before publishing. Always 200 —
+  // `eligible: false` is a normal body, not an error.
+  eligibility() {
+    return apiFetch<{ data: PublishEligibility }>('/api/v1/publish-ride/eligibility');
+  },
+
   // Step 1: Create draft with origin
   createWithOrigin(data: {
     originPlaceId: string;
@@ -1133,7 +1171,7 @@ export interface DriverBookingResult {
 
 export interface ConversationItem {
   id: string;
-  peer: { id: string; name: string | null; avatarUrl: string | null };
+  peer: { id: string; firstName: string | null; avatarUrl: string | null };
   lastMessage: { id: string; text: string | null; senderId: string; createdAt: string; type: string } | null;
   unreadCount: number;
   updatedAt: string;
@@ -1163,6 +1201,42 @@ export const paymentsApi = {
   },
   transactions() {
     return apiFetch<{ data: RiderTransaction[] }>('/api/v1/payments/transactions');
+  },
+};
+
+export interface DlVerificationSession {
+  verificationId: string;
+  sessionId: string;
+  sessionUrl: string;
+}
+
+export interface DlVerificationStatus {
+  status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'RESUBMISSION_REQUESTED' | 'IDENTITY_MISMATCH' | null;
+  sessionUrl?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Driving licence verification (Veriff). createSession returns a hosted Veriff URL
+// the driver is redirected to; the decision arrives later by webhook, so the app
+// re-reads eligibility on return rather than trusting the redirect.
+export const dlVerificationApi = {
+  createSession(data: {
+    firstName: string;
+    lastName: string;
+    email?: string;
+    dateOfBirth?: string;
+    gender?: 'M' | 'MALE' | 'F' | 'FEMALE';
+    callback?: string;
+  }) {
+    return apiFetch<{ data: DlVerificationSession }>('/api/v1/dl-verification', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  status() {
+    return apiFetch<{ data: DlVerificationStatus }>('/api/v1/dl-verification/status');
   },
 };
 
@@ -1279,8 +1353,27 @@ export const adminApi = {
   unbanUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/unban`, { method: 'POST' });
   },
+  // Vehicle review queue. Oldest-first server-side, so the list arrives in the order
+  // it should be worked.
+  listVehicles(params?: { status?: string; page?: number; limit?: number }) {
+    const query = new URLSearchParams();
+    // 'ALL' is the absence of a filter, not a value the backend understands.
+    if (params?.status && params.status !== 'ALL') query.set('status', params.status);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    return apiFetch<{ data: { vehicles: AdminVehicle[]; pagination: Pagination } }>(`/api/v1/admin/vehicles?${query}`);
+  },
   verifyVehicle(id: string) {
-    return apiFetch<{ data: { id: string; isVerified: boolean } }>(`/api/v1/admin/vehicles/${id}/verify`, { method: 'POST' });
+    return apiFetch<{ data: { id: string; isVerified: boolean; verificationStatus: VehicleVerificationStatus; reviewedAt: string | null } }>(
+      `/api/v1/admin/vehicles/${id}/verify`,
+      { method: 'POST' },
+    );
+  },
+  rejectVehicle(id: string, reason: string) {
+    return apiFetch<{ data: { id: string; verificationStatus: VehicleVerificationStatus; rejectionReason: string } }>(
+      `/api/v1/admin/vehicles/${id}/reject`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    );
   },
   refundBooking(id: string) {
     return apiFetch<{ data: { bookingId: string; refunded: boolean } }>(`/api/v1/admin/bookings/${id}/refund`, { method: 'POST' });
@@ -1440,6 +1533,7 @@ export interface AdminOperationsSummary {
     payoutEligiblePayments: number;
     pendingPaymentRecords: number;
     webhookEvents24h: number;
+    pendingVehicles: number;
   };
   content: {
     total: number;
@@ -1506,7 +1600,7 @@ export interface HealthReadyStatus {
 
 export interface AdminUser {
   id: string;
-  name: string | null;
+  firstName: string | null;
   email: string | null;
   phone: string | null;
   role: string;
@@ -1515,6 +1609,38 @@ export interface AdminUser {
   dlVerified: boolean;
   onboardingStatus: string;
   createdAt: string;
+}
+
+// A vehicle as it appears in the admin review queue. Private KYC documents arrive as
+// `previewKey` with `image: null` and must be exchanged for a signed URL via
+// vehicleApi.getDocumentReadUrl — admins are permitted cross-owner reads, and each one
+// is audit-logged server-side.
+export interface AdminVehicle {
+  id: string;
+  userId: string;
+  licenseCountry: string;
+  licenseNumber: string;
+  brand: string | null;
+  model_num: string | null;
+  model_name: string | null;
+  type: VehicleType | null;
+  color: string | null;
+  year: number | null;
+  imageUrl: string | null;
+  isVerified: boolean;
+  verificationStatus: VehicleVerificationStatus;
+  rejectionReason: string | null;
+  reviewedAt: string | null;
+  reviewedById: string | null;
+  createdAt: string;
+  user: {
+    id: string;
+    firstName: string | null;
+    email: string | null;
+    phone: string | null;
+    dlVerified: boolean;
+  };
+  documents: VehicleDocument[];
 }
 
 export interface AdminDispute {
@@ -1551,7 +1677,7 @@ export interface AdminEmergencyAlert {
   acknowledgedAt?: string | null;
   resolvedAt?: string | null;
   resolvedBy?: string | null;
-  user?: { id: string; name: string | null; email: string | null; phone: string | null; avatarUrl: string | null };
+  user?: { id: string; firstName: string | null; email: string | null; phone: string | null; avatarUrl: string | null };
   ride?: { id: string; originAddress: string; destinationAddress: string; departureDate: string; departureTime: string; status: string } | null;
   booking?: { id: string; passengerId: string; status: string; seatsBooked: number; totalPrice: number } | null;
 }
@@ -1568,7 +1694,7 @@ export interface AdminRide {
   basePricePerSeat: number;
   currency: string;
   createdAt: string;
-  driver?: { id: string; name: string | null; email?: string | null; phone?: string | null };
+  driver?: { id: string; firstName: string | null; email?: string | null; phone?: string | null };
   bookings: Array<{
     id: string;
     status: string;
@@ -1577,7 +1703,7 @@ export interface AdminRide {
     totalPrice: number;
     paymentAmount?: number | null;
     refundedAt?: string | null;
-    passenger?: { id: string; name: string | null; email?: string | null; phone?: string | null };
+    passenger?: { id: string; firstName: string | null; email?: string | null; phone?: string | null };
   }>;
   disputes: Array<{ id: string; status: string; reason: string }>;
 }
@@ -1686,7 +1812,7 @@ export interface RiderTransaction {
       destinationAddress: string;
       departureDate: string;
       departureTime: string;
-      driver?: { id: string; name: string | null };
+      driver?: { id: string; firstName: string | null };
     };
   };
 }
@@ -1714,7 +1840,7 @@ export interface DriverEarningItem {
     completedAt?: string | null;
     refundAmount?: number | null;
     refundedAt?: string | null;
-    passenger?: { id: string; name: string | null };
+    passenger?: { id: string; firstName: string | null };
     disputes?: Array<{ id: string; status: string; reason: string }>;
     ride?: {
       id: string;
@@ -1888,7 +2014,7 @@ export interface AdminPayoutCandidate {
     booking?: {
       id: string;
       status: string;
-      passenger?: { id: string; name: string | null };
+      passenger?: { id: string; firstName: string | null };
       ride?: {
         id: string;
         originAddress: string;
@@ -1923,7 +2049,7 @@ export interface SearchRideResult {
   driverId: string;
   driver: {
     id: string;
-    name: string | null;
+    firstName: string | null;
     avatarUrl: string | null;
     isVerified?: boolean;
     rating?: number;
@@ -2091,7 +2217,7 @@ export interface Booking {
     departureTime: string;
     routeDurationSeconds?: number | null;
     status?: string;
-    driver?: { name: string | null; avatarUrl: string | null };
+    driver?: { firstName: string | null; avatarUrl: string | null };
     vehicle?: { brand: string | null; model_name: string | null; color: string | null } | null;
   };
   fullRide?: Booking['ride'];
@@ -2249,7 +2375,7 @@ export interface DriverRideBooking {
   id: string;
   rideId: string;
   passengerId: string;
-  passenger?: { id: string; name: string | null; avatarUrl: string | null };
+  passenger?: { id: string; firstName: string | null; avatarUrl: string | null };
   seatsBooked: number;
   totalPrice: number;
   status: string;
@@ -2285,8 +2411,8 @@ export interface UserProfile {
   id: string;
   email?: string;
   phone?: string;
-  name?: string;
-  nickName?: string;
+  firstName?: string;
+  lastName?: string;
   salutation?: string | null;
   gender?: 'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER' | 'PREFER_NOT_TO_SAY' | null;
   dob?: string | null;
@@ -2329,15 +2455,15 @@ export interface UserFullProfile {
 }
 
 export interface UserProfileUpdate {
-  name: string;
-  nickName: string;
+  firstName: string;
+  lastName: string;
   salutation: string;
   dob: string;
 }
 
 export interface OnboardingData {
-  name: string;
-  nickName?: string;
+  firstName: string;
+  lastName: string;
   salutation?: string;
   gender?: 'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER' | 'PREFER_NOT_TO_SAY';
   dob?: string;
@@ -2346,6 +2472,8 @@ export interface OnboardingData {
 // A persisted vehicle document row. Private KYC docs (DRIVING_LICENSE,
 // INSURANCE_DOCUMENT) have `image: null` and are viewed via `previewKey` ->
 // getDocumentReadUrl. Public docs (VEHICLE_IMAGE) carry a plain `image` URL.
+export type VehicleVerificationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
 export interface VehicleDocument {
   id: string;
   documentType: string;
@@ -2364,6 +2492,9 @@ export interface Vehicle {
   year: number | null;
   imageUrl: string | null;
   isVerified: boolean;
+  /** Source of truth for review state; `isVerified` is kept in sync (true iff APPROVED). */
+  verificationStatus: VehicleVerificationStatus;
+  rejectionReason: string | null;
   licenseCountry?: string;
   licenseNumber?: string;
   documents?: VehicleDocument[];

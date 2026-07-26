@@ -38,6 +38,7 @@ import {
   vehicleApi,
   authApi,
   paymentsApi,
+  dlVerificationApi,
   PlacePrediction,
   RouteOption,
   PriceRecommendation,
@@ -45,6 +46,9 @@ import {
   StopoverSuggestion,
   Vehicle,
   ConnectStatus,
+  PublishEligibility,
+  PublishRequirement,
+  PublishRequirementKey,
 } from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1660,6 +1664,148 @@ const INITIAL_STATE: WizardState = {
 
 let vehicleDetourState: { step: number; state: WizardState } | null = null;
 
+// ─── Publish eligibility gate ─────────────────────────────────────────────────
+
+// TOS is returned by the eligibility endpoint but is not a prerequisite for
+// drafting a ride — it is the consent given at the final step, so it never
+// blocks the wizard here.
+const BLOCKING_REQUIREMENT_KEYS: PublishRequirementKey[] = [
+  'DL_VERIFICATION',
+  'IDENTITY_MATCH',
+  'BANK_ACCOUNT',
+  'VEHICLE',
+  'VEHICLE_VERIFICATION',
+];
+
+const getBlockingRequirements = (eligibility: PublishEligibility | null): PublishRequirement[] =>
+  (eligibility?.requirements || []).filter(
+    (requirement) => !requirement.satisfied && BLOCKING_REQUIREMENT_KEYS.includes(requirement.key),
+  );
+
+function PublishEligibilityGate({
+  requirements,
+  error,
+  dlLoading,
+  payoutSetupLoading,
+  onStartDlVerification,
+  onStartPayoutSetup,
+  onLeaveForVehicle,
+  onRefresh,
+}: {
+  requirements: PublishRequirement[];
+  error: string;
+  dlLoading: boolean;
+  payoutSetupLoading: boolean;
+  onStartDlVerification: () => void;
+  onStartPayoutSetup: () => void;
+  onLeaveForVehicle: () => void;
+  onRefresh: () => void;
+}) {
+  const { t } = useTranslation();
+
+  // The backend's actionUrl is an API path; each requirement is mapped to the app
+  // route or handler that actually resolves it.
+  const copy: Record<PublishRequirementKey, { icon: React.ReactNode; title: string; body: string }> = {
+    TOS: { icon: <CheckCircle className="h-5 w-5" />, title: t('publish.reqTosTitle'), body: t('publish.reqTosCopy') },
+    DL_VERIFICATION: { icon: <AlertCircle className="h-5 w-5" />, title: t('publish.reqDlTitle'), body: t('publish.reqDlCopy') },
+    IDENTITY_MATCH: { icon: <AlertCircle className="h-5 w-5" />, title: t('publish.reqIdentityTitle'), body: t('publish.reqIdentityCopy') },
+    BANK_ACCOUNT: { icon: <Wallet className="h-5 w-5" />, title: t('publish.reqBankTitle'), body: t('publish.reqBankCopy') },
+    VEHICLE: { icon: <Car className="h-5 w-5" />, title: t('publish.reqVehicleTitle'), body: t('publish.reqVehicleCopy') },
+    VEHICLE_VERIFICATION: { icon: <Car className="h-5 w-5" />, title: t('publish.reqVehicleReviewTitle'), body: t('publish.reqVehicleReviewCopy') },
+  };
+
+  // A rejected vehicle is not the same as one still in the queue: waiting will never
+  // clear it, so the driver is told what to fix instead of being asked to be patient.
+  const isRejected = (requirement: PublishRequirement) =>
+    requirement.key === 'VEHICLE_VERIFICATION' && requirement.vehicle?.verificationStatus === 'REJECTED';
+
+  const titleFor = (requirement: PublishRequirement) =>
+    isRejected(requirement) ? t('publish.reqVehicleRejectedTitle') : copy[requirement.key].title;
+
+  const bodyFor = (requirement: PublishRequirement) =>
+    isRejected(requirement) ? t('publish.reqVehicleRejectedCopy') : copy[requirement.key].body;
+
+  const action = (requirement: PublishRequirement) => {
+    switch (requirement.key) {
+      case 'DL_VERIFICATION':
+      case 'IDENTITY_MATCH':
+        return (
+          <button type="button" onClick={onStartDlVerification} disabled={dlLoading} className="btn-primary px-4 py-2 text-sm disabled:opacity-50">
+            {dlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('publish.reqDlAction')}
+          </button>
+        );
+      case 'BANK_ACCOUNT':
+        return (
+          <button type="button" onClick={onStartPayoutSetup} disabled={payoutSetupLoading} className="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50">
+            {payoutSetupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{t('publish.reqBankAction')} <ExternalLink className="h-3.5 w-3.5" /></>}
+          </button>
+        );
+      case 'VEHICLE':
+        return (
+          <Link href="/profile/vehicle?returnTo=%2Fpublish&add=1" onClick={onLeaveForVehicle} className="btn-primary px-4 py-2 text-sm">
+            {t('profile.addVehicle')}
+          </Link>
+        );
+      case 'VEHICLE_VERIFICATION':
+        // While pending, approval is an admin decision and the driver can only review
+        // what was sent. Once rejected, there is real work for them to do.
+        return isRejected(requirement) ? (
+          <Link href="/profile/vehicle?returnTo=%2Fpublish" onClick={onLeaveForVehicle} className="btn-primary px-4 py-2 text-sm">
+            {t('publish.reqVehicleRejectedAction')}
+          </Link>
+        ) : (
+          <Link href="/profile/vehicle?returnTo=%2Fpublish" onClick={onLeaveForVehicle} className="btn-outline px-4 py-2 text-sm">
+            {t('publish.reqVehicleReviewAction')}
+          </Link>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="w-full max-w-2xl rounded-3xl border border-orange-100 bg-white p-7 shadow-sm sm:p-9">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-deliivo-orange-light text-deliivo-orange">
+        <AlertCircle className="h-6 w-6" />
+      </div>
+      <h1 className="mt-5 text-2xl font-bold text-deliivo-dark">{t('publish.eligibilityTitle')}</h1>
+      <p className="mt-2 text-sm leading-6 text-deliivo-gray">
+        {t('publish.eligibilityCopy', { count: requirements.length })}
+      </p>
+
+      <ul className="mt-6 space-y-3">
+        {requirements.map((requirement) => (
+          <li key={requirement.key} className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-deliivo-cream/40 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-3">
+              <span className="mt-0.5 shrink-0 text-deliivo-orange">{copy[requirement.key].icon}</span>
+              <div>
+                <p className="text-sm font-semibold text-deliivo-dark">{titleFor(requirement)}</p>
+                <p className="mt-0.5 text-xs leading-5 text-deliivo-gray">{bodyFor(requirement)}</p>
+                {/* Admin free text: interpolated as a value, never used as a key. */}
+                {isRejected(requirement) && requirement.vehicle?.rejectionReason && (
+                  <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
+                    {t('publish.reqVehicleRejectedReason', { reason: requirement.vehicle.rejectionReason })}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="shrink-0 sm:pl-4">{action(requirement)}</div>
+          </li>
+        ))}
+      </ul>
+
+      {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+        <Link href="/" className="btn-outline flex-1 px-6 py-3 text-center text-sm">{t('common.backHome')}</Link>
+        <button type="button" onClick={onRefresh} className="btn-primary flex-1 px-6 py-3 text-sm">
+          {t('publish.eligibilityRecheck')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PublishRideWizard() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -1677,7 +1823,10 @@ function PublishRideWizard() {
   const [payoutStatus, setPayoutStatus] = useState<ConnectStatus | null>(null);
   const [payoutStatusLoading, setPayoutStatusLoading] = useState(false);
   const [payoutSetupLoading, setPayoutSetupLoading] = useState(false);
-  const [vehicleStatus, setVehicleStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
+  const [eligibility, setEligibility] = useState<PublishEligibility | null>(null);
+  const [eligibilityStatus, setEligibilityStatus] = useState<'loading' | 'ready' | 'blocked' | 'error'>('loading');
+  const [dlSessionLoading, setDlSessionLoading] = useState(false);
+  const [gateError, setGateError] = useState('');
   const publishGuide = getPublishGuide(step);
 
   function patch(update: Partial<WizardState>) {
@@ -1689,19 +1838,64 @@ function PublishRideWizard() {
     loadPayoutStatus();
   }, []);
 
-  const checkVehicleAvailability = useCallback(async () => {
-    setVehicleStatus('loading');
+  // One call replaces the separate vehicle/payout probes: the backend evaluates
+  // licence, identity, bank account and vehicle in the same place it enforces them
+  // at publish time, so the checklist can never drift from the actual gate.
+  const checkEligibility = useCallback(async () => {
+    setEligibilityStatus('loading');
+    setGateError('');
     try {
-      const res = await vehicleApi.list();
-      setVehicleStatus((res.data?.vehicles || []).length > 0 ? 'ready' : 'missing');
+      const res = await publishRideApi.eligibility();
+      setEligibility(res.data);
+      setEligibilityStatus(getBlockingRequirements(res.data).length > 0 ? 'blocked' : 'ready');
     } catch {
-      setVehicleStatus('error');
+      setEligibilityStatus('error');
     }
   }, []);
 
   useEffect(() => {
-    void checkVehicleAvailability();
-  }, [checkVehicleAvailability]);
+    void checkEligibility();
+  }, [checkEligibility]);
+
+  // Veriff decisions arrive by webhook, so returning from the hosted flow (or from
+  // Stripe onboarding) requires a re-read rather than trusting the redirect.
+  useEffect(() => {
+    const onFocus = () => {
+      if (eligibilityStatus === 'blocked') void checkEligibility();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [checkEligibility, eligibilityStatus]);
+
+  async function handleStartDlVerification() {
+    setDlSessionLoading(true);
+    setGateError('');
+    try {
+      // The profile stores the given and family name separately, so both are sent
+      // as stored rather than split out of one string.
+      const firstName = (user?.firstName || '').trim();
+      const lastName = (user?.lastName || '').trim();
+      if (!firstName || !lastName) {
+        // Veriff matches the document against the submitted name, so both parts must
+        // come from a completed profile rather than a guess.
+        setGateError(t('publish.dlNeedsFullName'));
+        return;
+      }
+      const res = await dlVerificationApi.createSession({
+        firstName,
+        lastName,
+        email: user?.email,
+        dateOfBirth: user?.dob?.slice(0, 10),
+        gender: user?.gender === 'MALE' ? 'M' : user?.gender === 'FEMALE' ? 'F' : undefined,
+        callback: `${window.location.origin}/publish`,
+      });
+      window.location.href = res.data.sessionUrl;
+    } catch (err: unknown) {
+      setGateError(err instanceof Error ? err.message : t('publish.dlSessionFailed'));
+    } finally {
+      setDlSessionLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!published) return;
@@ -1964,44 +2158,39 @@ function PublishRideWizard() {
     );
   }
 
-  if (vehicleStatus !== 'ready') {
+  if (eligibilityStatus !== 'ready') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-deliivo-cream px-4 py-10">
-        {vehicleStatus === 'loading' ? (
+        {eligibilityStatus === 'loading' ? (
           <div className="flex items-center gap-3 text-sm font-medium text-deliivo-gray">
             <Loader2 className="h-5 w-5 animate-spin text-deliivo-orange" />
-            {t('publish.checkingVehicle')}
+            {t('publish.checkingEligibility')}
           </div>
-        ) : (
+        ) : eligibilityStatus === 'error' ? (
           <div className="w-full max-w-lg rounded-3xl border border-orange-100 bg-white p-7 text-center shadow-sm sm:p-9">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-deliivo-orange-light text-deliivo-orange">
-              {vehicleStatus === 'missing' ? <Car className="h-6 w-6" /> : <AlertCircle className="h-6 w-6" />}
+              <AlertCircle className="h-6 w-6" />
             </div>
-            <h1 className="mt-5 text-2xl font-bold text-deliivo-dark">
-              {vehicleStatus === 'missing' ? t('publish.vehicleGateMissingTitle') : t('publish.vehicleGateErrorTitle')}
-            </h1>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-deliivo-gray">
-              {vehicleStatus === 'missing'
-                ? t('publish.vehicleGateMissingCopy')
-                : t('publish.vehicleGateErrorCopy')}
-            </p>
+            <h1 className="mt-5 text-2xl font-bold text-deliivo-dark">{t('publish.eligibilityErrorTitle')}</h1>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-deliivo-gray">{t('publish.eligibilityErrorCopy')}</p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Link href="/" className="btn-outline px-6 py-3 text-sm">{t('common.backHome')}</Link>
-              {vehicleStatus === 'missing' ? (
-                <Link
-                  href="/profile/vehicle?returnTo=%2Fpublish&add=1"
-                  onClick={() => { vehicleDetourState = { step, state }; }}
-                  className="btn-primary px-6 py-3 text-sm"
-                >
-                  {t('profile.addVehicle')}
-                </Link>
-              ) : (
-                <button type="button" onClick={() => void checkVehicleAvailability()} className="btn-primary px-6 py-3 text-sm">
-                  {t('common.retry')}
-                </button>
-              )}
+              <button type="button" onClick={() => void checkEligibility()} className="btn-primary px-6 py-3 text-sm">
+                {t('common.retry')}
+              </button>
             </div>
           </div>
+        ) : (
+          <PublishEligibilityGate
+            requirements={getBlockingRequirements(eligibility)}
+            error={gateError}
+            dlLoading={dlSessionLoading}
+            payoutSetupLoading={payoutSetupLoading}
+            onStartDlVerification={handleStartDlVerification}
+            onStartPayoutSetup={handleStartPayoutSetup}
+            onLeaveForVehicle={() => { vehicleDetourState = { step, state }; }}
+            onRefresh={() => void checkEligibility()}
+          />
         )}
       </div>
     );

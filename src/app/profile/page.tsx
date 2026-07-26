@@ -64,7 +64,7 @@ function ProfileContent() {
   // Profile edit
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState('');
-  const [profileNickName, setProfileNickName] = useState('');
+  const [profileLastName, setProfileLastName] = useState('');
   const [profileDob, setProfileDob] = useState('');
   const [profileSalutation, setProfileSalutation] = useState('');
   const [profileGender, setProfileGender] = useState('');
@@ -105,8 +105,8 @@ function ProfileContent() {
 
   function startEditProfile() {
     setEditingProfile(true);
-    setProfileName(user?.name || '');
-    setProfileNickName(user?.nickName || '');
+    setProfileName(user?.firstName || '');
+    setProfileLastName(user?.lastName || '');
     setProfileDob(formatDateInput(fullProfile?.user.dob || user?.dob || null));
     setProfileSalutation(user?.salutation || '');
     setProfileGender(user?.gender || '');
@@ -120,7 +120,7 @@ function ProfileContent() {
       }
       const data: Record<string, string> = {};
       if (profileName.trim()) data.name = profileName.trim();
-      if (profileNickName.trim()) data.nickName = profileNickName.trim();
+      if (profileLastName.trim()) data.lastName = profileLastName.trim();
       if (profileDob) data.dob = profileDob;
       if (profileSalutation) data.salutation = profileSalutation;
       if (profileGender) data.gender = profileGender;
@@ -204,8 +204,7 @@ function ProfileContent() {
               <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarUploading} />
             </label>
           </div>
-          <h2 className="text-lg font-bold">{user?.name || t('profile.user')}</h2>
-          {user?.nickName && <p className="text-xs text-deliivo-gray">@{user.nickName}</p>}
+          <h2 className="text-lg font-bold">{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || t('profile.user')}</h2>
           {user?.isVerified && (
             <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
               <CheckCircle size={12} />
@@ -253,8 +252,8 @@ function ProfileContent() {
                   <input type="text" value={profileName} onChange={e => setProfileName(e.target.value)} className="input-field" placeholder={t('profile.namePlaceholder')} />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-deliivo-gray">{t('profile.nickname')}</label>
-                  <input type="text" value={profileNickName} onChange={e => setProfileNickName(e.target.value)} className="input-field" placeholder={t('profile.nicknamePlaceholder')} />
+                  <label className="mb-1 block text-xs font-medium text-deliivo-gray">{t('profile.lastName')}</label>
+                  <input type="text" value={profileLastName} onChange={e => setProfileLastName(e.target.value)} className="input-field" placeholder={t('profile.lastNamePlaceholder')} />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-deliivo-gray">{t('profile.salutation')}</label>

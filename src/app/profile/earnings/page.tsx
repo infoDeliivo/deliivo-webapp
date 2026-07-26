@@ -234,7 +234,7 @@ function EarningsContent() {
                         <p className="mt-1 text-xs text-deliivo-gray">
                           {ride ? `${new Date(ride.departureDate).toLocaleDateString()} at ${ride.departureTime}` : new Date(item.createdAt).toLocaleString()}
                         </p>
-                        <p className="mt-1 text-xs text-deliivo-gray">{t('profile.passenger')}: {item.booking?.passenger?.name || t('profile.rider')}</p>
+                        <p className="mt-1 text-xs text-deliivo-gray">{t('profile.passenger')}: {item.booking?.passenger?.firstName || t('profile.rider')}</p>
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="text-sm font-bold text-gray-900">{formatMoney(item.fareAmount, item.currency)}</p>
