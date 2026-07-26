@@ -52,8 +52,8 @@ function OnboardingForm() {
   const { refreshUser, user } = useAuth();
   const { t } = useTranslation();
 
-  const [name, setName] = useState(user?.name ?? '');
-  const [nickName, setNickName] = useState(user?.nickName ?? '');
+  const [firstName, setFirstName] = useState(user?.firstName ?? '');
+  const [lastName, setLastName] = useState(user?.lastName ?? '');
   const [dob, setDob] = useState(user?.dob?.slice(0, 10) ?? '');
   const [salutation, setSalutation] = useState(user?.salutation ?? '');
   const [gender, setGender] = useState<'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER' | 'PREFER_NOT_TO_SAY' | ''>(user?.gender ?? '');
@@ -63,8 +63,8 @@ function OnboardingForm() {
 
   useEffect(() => {
     if (!user) return;
-    setName((current) => current || user.name || '');
-    setNickName((current) => current || user.nickName || '');
+    setFirstName((current) => current || user.firstName || '');
+    setLastName((current) => current || user.lastName || '');
     setDob((current) => current || user.dob?.slice(0, 10) || '');
     setSalutation((current) => current || user.salutation || '');
     setGender((current) => current || user.gender || '');
@@ -77,7 +77,9 @@ function OnboardingForm() {
       setError(t('onboarding.dobRequired', { age: MINIMUM_BOOKING_AGE_YEARS }));
       return;
     }
-    if (!PERSON_NAME_PATTERN.test(name.trim())) {
+    // Licence verification submits both parts to Veriff, so neither can be left
+    // blank or hold something other than a name.
+    if (!PERSON_NAME_PATTERN.test(firstName.trim()) || !PERSON_NAME_PATTERN.test(lastName.trim())) {
       setError(t('onboarding.nameInvalid'));
       return;
     }
@@ -88,8 +90,8 @@ function OnboardingForm() {
     setLoading(true);
     try {
       await userApi.completeOnboarding({
-        name,
-        nickName: nickName || undefined,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         dob: dob || undefined,
         salutation,
         gender: gender || undefined,
@@ -176,30 +178,31 @@ function OnboardingForm() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="name" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-                    {t('onboarding.fullName')} *
+                  <label htmlFor="firstName" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                    {t('onboarding.firstName')} *
                   </label>
                   <input
-                    id="name"
+                    id="firstName"
                     type="text"
                     required
-                    placeholder={t('onboarding.fullNamePlaceholder')}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t('onboarding.firstNamePlaceholder')}
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
                     className="input-field"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="nickName" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-                    {t('onboarding.nickname')}
+                  <label htmlFor="lastName" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                    {t('onboarding.lastName')} *
                   </label>
                   <input
-                    id="nickName"
+                    id="lastName"
                     type="text"
-                    placeholder={t('onboarding.nicknamePlaceholder')}
-                    value={nickName}
-                    onChange={(e) => setNickName(e.target.value)}
+                    required
+                    placeholder={t('onboarding.lastNamePlaceholder')}
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
                     className="input-field"
                   />
                 </div>
@@ -225,7 +228,7 @@ function OnboardingForm() {
                 <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
               )}
 
-              <button type="submit" disabled={loading || !name.trim() || !salutation || !gender || !dob} className="btn-primary w-full py-3 text-base disabled:opacity-50">
+              <button type="submit" disabled={loading || !firstName.trim() || !lastName.trim() || !salutation || !gender || !dob} className="btn-primary w-full py-3 text-base disabled:opacity-50">
                 {loading ? t('onboarding.saving') : t('onboarding.complete')}
               </button>
             </form>

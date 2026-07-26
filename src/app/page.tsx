@@ -144,7 +144,7 @@ function LegacyHomePage() {
             </p>
             {user && (
               <p className="mt-2 text-sm font-semibold text-deliivo-dark">
-                Welcome back, {user.name || user.nickName || 'rider'}.
+                Welcome back, {user.firstName || 'rider'}.
               </p>
             )}
 

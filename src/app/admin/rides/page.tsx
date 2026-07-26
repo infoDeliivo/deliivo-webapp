@@ -209,7 +209,7 @@ export default function AdminRidesPage() {
                         Ride {ride.id} • {new Date(ride.departureDate).toLocaleDateString()} at {ride.departureTime}
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
-                        Driver: {ride.driver?.name || ride.driver?.email || 'Unknown'} • {bookedSeats}/{ride.totalSeats} seats booked • {ride.currency} {paidAmount.toFixed(2)} paid
+                        Driver: {ride.driver?.firstName || ride.driver?.email || 'Unknown'} • {bookedSeats}/{ride.totalSeats} seats booked • {ride.currency} {paidAmount.toFixed(2)} paid
                       </p>
                       {ride.driver?.id && (
                         <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400">
@@ -248,7 +248,7 @@ export default function AdminRidesPage() {
                               <td className="px-3 py-2 text-gray-700">
                                 <div className="space-y-0.5">
                                   <Link href={`/profile/users/${booking.passengerId}`} className="font-medium hover:text-[#F97316]">
-                                    {booking.passenger?.name || booking.passenger?.email || shortId(booking.passengerId)}
+                                    {booking.passenger?.firstName || booking.passenger?.email || shortId(booking.passengerId)}
                                   </Link>
                                   <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-gray-400">
                                     <span>Rider ID <CopyableId id={booking.passengerId} label="Rider ID" /></span>

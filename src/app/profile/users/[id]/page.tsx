@@ -12,8 +12,8 @@ import { useTranslation } from '@/lib/i18n-context';
 type PublicProfile = {
   user: {
     id: string;
-    name: string | null;
-    nickName: string | null;
+    firstName: string | null;
+    lastName: string | null;
     avatarUrl: string | null;
     isVerified: boolean;
     memberSince: string;
@@ -70,7 +70,7 @@ function PublicProfileContent() {
     );
   }
 
-  const name = profile.user.name || 'User';
+  const name = [profile.user.firstName, profile.user.lastName].filter(Boolean).join(' ') || 'User';
   const initials = name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
   const memberSinceSource = profile.user.memberSince || profile.stats?.memberSince;
   const memberSince = memberSinceSource ? new Date(memberSinceSource).getFullYear() : 'recently';
@@ -103,7 +103,6 @@ function PublicProfileContent() {
                 </span>
               )}
             </div>
-            {profile.user.nickName && <p className="mt-1 text-sm text-deliivo-gray">@{profile.user.nickName}</p>}
             <p className="mt-1 text-xs text-deliivo-gray">{t('profile.memberSince', { memberSince })}</p>
           </div>
         </div>

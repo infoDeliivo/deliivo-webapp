@@ -133,7 +133,7 @@ function PlaceInput({
 function RideResultCard({ ride }: { ride: SearchRideResult }) {
   const { t } = useTranslation();
   const seatsLeft = ride.availableSeats;
-  const driverName = ride.driver?.name || 'Driver';
+  const driverName = ride.driver?.firstName || 'Driver';
   const initials = driverName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const vehicleLabel = ride.vehicle ? [ride.vehicle.brand, ride.vehicle.model_name].filter(Boolean).join(' ') : null;
   const price = ride.segment?.segmentFare ?? ride.basePricePerSeat;

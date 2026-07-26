@@ -76,6 +76,7 @@ export default function AdminMonitoringPage() {
                 payoutEligiblePayments: 0,
                 pendingPaymentRecords: 0,
                 webhookEvents24h: 0,
+                pendingVehicles: 0,
               },
               content: {
                 total: 0,

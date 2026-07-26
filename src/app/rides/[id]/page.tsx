@@ -965,7 +965,7 @@ function RideDetailContent() {
     );
   }
 
-  const driverName = ride.driver?.name || t('rideDetail.driverFallback');
+  const driverName = ride.driver?.firstName || t('rideDetail.driverFallback');
   const initials = driverName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const vehicleLabel = ride.vehicle ? [ride.vehicle.brand, ride.vehicle.model_name].filter(Boolean).join(' ') : null;
   const dateLabel = new Date(ride.departureDate).toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });

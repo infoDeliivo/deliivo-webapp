@@ -123,7 +123,7 @@ export default function AdminSosPage() {
 
                   <div>
                     <h2 className="text-base font-semibold text-gray-900">
-                      {alert.user?.name || alert.user?.email || alert.user?.phone || 'Unknown user'}
+                      {alert.user?.firstName || alert.user?.email || alert.user?.phone || 'Unknown user'}
                     </h2>
                     <p className="mt-1 text-sm text-gray-600">
                       {alert.ride

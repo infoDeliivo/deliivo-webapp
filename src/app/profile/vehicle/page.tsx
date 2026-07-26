@@ -19,18 +19,41 @@ export default function VehiclePage() {
 }
 
 const VEHICLE_DOCUMENT_OPTIONS = [
-  { key: 'VEHICLE_IMAGE', label: 'Vehicle photo' },
+  { key: 'VEHICLE_IMAGE_FRONT', label: 'Vehicle photo (front)' },
+  { key: 'VEHICLE_IMAGE_BACK', label: 'Vehicle photo (rear)' },
+  { key: 'VEHICLE_DOCUMENT', label: 'Vehicle registration document' },
   { key: 'DRIVING_LICENSE', label: 'Driving license' },
   { key: 'INSURANCE_DOCUMENT', label: 'Insurance document' },
 ] as const;
 
-// KYC documents stored privately (no public URL) — viewed via a short-lived
-// signed URL fetched on demand from previewKey.
-const PRIVATE_DOC_TYPES = new Set(['DRIVING_LICENSE', 'INSURANCE_DOCUMENT']);
+// Mirrors the backend: drivers with a plate from these countries must supply the
+// full set below before /vehicles/draft/save accepts the vehicle. Keep in sync
+// with DOCUMENT_REQUIRED_COUNTRIES / REQUIRED_DOCUMENT_TYPES in vehicle.constants.ts.
+const DOCUMENT_REQUIRED_COUNTRIES = new Set(['EE']);
+const REQUIRED_DOC_TYPES = ['VEHICLE_IMAGE_FRONT', 'VEHICLE_IMAGE_BACK', 'VEHICLE_DOCUMENT'] as const;
+const requiresFullDocumentSet = (licenseCountry: string) =>
+  DOCUMENT_REQUIRED_COUNTRIES.has(licenseCountry.trim().toUpperCase());
+
+// Documents stored privately (no public URL) — viewed via a short-lived signed
+// URL fetched on demand from previewKey. The registry document is private too:
+// uploading it to a public target makes the backend drop the URL and the draft
+// stays incomplete.
+const PRIVATE_DOC_TYPES = new Set(['DRIVING_LICENSE', 'INSURANCE_DOCUMENT', 'VEHICLE_DOCUMENT']);
 const isPrivateDocType = (documentType: string) => PRIVATE_DOC_TYPES.has(documentType);
 
-const DOC_TYPE_LABEL: Record<string, string> =
-  Object.fromEntries(VEHICLE_DOCUMENT_OPTIONS.map((o) => [o.key, o.label]));
+// Re-uploading a type replaces the earlier entry — the draft keeps one document
+// per type, so appending would leave a stale duplicate in the checklist.
+type DraftDocument = { documentType: string; imageUrl?: string };
+const upsertDocument = (docs: DraftDocument[], doc: DraftDocument): DraftDocument[] => [
+  ...docs.filter((d) => d.documentType !== doc.documentType),
+  doc,
+];
+
+const DOC_TYPE_LABEL: Record<string, string> = {
+  ...Object.fromEntries(VEHICLE_DOCUMENT_OPTIONS.map((o) => [o.key, o.label])),
+  // Legacy single-photo type on vehicles saved before the front/rear split.
+  VEHICLE_IMAGE: 'Vehicle photo',
+};
 
 // Renders a private KYC document. The signed view URL (300 s TTL) is fetched on
 // demand when the user clicks View and is never cached.
@@ -147,9 +170,9 @@ function VehicleContent() {
     }
   };
 
-  // Document upload state. Public docs (VEHICLE_IMAGE) carry an imageUrl; private
-  // KYC docs are attached by key and have no public URL.
-  const [documents, setDocuments] = useState<{ documentType: string; imageUrl?: string }[]>([]);
+  // Document upload state. Public docs (front/rear photo) carry an imageUrl;
+  // private KYC docs are attached by key and have no public URL.
+  const [documents, setDocuments] = useState<DraftDocument[]>([]);
   const [uploading, setUploading] = useState(false);
   const vehicleTypes: { value: VehicleType; label: string }[] = [
     { value: 'sedan', label: t('profile.vehicleTypeSedan') },
@@ -187,14 +210,14 @@ function VehicleContent() {
     setError('');
     try {
       if (isPrivateDocType(documentType)) {
-        // KYC (licence/insurance): private target, attached by key. No public URL,
-        // so track completion by the known documentType.
+        // KYC (licence/insurance/registry): private target, attached by key. No
+        // public URL, so track completion by the known documentType.
         await vehicleApi.uploadDraftPrivateDocument(file, documentType);
-        setDocuments(prev => [...prev, { documentType }]);
+        setDocuments(prev => upsertDocument(prev, { documentType }));
       } else {
-        // Public car photo: keeps its confirmed URL for preview.
+        // Public car photo (front/rear): keeps its confirmed URL for preview.
         const res = await vehicleApi.uploadDraftDocument(file, documentType);
-        setDocuments(prev => [...prev, { documentType: res.data.documentType, imageUrl: res.data.imageUrl }]);
+        setDocuments(prev => upsertDocument(prev, { documentType: res.data.documentType, imageUrl: res.data.imageUrl }));
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('profile.vehicleUploadFailed'));
@@ -203,7 +226,23 @@ function VehicleContent() {
     }
   };
 
+  // Documents the current plate country makes mandatory, and which are still missing.
+  const documentsRequired = requiresFullDocumentSet(licenseCountry);
+  const missingRequiredDocs = documentsRequired
+    ? REQUIRED_DOC_TYPES.filter((type) => !documents.some((d) => d.documentType === type))
+    : [];
+
   const handleFinalizeDraft = async () => {
+    // The backend rejects an incomplete set with VEHICLE_DOCUMENTS_REQUIRED; name
+    // the missing documents here instead of surfacing raw enum values.
+    if (missingRequiredDocs.length > 0) {
+      setError(
+        `Upload these documents before saving: ${missingRequiredDocs
+          .map((type) => DOC_TYPE_LABEL[type] || type)
+          .join(', ')}`,
+      );
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -350,8 +389,20 @@ function VehicleContent() {
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-lg font-semibold text-deliivo-dark">{formatVehicleLabel(v)}</h3>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${v.isVerified ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-                      {v.isVerified ? t('profile.verifiedVehicle') : t('profile.vehicleNotVerifiedYet')}
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        v.verificationStatus === 'APPROVED'
+                          ? 'bg-green-50 text-green-700'
+                          : v.verificationStatus === 'REJECTED'
+                            ? 'bg-red-50 text-red-700'
+                            : 'bg-amber-50 text-amber-700'
+                      }`}
+                    >
+                      {v.verificationStatus === 'APPROVED'
+                        ? t('profile.verifiedVehicle')
+                        : v.verificationStatus === 'REJECTED'
+                          ? t('profile.vehicleRejected')
+                          : t('profile.vehicleNotVerifiedYet')}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-deliivo-gray">
@@ -370,6 +421,17 @@ function VehicleContent() {
                   <Trash2 size={18} />
                 </button>
               </div>
+
+              {v.verificationStatus === 'REJECTED' && (
+                <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
+                  <p className="text-sm font-semibold text-red-700">{t('profile.vehicleRejected')}</p>
+                  {/* Admin free text: interpolated as a value, never used as a key. */}
+                  {v.rejectionReason && (
+                    <p className="mt-1 text-xs leading-5 text-red-700">{v.rejectionReason}</p>
+                  )}
+                  <p className="mt-2 text-xs leading-5 text-red-600">{t('profile.vehicleRejectedHelp')}</p>
+                </div>
+              )}
 
               <div className="mt-4 border-t border-gray-100 pt-4">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">Documents</p>
@@ -488,17 +550,27 @@ function VehicleContent() {
 
           {step === 3 && (
             <div className="space-y-4">
-              <p className="text-sm text-deliivo-gray">Upload documents if available. This is optional, and you can still save the vehicle without them.</p>
+              <p className="text-sm text-deliivo-gray">
+                {documentsRequired
+                  ? `Vehicles with a ${licenseCountry.toUpperCase()} plate need the front photo, rear photo and registration document. The rest are optional.`
+                  : 'Upload documents if available. This is optional, and you can still save the vehicle without them.'}
+              </p>
 
-              {VEHICLE_DOCUMENT_OPTIONS.map(({ key, label }) => (
+              {VEHICLE_DOCUMENT_OPTIONS.map(({ key, label }) => {
+                const uploaded = documents.some(d => d.documentType === key);
+                const required = documentsRequired && (REQUIRED_DOC_TYPES as readonly string[]).includes(key);
+                return (
                 <div key={key} className="flex items-center gap-3">
-                  <label className={`flex-1 flex items-center gap-2 cursor-pointer rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm hover:border-deliivo-orange transition-colors ${documents.some(d => d.documentType === key) ? 'border-green-400 bg-green-50' : ''}`}>
-                    {documents.some(d => d.documentType === key) ? (
+                  <label className={`flex-1 flex items-center gap-2 cursor-pointer rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm hover:border-deliivo-orange transition-colors ${uploaded ? 'border-green-400 bg-green-50' : required ? 'border-amber-300 bg-amber-50/40' : ''}`}>
+                    {uploaded ? (
                       <CheckCircle size={16} className="text-green-500 shrink-0" />
                     ) : (
                       <Upload size={16} className="text-deliivo-gray shrink-0" />
                     )}
                     <span>{label}</span>
+                    {required && !uploaded && (
+                      <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Required</span>
+                    )}
                     <input
                       type="file"
                       accept="image/*"
@@ -511,14 +583,20 @@ function VehicleContent() {
                     />
                   </label>
                 </div>
-              ))}
+                );
+              })}
 
               {uploading && <p className="text-xs text-deliivo-gray">Uploading...</p>}
               {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
               <div className="flex gap-3">
                 <button type="button" onClick={() => setStep(2)} className="btn-outline flex-1 py-2 text-sm">Back</button>
-                <button type="button" onClick={handleFinalizeDraft} disabled={saving} className="btn-primary flex-1 py-2 text-sm disabled:opacity-50">
+                <button
+                  type="button"
+                  onClick={handleFinalizeDraft}
+                  disabled={saving || missingRequiredDocs.length > 0}
+                  className="btn-primary flex-1 py-2 text-sm disabled:opacity-50"
+                >
                   {saving ? 'Saving...' : 'Save Vehicle'}
                 </button>
               </div>
