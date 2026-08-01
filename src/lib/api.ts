@@ -639,13 +639,7 @@ export const mapsApi = {
 // Everything a driver must satisfy before a ride can go live. The backend owns this
 // list (driver-eligibility.service.ts) and evaluates it again at publish time, so the
 // app renders whatever comes back rather than re-deriving the rules.
-export type PublishRequirementKey =
-  | 'TOS'
-  | 'DL_VERIFICATION'
-  | 'IDENTITY_MATCH'
-  | 'BANK_ACCOUNT'
-  | 'VEHICLE'
-  | 'VEHICLE_VERIFICATION';
+export type PublishRequirementKey = 'DL_VERIFICATION' | 'BANK_ACCOUNT' | 'VEHICLE';
 
 export interface PublishRequirement {
   key: PublishRequirementKey;
@@ -657,8 +651,8 @@ export interface PublishRequirement {
   /** Backend endpoint that resolves it — an API path, not an app route. */
   actionUrl: string | null;
   /**
-   * Set only on an unsatisfied VEHICLE_VERIFICATION. A reason code cannot carry the
-   * admin's free-text note, so it travels alongside.
+   * Set only on an unsatisfied VEHICLE that has already been added. A reason code cannot
+   * carry the admin's free-text note, so it travels alongside.
    */
   vehicle?: { verificationStatus: VehicleVerificationStatus; rejectionReason: string | null };
 }
@@ -1199,6 +1193,40 @@ export const paymentsApi = {
   connectStatus() {
     return apiFetch<{ data: ConnectStatus }>('/api/v1/payments/connect/status');
   },
+  // Mints a fresh AccountSession for the embedded onboarding component. Never cache the
+  // secret — connect-js calls this again whenever the current one expires.
+  connectAccountSession() {
+    return apiFetch<{ data: ConnectAccountSession }>('/api/v1/payments/connect/account-session', {
+      method: 'POST',
+    });
+  },
+  // ---- Custom payout onboarding ----
+  // The platform collects every requirement in its own form; these four calls are the whole
+  // driver-facing flow. Each returns the refreshed requirements, so the UI always renders from
+  // the response it just received rather than a separate status call.
+  connectRequirements() {
+    return apiFetch<{ data: ConnectRequirements }>('/api/v1/payments/connect/requirements');
+  },
+  connectSaveDetails(payload: ConnectDetailsPayload) {
+    return apiFetch<{ data: ConnectRequirements }>('/api/v1/payments/connect/details', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+  // `token` comes from Stripe.js. Raw account numbers are rejected by the backend, so they must
+  // never be put in this payload.
+  connectAddBankAccount(token: string) {
+    return apiFetch<{ data: ConnectRequirements }>('/api/v1/payments/connect/bank-account', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+  },
+  connectAcceptTerms() {
+    return apiFetch<{ data: ConnectRequirements }>('/api/v1/payments/connect/terms', {
+      method: 'POST',
+      body: JSON.stringify({ accepted: true }),
+    });
+  },
   transactions() {
     return apiFetch<{ data: RiderTransaction[] }>('/api/v1/payments/transactions');
   },
@@ -1217,9 +1245,12 @@ export interface DlVerificationStatus {
   updatedAt?: string;
 }
 
-// Driving licence verification (Veriff). createSession returns a hosted Veriff URL
-// the driver is redirected to; the decision arrives later by webhook, so the app
-// re-reads eligibility on return rather than trusting the redirect.
+// Driving licence verification (Veriff). The session is always created by the backend:
+// only it can sign the request and fill in the identity Veriff should expect (phone,
+// date of birth, gender, a document pinned to DRIVERS_LICENSE). The returned sessionUrl
+// is then run in an overlay iframe by @veriff/incontext-sdk.
+// The decision is never known client-side, so eligibility is re-read from the backend
+// rather than inferred from the flow finishing.
 export const dlVerificationApi = {
   createSession(data: {
     firstName: string;
@@ -1230,6 +1261,16 @@ export const dlVerificationApi = {
     callback?: string;
   }) {
     return apiFetch<{ data: DlVerificationSession }>('/api/v1/dl-verification', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Attaches a Veriff session created outside createSession() to the signed-in user.
+  // Unused now that every session originates on the backend, which persists the row at
+  // creation; kept because the endpoint still exists and rescues an orphaned session.
+  register(data: { sessionId: string; sessionUrl: string }) {
+    return apiFetch<{ data: DlVerificationStatus }>('/api/v1/dl-verification/register', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -1756,6 +1797,10 @@ export interface ReconciliationIssue {
 }
 
 // Payment types
+// 'application' = controller-based account, onboarding runs fully embedded with no Stripe
+// login step. 'stripe' = legacy Express account, which still authenticates inside the frame.
+export type ConnectRequirementCollection = 'application' | 'stripe';
+
 export interface ConnectStatus {
   connected: boolean;
   onboardingComplete: boolean;
@@ -1763,6 +1808,63 @@ export interface ConnectStatus {
   detailsSubmitted?: boolean;
   chargesEnabled?: boolean;
   payoutsEnabled?: boolean;
+  requirementCollection?: ConnectRequirementCollection;
+}
+
+export interface ConnectExternalAccount {
+  id: string;
+  bankName: string | null;
+  last4: string | null;
+  currency: string | null;
+  country: string | null;
+  defaultForCurrency: boolean;
+}
+
+/**
+ * What Stripe still needs before payouts run. `currentlyDue` is what the onboarding form renders
+ * from — an empty list with payoutsEnabled means the driver is done.
+ */
+export interface ConnectRequirements {
+  accountId: string;
+  requirementCollection: ConnectRequirementCollection;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+  disabledReason: string | null;
+  currentDeadline: number | null;
+  currentlyDue: string[];
+  pastDue: string[];
+  eventuallyDue: string[];
+  pendingVerification: string[];
+  errors: { requirement: string; code: string; reason: string }[];
+  termsAccepted: boolean;
+  externalAccount: ConnectExternalAccount | null;
+}
+
+export interface ConnectDetailsPayload {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string | null;
+  // YYYY-MM-DD.
+  dob: string;
+  address: {
+    line1: string;
+    line2?: string | null;
+    city: string;
+    postalCode: string;
+    state?: string | null;
+    country: string;
+  };
+}
+
+export interface ConnectAccountSession {
+  // null when the backend runs with STRIPE_CONNECT_MOCK_MODE=true.
+  clientSecret: string | null;
+  mock?: boolean;
+  expiresAt?: number;
+  accountId?: string;
+  requirementCollection?: ConnectRequirementCollection;
 }
 
 export interface DriverEarnings {

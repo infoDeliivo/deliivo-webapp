@@ -10,6 +10,9 @@ export const publicConfig = {
   linkedinUrl: process.env.NEXT_PUBLIC_LINKEDIN_URL || 'https://www.linkedin.com/company/deliivo',
   siteUrl: (process.env.NEXT_PUBLIC_SITE_URL || 'https://deliivo-webapp.vercel.app').replace(/\/$/, ''),
   gaMeasurementId: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || 'G-MSG1B1Y353',
+  // Veriff publishable key. The browser SDK creates the licence session with it, so
+  // licence verification cannot start at all when this is empty.
+  veriffApiKey: process.env.NEXT_PUBLIC_VERIFF_API_KEY || '',
   googleSiteVerification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || 'SU-QN9TplRKM9Kn7lq1H07KiKc93qQZfRhMDveuw1H4',
   defaultOgImagePath: process.env.NEXT_PUBLIC_DEFAULT_OG_IMAGE_PATH || '/baltic-hero-v2.png',
 };

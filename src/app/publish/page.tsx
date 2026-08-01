@@ -22,7 +22,7 @@ import {
   Route,
   AlertCircle,
   Wallet,
-  ExternalLink,
+  ArrowRight,
   CigaretteOff,
   Bike,
   Car,
@@ -38,7 +38,6 @@ import {
   vehicleApi,
   authApi,
   paymentsApi,
-  dlVerificationApi,
   PlacePrediction,
   RouteOption,
   PriceRecommendation,
@@ -50,6 +49,7 @@ import {
   PublishRequirement,
   PublishRequirementKey,
 } from "@/lib/api";
+import { DlVerificationModal, useDlVerification } from "@/components/DlVerification";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1603,8 +1603,8 @@ function StepConfirm({
                 disabled={payoutLoading || payoutSetupLoading}
                 className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-deliivo-orange px-4 py-2 text-sm font-semibold text-white hover:bg-deliivo-orange-dark disabled:opacity-50"
               >
-                {payoutSetupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                {payoutSetupLoading ? t('publish.redirecting') : t('publish.setUpPayouts')}
+                {payoutSetupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                {payoutSetupLoading ? t('publish.openingPayoutSetup') : t('publish.setUpPayouts')}
               </button>
             )}
           </div>
@@ -1666,15 +1666,12 @@ let vehicleDetourState: { step: number; state: WizardState } | null = null;
 
 // ─── Publish eligibility gate ─────────────────────────────────────────────────
 
-// TOS is returned by the eligibility endpoint but is not a prerequisite for
-// drafting a ride — it is the consent given at the final step, so it never
-// blocks the wizard here.
+// Every requirement the endpoint returns blocks the wizard — it reports exactly the three
+// things a driver still has to do, and each of them is genuinely required to publish.
 const BLOCKING_REQUIREMENT_KEYS: PublishRequirementKey[] = [
   'DL_VERIFICATION',
-  'IDENTITY_MATCH',
   'BANK_ACCOUNT',
   'VEHICLE',
-  'VEHICLE_VERIFICATION',
 ];
 
 const getBlockingRequirements = (eligibility: PublishEligibility | null): PublishRequirement[] =>
@@ -1706,29 +1703,34 @@ function PublishEligibilityGate({
   // The backend's actionUrl is an API path; each requirement is mapped to the app
   // route or handler that actually resolves it.
   const copy: Record<PublishRequirementKey, { icon: React.ReactNode; title: string; body: string }> = {
-    TOS: { icon: <CheckCircle className="h-5 w-5" />, title: t('publish.reqTosTitle'), body: t('publish.reqTosCopy') },
     DL_VERIFICATION: { icon: <AlertCircle className="h-5 w-5" />, title: t('publish.reqDlTitle'), body: t('publish.reqDlCopy') },
-    IDENTITY_MATCH: { icon: <AlertCircle className="h-5 w-5" />, title: t('publish.reqIdentityTitle'), body: t('publish.reqIdentityCopy') },
     BANK_ACCOUNT: { icon: <Wallet className="h-5 w-5" />, title: t('publish.reqBankTitle'), body: t('publish.reqBankCopy') },
     VEHICLE: { icon: <Car className="h-5 w-5" />, title: t('publish.reqVehicleTitle'), body: t('publish.reqVehicleCopy') },
-    VEHICLE_VERIFICATION: { icon: <Car className="h-5 w-5" />, title: t('publish.reqVehicleReviewTitle'), body: t('publish.reqVehicleReviewCopy') },
   };
 
-  // A rejected vehicle is not the same as one still in the queue: waiting will never
-  // clear it, so the driver is told what to fix instead of being asked to be patient.
-  const isRejected = (requirement: PublishRequirement) =>
-    requirement.key === 'VEHICLE_VERIFICATION' && requirement.vehicle?.verificationStatus === 'REJECTED';
+  // The vehicle gate covers three situations the driver experiences differently — none added,
+  // one waiting on an admin, one turned down — so its copy comes from the reason code rather
+  // than the key. A rejected vehicle especially: waiting will never clear it, so the driver is
+  // told what to fix instead of being asked to be patient.
+  const isRejected = (requirement: PublishRequirement) => requirement.reason === 'VEHICLE_REJECTED';
+  const isAwaitingReview = (requirement: PublishRequirement) =>
+    requirement.reason === 'VEHICLE_NOT_VERIFIED';
 
-  const titleFor = (requirement: PublishRequirement) =>
-    isRejected(requirement) ? t('publish.reqVehicleRejectedTitle') : copy[requirement.key].title;
+  const titleFor = (requirement: PublishRequirement) => {
+    if (isRejected(requirement)) return t('publish.reqVehicleRejectedTitle');
+    if (isAwaitingReview(requirement)) return t('publish.reqVehicleReviewTitle');
+    return copy[requirement.key].title;
+  };
 
-  const bodyFor = (requirement: PublishRequirement) =>
-    isRejected(requirement) ? t('publish.reqVehicleRejectedCopy') : copy[requirement.key].body;
+  const bodyFor = (requirement: PublishRequirement) => {
+    if (isRejected(requirement)) return t('publish.reqVehicleRejectedCopy');
+    if (isAwaitingReview(requirement)) return t('publish.reqVehicleReviewCopy');
+    return copy[requirement.key].body;
+  };
 
   const action = (requirement: PublishRequirement) => {
     switch (requirement.key) {
       case 'DL_VERIFICATION':
-      case 'IDENTITY_MATCH':
         return (
           <button type="button" onClick={onStartDlVerification} disabled={dlLoading} className="btn-primary px-4 py-2 text-sm disabled:opacity-50">
             {dlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('publish.reqDlAction')}
@@ -1737,25 +1739,29 @@ function PublishEligibilityGate({
       case 'BANK_ACCOUNT':
         return (
           <button type="button" onClick={onStartPayoutSetup} disabled={payoutSetupLoading} className="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50">
-            {payoutSetupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{t('publish.reqBankAction')} <ExternalLink className="h-3.5 w-3.5" /></>}
+            {payoutSetupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{t('publish.reqBankAction')} <ArrowRight className="h-3.5 w-3.5" /></>}
           </button>
         );
       case 'VEHICLE':
+        // Once rejected there is real work for the driver to do; while pending, approval is an
+        // admin decision and they can only review what was sent.
+        if (isRejected(requirement)) {
+          return (
+            <Link href="/profile/vehicle?returnTo=%2Fpublish" onClick={onLeaveForVehicle} className="btn-primary px-4 py-2 text-sm">
+              {t('publish.reqVehicleRejectedAction')}
+            </Link>
+          );
+        }
+        if (isAwaitingReview(requirement)) {
+          return (
+            <Link href="/profile/vehicle?returnTo=%2Fpublish" onClick={onLeaveForVehicle} className="btn-outline px-4 py-2 text-sm">
+              {t('publish.reqVehicleReviewAction')}
+            </Link>
+          );
+        }
         return (
           <Link href="/profile/vehicle?returnTo=%2Fpublish&add=1" onClick={onLeaveForVehicle} className="btn-primary px-4 py-2 text-sm">
             {t('profile.addVehicle')}
-          </Link>
-        );
-      case 'VEHICLE_VERIFICATION':
-        // While pending, approval is an admin decision and the driver can only review
-        // what was sent. Once rejected, there is real work for them to do.
-        return isRejected(requirement) ? (
-          <Link href="/profile/vehicle?returnTo=%2Fpublish" onClick={onLeaveForVehicle} className="btn-primary px-4 py-2 text-sm">
-            {t('publish.reqVehicleRejectedAction')}
-          </Link>
-        ) : (
-          <Link href="/profile/vehicle?returnTo=%2Fpublish" onClick={onLeaveForVehicle} className="btn-outline px-4 py-2 text-sm">
-            {t('publish.reqVehicleReviewAction')}
           </Link>
         );
       default:
@@ -1825,7 +1831,6 @@ function PublishRideWizard() {
   const [payoutSetupLoading, setPayoutSetupLoading] = useState(false);
   const [eligibility, setEligibility] = useState<PublishEligibility | null>(null);
   const [eligibilityStatus, setEligibilityStatus] = useState<'loading' | 'ready' | 'blocked' | 'error'>('loading');
-  const [dlSessionLoading, setDlSessionLoading] = useState(false);
   const [gateError, setGateError] = useState('');
   const publishGuide = getPublishGuide(step);
 
@@ -1857,8 +1862,11 @@ function PublishRideWizard() {
     void checkEligibility();
   }, [checkEligibility]);
 
-  // Veriff decisions arrive by webhook, so returning from the hosted flow (or from
-  // Stripe onboarding) requires a re-read rather than trusting the redirect.
+  // Licence verification runs in-page; the flow reports back through onCompleted.
+  const dlVerification = useDlVerification({ onCompleted: () => void checkEligibility() });
+
+  // Stripe payout onboarding is still a real redirect, and the licence flow can also
+  // leave for a tab of its own on iOS, so returning focus is worth a re-read.
   useEffect(() => {
     const onFocus = () => {
       if (eligibilityStatus === 'blocked') void checkEligibility();
@@ -1866,36 +1874,6 @@ function PublishRideWizard() {
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [checkEligibility, eligibilityStatus]);
-
-  async function handleStartDlVerification() {
-    setDlSessionLoading(true);
-    setGateError('');
-    try {
-      // The profile stores the given and family name separately, so both are sent
-      // as stored rather than split out of one string.
-      const firstName = (user?.firstName || '').trim();
-      const lastName = (user?.lastName || '').trim();
-      if (!firstName || !lastName) {
-        // Veriff matches the document against the submitted name, so both parts must
-        // come from a completed profile rather than a guess.
-        setGateError(t('publish.dlNeedsFullName'));
-        return;
-      }
-      const res = await dlVerificationApi.createSession({
-        firstName,
-        lastName,
-        email: user?.email,
-        dateOfBirth: user?.dob?.slice(0, 10),
-        gender: user?.gender === 'MALE' ? 'M' : user?.gender === 'FEMALE' ? 'F' : undefined,
-        callback: `${window.location.origin}/publish`,
-      });
-      window.location.href = res.data.sessionUrl;
-    } catch (err: unknown) {
-      setGateError(err instanceof Error ? err.message : t('publish.dlSessionFailed'));
-    } finally {
-      setDlSessionLoading(false);
-    }
-  }
 
   useEffect(() => {
     if (!published) return;
@@ -1919,16 +1897,10 @@ function PublishRideWizard() {
     }
   }
 
-  async function handleStartPayoutSetup() {
+  function handleStartPayoutSetup() {
     setPayoutSetupLoading(true);
     setError('');
-    try {
-      const res = await paymentsApi.connectOnboard();
-      window.location.href = res.data.url;
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('publish.failedStartPayoutSetup'));
-      setPayoutSetupLoading(false);
-    }
+    router.push('/driver/payouts/setup?returnTo=/publish');
   }
 
   function canContinue(): boolean {
@@ -2181,16 +2153,19 @@ function PublishRideWizard() {
             </div>
           </div>
         ) : (
-          <PublishEligibilityGate
-            requirements={getBlockingRequirements(eligibility)}
-            error={gateError}
-            dlLoading={dlSessionLoading}
-            payoutSetupLoading={payoutSetupLoading}
-            onStartDlVerification={handleStartDlVerification}
-            onStartPayoutSetup={handleStartPayoutSetup}
-            onLeaveForVehicle={() => { vehicleDetourState = { step, state }; }}
-            onRefresh={() => void checkEligibility()}
-          />
+          <>
+            <PublishEligibilityGate
+              requirements={getBlockingRequirements(eligibility)}
+              error={gateError}
+              dlLoading={dlVerification.busy}
+              payoutSetupLoading={payoutSetupLoading}
+              onStartDlVerification={dlVerification.start}
+              onStartPayoutSetup={handleStartPayoutSetup}
+              onLeaveForVehicle={() => { vehicleDetourState = { step, state }; }}
+              onRefresh={() => void checkEligibility()}
+            />
+            <DlVerificationModal control={dlVerification} />
+          </>
         )}
       </div>
     );

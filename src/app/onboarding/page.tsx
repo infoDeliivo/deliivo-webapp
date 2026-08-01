@@ -77,8 +77,8 @@ function OnboardingForm() {
       setError(t('onboarding.dobRequired', { age: MINIMUM_BOOKING_AGE_YEARS }));
       return;
     }
-    // Licence verification submits both parts to Veriff, so neither can be left
-    // blank or hold something other than a name.
+    // A driver's licence verification submits both parts to Veriff from the publish gate, so
+    // neither can be left blank or hold something other than a name.
     if (!PERSON_NAME_PATTERN.test(firstName.trim()) || !PERSON_NAME_PATTERN.test(lastName.trim())) {
       setError(t('onboarding.nameInvalid'));
       return;
@@ -97,7 +97,10 @@ function OnboardingForm() {
         gender: gender || undefined,
       });
       await refreshUser();
-      router.replace(getSafeReturnTo() || '/');
+      // Signup ends on the homepage, never on the route that triggered onboarding. That route is
+      // usually /publish, whose eligibility gate would greet a brand-new account with a list of
+      // driver requirements it cannot possibly have met yet.
+      router.replace('/');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t('onboarding.failed');
       setError(msg);
