@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, ChevronLeft, ExternalLink, Loader2, Wallet } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowRight, CheckCircle2, ChevronLeft, Loader2, Wallet } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import LoadFailureCard from '@/components/LoadFailureCard';
 import { ConnectStatus, DriverEarningItem, DriverEarnings, getApiErrorMessage, paymentsApi, payoutsApi } from '@/lib/api';
@@ -36,6 +37,7 @@ export default function EarningsPage() {
 
 function EarningsContent() {
   const { t } = useTranslation();
+  const router = useRouter();
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
   const [earnings, setEarnings] = useState<DriverEarnings | null>(null);
   const [items, setItems] = useState<DriverEarningItem[]>([]);
@@ -69,18 +71,9 @@ function EarningsContent() {
     }
   }
 
-  async function handleConnectOnboard() {
+  function handleConnectOnboard() {
     setOnboarding(true);
-    setError('');
-    try {
-      const res = await paymentsApi.connectOnboard();
-      window.location.href = res.data.url;
-    } catch (err: unknown) {
-      const message = getApiErrorMessage(err, t('profile.payoutSetupFailed'));
-      setError(message);
-      showError(t('profile.payoutSetupError'), message);
-      setOnboarding(false);
-    }
+    router.push('/driver/payouts/setup');
   }
 
   async function handleRequestPayout() {
@@ -151,7 +144,7 @@ function EarningsContent() {
                 disabled={onboarding}
                 className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-deliivo-orange px-4 py-2 text-sm font-semibold text-white hover:bg-deliivo-orange-dark disabled:opacity-50"
               >
-                {onboarding ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                {onboarding ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
                 {t('profile.connect')}
               </button>
             )}
