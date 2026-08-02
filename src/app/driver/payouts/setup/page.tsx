@@ -6,7 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Check, ChevronLeft, FlaskConical, Landmark, Loader2, ShieldCheck, Wallet } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import LoadFailureCard from '@/components/LoadFailureCard';
-import { createBankAccountToken } from '@/lib/stripe-connect';
+import { ConnectAccountOnboarding } from '@stripe/react-connect-js';
+import { ConnectProvider, createBankAccountToken } from '@/lib/stripe-connect';
 import { isStripeConfigured, isStripeTestMode } from '@/lib/stripe';
 import { ApiError, ConnectRequirements, getApiErrorMessage, paymentsApi } from '@/lib/api';
 import { showError, showSuccess } from '@/lib/app-feedback';
@@ -18,8 +19,12 @@ const DEFAULT_RETURN_TO = '/profile/earnings';
 // Payouts are single-country, matching the backend's STRIPE_CONNECT_COUNTRY. Both values are sent
 // to Stripe when tokenising the bank account, so they have to agree with the connected account's
 // own country — a mismatch is rejected outright.
-const PAYOUT_COUNTRY = 'EE';
-const PAYOUT_CURRENCY = 'eur';
+// Fallbacks only, used before the requirements response has arrived. The connected account's
+// real country and currency come from that response: Stripe fixes them when the account is
+// created and rejects an address or bank account from anywhere else, so hardcoding them breaks
+// every driver whose account was opened in another country.
+const FALLBACK_COUNTRY = 'EE';
+const FALLBACK_CURRENCY = 'eur';
 
 /**
  * Stripe's documented test values (https://docs.stripe.com/connect/testing). They are the only
@@ -199,6 +204,13 @@ function PayoutSetupContent() {
     requirements && requirements.payoutsEnabled && requirements.currentlyDue.length === 0
   );
 
+  const payoutCountry = requirements?.country?.toUpperCase() || FALLBACK_COUNTRY;
+  const payoutCurrency = requirements?.defaultCurrency || FALLBACK_CURRENCY;
+
+  // An account Stripe collects requirements for cannot be filled in through this form; those
+  // drivers finish in Stripe's own onboarding instead.
+  const stripeManaged = requirements?.requirementCollection === 'stripe';
+
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
@@ -222,7 +234,7 @@ function PayoutSetupContent() {
               line2: line2.trim() ? line2.trim() : null,
               city,
               postalCode,
-              country: PAYOUT_COUNTRY,
+              country: payoutCountry,
             },
           });
           latest = res.data;
@@ -232,8 +244,8 @@ function PayoutSetupContent() {
         if (outstanding.bank) {
           // Tokenised in the browser: the account number never reaches Deliivo's server.
           const token = await createBankAccountToken({
-            country: PAYOUT_COUNTRY,
-            currency: PAYOUT_CURRENCY,
+            country: payoutCountry,
+            currency: payoutCurrency,
             accountNumber,
             accountHolderName,
           });
@@ -266,6 +278,8 @@ function PayoutSetupContent() {
       accountHolderName,
       accountNumber,
       city,
+      payoutCountry,
+      payoutCurrency,
       dob,
       email,
       firstName,
@@ -388,12 +402,38 @@ function PayoutSetupContent() {
     );
   }
 
+  // Nothing on this account is ours to write, so the custom form would only produce a 409 on
+  // submit. Stripe's embedded onboarding is the one path that still works for these drivers.
+  if (stripeManaged) {
+    return chrome(
+      <>
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm text-amber-900">{t('payout.stripeManagedCopy')}</p>
+        </section>
+        <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
+          <ConnectProvider>
+            <ConnectAccountOnboarding
+              onExit={handleExit}
+              collectionOptions={{ fields: 'currently_due', futureRequirements: 'omit' }}
+              onLoadError={({ error: loadError }) => {
+                showError(
+                  t('profile.payoutSetupError'),
+                  loadError.message || t('profile.payoutSetupLoadError')
+                );
+              }}
+            />
+          </ConnectProvider>
+        </section>
+      </>
+    );
+  }
+
   return chrome(
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
         <p className="text-sm text-amber-900">
           <span className="font-semibold">{t('payout.countryNoticeTitle')}</span>{' '}
-          {t('payout.countryNoticeCopy')}
+          {t('payout.countryNoticeCopy', { country: payoutCountry })}
         </p>
       </section>
 
@@ -612,7 +652,7 @@ function PayoutSetupContent() {
               <input
                 id="country"
                 type="text"
-                value={t('payout.countryName')}
+                value={payoutCountry}
                 readOnly
                 disabled
                 className="input-field bg-gray-50 text-deliivo-gray"

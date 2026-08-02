@@ -1827,6 +1827,13 @@ export interface ConnectExternalAccount {
 export interface ConnectRequirements {
   accountId: string;
   requirementCollection: ConnectRequirementCollection;
+  /**
+   * The connected account's own country and payout currency. Stripe fixes both when the account
+   * is created and rejects an address or bank account from anywhere else, so the form collects
+   * against these rather than against a hardcoded country.
+   */
+  country: string | null;
+  defaultCurrency: string | null;
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
   detailsSubmitted: boolean;
