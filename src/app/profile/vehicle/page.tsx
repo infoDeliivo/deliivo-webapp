@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Car, Plus, Trash2, ArrowLeft, Upload, CheckCircle, Camera, Eye, Loader2 } from 'lucide-react';
-import { vehicleApi, Vehicle, VehicleType, VehicleDocument, validateImageFile } from '@/lib/api';
+import { vehicleApi, dlVerificationApi, Vehicle, VehicleType, VehicleDocument, validateImageFile } from '@/lib/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { useTranslation } from '@/lib/i18n-context';
@@ -33,6 +33,11 @@ const DOCUMENT_REQUIRED_COUNTRIES = new Set(['EE']);
 const REQUIRED_DOC_TYPES = ['VEHICLE_IMAGE_FRONT', 'VEHICLE_IMAGE_BACK', 'VEHICLE_DOCUMENT'] as const;
 const requiresFullDocumentSet = (licenseCountry: string) =>
   DOCUMENT_REQUIRED_COUNTRIES.has(licenseCountry.trim().toUpperCase());
+
+// The driving licence is checked against the person, not the vehicle: a driver who is
+// already verified, or who has a licence awaiting review, is not asked again when they
+// add a second vehicle. Mirrors the DL_DOCUMENT_REQUIRED gate in draft-vehicle.service.ts.
+const DL_DOC_TYPE = 'DRIVING_LICENSE';
 
 // Documents stored privately (no public URL) — viewed via a short-lived signed
 // URL fetched on demand from previewKey. The registry document is private too:
@@ -130,8 +135,14 @@ function VehicleContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Licence state, read from the backend rather than inferred from this draft: a
+  // licence uploaded for an earlier vehicle already satisfies the gate.
+  const [dlOnFile, setDlOnFile] = useState(false);
+  const [dlDeclineReason, setDlDeclineReason] = useState<string | null>(null);
+
   useEffect(() => {
     fetchVehicles();
+    void fetchDlStatus();
   }, []);
 
   useEffect(() => {
@@ -153,6 +164,17 @@ function VehicleContent() {
       // ignore
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDlStatus = async () => {
+    try {
+      const res = await dlVerificationApi.status();
+      // APPROVED covers the Veriff path, which leaves no uploaded image behind.
+      setDlOnFile(Boolean(res.data?.hasDocument) || res.data?.status === 'APPROVED');
+      setDlDeclineReason(res.data?.status === 'DECLINED' ? (res.data.declineReason ?? null) : null);
+    } catch {
+      // A failed status read must not block adding a vehicle; the backend still gates.
     }
   };
 
@@ -212,8 +234,16 @@ function VehicleContent() {
       if (isPrivateDocType(documentType)) {
         // KYC (licence/insurance/registry): private target, attached by key. No
         // public URL, so track completion by the known documentType.
-        await vehicleApi.uploadDraftPrivateDocument(file, documentType);
+        const uploaded = await vehicleApi.uploadDraftPrivateDocument(file, documentType);
         setDocuments(prev => upsertDocument(prev, { documentType }));
+
+        // A licence also enters the manual admin review queue. The vehicle draft and
+        // the review row point at the same private object.
+        if (documentType === DL_DOC_TYPE) {
+          await dlVerificationApi.submitDocument(uploaded.key);
+          setDlOnFile(true);
+          setDlDeclineReason(null);
+        }
       } else {
         // Public car photo (front/rear): keeps its confirmed URL for preview.
         const res = await vehicleApi.uploadDraftDocument(file, documentType);
@@ -231,6 +261,9 @@ function VehicleContent() {
   const missingRequiredDocs = documentsRequired
     ? REQUIRED_DOC_TYPES.filter((type) => !documents.some((d) => d.documentType === type))
     : [];
+  // The licence is satisfied by one already on file, so a second vehicle does not ask.
+  const dlSatisfied = dlOnFile || documents.some((d) => d.documentType === DL_DOC_TYPE);
+  const dlMissing = documentsRequired && !dlSatisfied;
 
   const handleFinalizeDraft = async () => {
     // The backend rejects an incomplete set with VEHICLE_DOCUMENTS_REQUIRED; name
@@ -241,6 +274,11 @@ function VehicleContent() {
           .map((type) => DOC_TYPE_LABEL[type] || type)
           .join(', ')}`,
       );
+      return;
+    }
+    // Matches DL_DOCUMENT_REQUIRED on the backend.
+    if (dlMissing) {
+      setError('Upload a photo of your driving licence before saving this vehicle.');
       return;
     }
     setSaving(true);
@@ -552,13 +590,31 @@ function VehicleContent() {
             <div className="space-y-4">
               <p className="text-sm text-deliivo-gray">
                 {documentsRequired
-                  ? `Vehicles with a ${licenseCountry.toUpperCase()} plate need the front photo, rear photo and registration document. The rest are optional.`
+                  ? `Vehicles with a ${licenseCountry.toUpperCase()} plate need the front photo, rear photo, registration document and your driving licence. The rest are optional.`
                   : 'Upload documents if available. This is optional, and you can still save the vehicle without them.'}
               </p>
 
+              {documentsRequired && dlOnFile && (
+                <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">
+                  Your driving licence is already on file — you do not need to upload it again.
+                </p>
+              )}
+
+              {dlDeclineReason && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+                  Your driving licence was declined: {dlDeclineReason} Upload a new photo below.
+                </p>
+              )}
+
               {VEHICLE_DOCUMENT_OPTIONS.map(({ key, label }) => {
                 const uploaded = documents.some(d => d.documentType === key);
-                const required = documentsRequired && (REQUIRED_DOC_TYPES as readonly string[]).includes(key);
+                // The licence is required by the person, not the draft — and already
+                // satisfied if one is on file from an earlier vehicle.
+                const required = documentsRequired && (
+                  key === DL_DOC_TYPE
+                    ? !dlOnFile
+                    : (REQUIRED_DOC_TYPES as readonly string[]).includes(key)
+                );
                 return (
                 <div key={key} className="flex items-center gap-3">
                   <label className={`flex-1 flex items-center gap-2 cursor-pointer rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm hover:border-deliivo-orange transition-colors ${uploaded ? 'border-green-400 bg-green-50' : required ? 'border-amber-300 bg-amber-50/40' : ''}`}>

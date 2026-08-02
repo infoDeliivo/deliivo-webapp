@@ -532,13 +532,15 @@ export const vehicleApi = {
   // Draft wizard PRIVATE KYC document (DRIVING_LICENSE / INSURANCE_DOCUMENT):
   // confirm returns only { key } (no public URL); attach it to the draft by
   // imageKey. /draft/upload-document requires exactly one of imageUrl | imageKey.
+  // The private key is returned alongside the draft response: a driving licence is
+  // also submitted to the manual review queue, which is keyed on that same object.
   async uploadDraftPrivateDocument(file: File, documentType: string) {
     const uploaded = await uploadViaPresign<{ key: string }>('vehicle_draft_document_private', file);
     const res = await apiFetch<{ data: { documentType: string } }>(
       '/api/v1/vehicles/draft/upload-document',
       { method: 'POST', body: JSON.stringify({ imageKey: uploaded.key, documentType }) },
     );
-    return res;
+    return { ...res, key: uploaded.key };
   },
 
   // Private document for an existing vehicle: confirm persists a VehicleDocument
@@ -1241,6 +1243,10 @@ export interface DlVerificationSession {
 export interface DlVerificationStatus {
   status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'RESUBMISSION_REQUESTED' | 'IDENTITY_MISMATCH' | null;
   sessionUrl?: string | null;
+  /** Set when an admin declined a manually uploaded licence — shown to the driver verbatim. */
+  declineReason?: string | null;
+  /** True once the driver has uploaded a licence photo for manual review. */
+  hasDocument?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -1278,6 +1284,16 @@ export const dlVerificationApi = {
 
   status() {
     return apiFetch<{ data: DlVerificationStatus }>('/api/v1/dl-verification/status');
+  },
+
+  // Manual review fallback for drivers who do not complete Veriff: submit the private
+  // key of an uploaded licence photo and an admin reads it. Re-submitting after a
+  // decline puts the driver back in the queue.
+  submitDocument(documentImageKey: string) {
+    return apiFetch<{ data: { record: { id: string; status: string } } }>(
+      '/api/v1/dl-verification/document',
+      { method: 'POST', body: JSON.stringify({ documentImageKey }) },
+    );
   },
 };
 
