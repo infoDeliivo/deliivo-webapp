@@ -1409,6 +1409,30 @@ export const adminApi = {
       { method: 'POST' },
     );
   },
+  // Driving-licence review queue. The licence photo comes back as `previewKey` —
+  // a private S3 key exchanged for a short-lived signed URL via getDocumentReadUrl.
+  listDlSubmissions(params?: { status?: string; page?: number; limit?: number }) {
+    const query = new URLSearchParams();
+    // 'ALL' is the absence of a filter, not a value the backend understands.
+    if (params?.status && params.status !== 'ALL') query.set('status', params.status);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    return apiFetch<{ data: { submissions: AdminDlSubmission[]; pagination: Pagination } }>(
+      `/api/v1/admin/dl-verifications?${query}`,
+    );
+  },
+  approveDlSubmission(userId: string) {
+    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
+      `/api/v1/admin/dl-verifications/${userId}/approve`,
+      { method: 'POST' },
+    );
+  },
+  declineDlSubmission(userId: string, reason: string) {
+    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
+      `/api/v1/admin/dl-verifications/${userId}/decline`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    );
+  },
   // Vehicle review queue. Oldest-first server-side, so the list arrives in the order
   // it should be worked.
   listVehicles(params?: { status?: string; page?: number; limit?: number }) {
@@ -1652,6 +1676,28 @@ export interface HealthReadyStatus {
     firebase: boolean;
   };
   uptime: number;
+}
+
+/** A driver's uploaded licence awaiting (or past) manual admin review. */
+export interface AdminDlSubmission {
+  id: string;
+  userId: string;
+  status: string;
+  /** Private S3 key for the licence photo — exchange via getDocumentReadUrl. */
+  previewKey: string | null;
+  declineReason: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+    phone: string | null;
+    dob: string | null;
+    dlVerified: boolean;
+  };
 }
 
 /** The DlVerification row the manual override writes. */
