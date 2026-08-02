@@ -1418,21 +1418,6 @@ export const adminApi = {
   unbanUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/unban`, { method: 'POST' });
   },
-  // Manual driving-licence override. Marks the user DL-verified without a Veriff round
-  // trip and writes a synthetic verification record, so the flows gated on dlVerified
-  // (publishing a ride, accepting a booking) open up immediately.
-  verifyUserDl(id: string) {
-    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
-      `/api/v1/admin/users/${id}/dl/verify`,
-      { method: 'POST' },
-    );
-  },
-  unverifyUserDl(id: string) {
-    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
-      `/api/v1/admin/users/${id}/dl/unverify`,
-      { method: 'POST' },
-    );
-  },
   // Driving-licence review queue. The licence photo comes back as `previewKey` —
   // a private S3 key exchanged for a short-lived signed URL via getDocumentReadUrl.
   listDlSubmissions(params?: { status?: string; page?: number; limit?: number }) {
