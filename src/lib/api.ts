@@ -1394,6 +1394,21 @@ export const adminApi = {
   unbanUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/unban`, { method: 'POST' });
   },
+  // Manual driving-licence override. Marks the user DL-verified without a Veriff round
+  // trip and writes a synthetic verification record, so the flows gated on dlVerified
+  // (publishing a ride, accepting a booking) open up immediately.
+  verifyUserDl(id: string) {
+    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
+      `/api/v1/admin/users/${id}/dl/verify`,
+      { method: 'POST' },
+    );
+  },
+  unverifyUserDl(id: string) {
+    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
+      `/api/v1/admin/users/${id}/dl/unverify`,
+      { method: 'POST' },
+    );
+  },
   // Vehicle review queue. Oldest-first server-side, so the list arrives in the order
   // it should be worked.
   listVehicles(params?: { status?: string; page?: number; limit?: number }) {
@@ -1637,6 +1652,18 @@ export interface HealthReadyStatus {
     firebase: boolean;
   };
   uptime: number;
+}
+
+/** The DlVerification row the manual override writes. */
+export interface AdminDlRecord {
+  id: string;
+  userId: string;
+  status: string;
+  veriffSessionId: string;
+  verifiedName: string | null;
+  verifiedDob: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AdminUser {
