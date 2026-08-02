@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
-import { getSafeReturnTo, withReturnTo } from '@/lib/auth-redirect';
+import { getSafeReturnTo, resolvePostLoginPath } from '@/lib/auth-redirect';
 
 type GoogleCredentialResponse = { credential: string };
 type GoogleIdentity = {
@@ -57,9 +57,11 @@ export default function GoogleSignInButton({ returnTo }: { returnTo?: string | n
       const result = await authApi.google(response.credential);
       await login(result.data.accessToken, result.data.refreshToken);
       const destination = returnTo || getSafeReturnTo();
-      router.replace(result.data.next === 'onboarding'
-        ? withReturnTo('/onboarding', destination)
-        : (destination || '/'));
+      router.replace(resolvePostLoginPath(
+        { role: result.data.user.role === 'ADMIN' ? 'ADMIN' : 'USER' },
+        destination,
+        result.data.next !== 'onboarding',
+      ));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Google sign-in failed');
     } finally {

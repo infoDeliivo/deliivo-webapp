@@ -532,13 +532,15 @@ export const vehicleApi = {
   // Draft wizard PRIVATE KYC document (DRIVING_LICENSE / INSURANCE_DOCUMENT):
   // confirm returns only { key } (no public URL); attach it to the draft by
   // imageKey. /draft/upload-document requires exactly one of imageUrl | imageKey.
+  // The private key is returned alongside the draft response: a driving licence is
+  // also submitted to the manual review queue, which is keyed on that same object.
   async uploadDraftPrivateDocument(file: File, documentType: string) {
     const uploaded = await uploadViaPresign<{ key: string }>('vehicle_draft_document_private', file);
     const res = await apiFetch<{ data: { documentType: string } }>(
       '/api/v1/vehicles/draft/upload-document',
       { method: 'POST', body: JSON.stringify({ imageKey: uploaded.key, documentType }) },
     );
-    return res;
+    return { ...res, key: uploaded.key };
   },
 
   // Private document for an existing vehicle: confirm persists a VehicleDocument
@@ -1241,6 +1243,10 @@ export interface DlVerificationSession {
 export interface DlVerificationStatus {
   status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'RESUBMISSION_REQUESTED' | 'IDENTITY_MISMATCH' | null;
   sessionUrl?: string | null;
+  /** Set when an admin declined a manually uploaded licence — shown to the driver verbatim. */
+  declineReason?: string | null;
+  /** True once the driver has uploaded a licence photo for manual review. */
+  hasDocument?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -1278,6 +1284,16 @@ export const dlVerificationApi = {
 
   status() {
     return apiFetch<{ data: DlVerificationStatus }>('/api/v1/dl-verification/status');
+  },
+
+  // Manual review fallback for drivers who do not complete Veriff: submit the private
+  // key of an uploaded licence photo and an admin reads it. Re-submitting after a
+  // decline puts the driver back in the queue.
+  submitDocument(documentImageKey: string) {
+    return apiFetch<{ data: { record: { id: string; status: string } } }>(
+      '/api/v1/dl-verification/document',
+      { method: 'POST', body: JSON.stringify({ documentImageKey }) },
+    );
   },
 };
 
@@ -1393,6 +1409,45 @@ export const adminApi = {
   },
   unbanUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/unban`, { method: 'POST' });
+  },
+  // Manual driving-licence override. Marks the user DL-verified without a Veriff round
+  // trip and writes a synthetic verification record, so the flows gated on dlVerified
+  // (publishing a ride, accepting a booking) open up immediately.
+  verifyUserDl(id: string) {
+    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
+      `/api/v1/admin/users/${id}/dl/verify`,
+      { method: 'POST' },
+    );
+  },
+  unverifyUserDl(id: string) {
+    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
+      `/api/v1/admin/users/${id}/dl/unverify`,
+      { method: 'POST' },
+    );
+  },
+  // Driving-licence review queue. The licence photo comes back as `previewKey` —
+  // a private S3 key exchanged for a short-lived signed URL via getDocumentReadUrl.
+  listDlSubmissions(params?: { status?: string; page?: number; limit?: number }) {
+    const query = new URLSearchParams();
+    // 'ALL' is the absence of a filter, not a value the backend understands.
+    if (params?.status && params.status !== 'ALL') query.set('status', params.status);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    return apiFetch<{ data: { submissions: AdminDlSubmission[]; pagination: Pagination } }>(
+      `/api/v1/admin/dl-verifications?${query}`,
+    );
+  },
+  approveDlSubmission(userId: string) {
+    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
+      `/api/v1/admin/dl-verifications/${userId}/approve`,
+      { method: 'POST' },
+    );
+  },
+  declineDlSubmission(userId: string, reason: string) {
+    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
+      `/api/v1/admin/dl-verifications/${userId}/decline`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    );
   },
   // Vehicle review queue. Oldest-first server-side, so the list arrives in the order
   // it should be worked.
@@ -1637,6 +1692,40 @@ export interface HealthReadyStatus {
     firebase: boolean;
   };
   uptime: number;
+}
+
+/** A driver's uploaded licence awaiting (or past) manual admin review. */
+export interface AdminDlSubmission {
+  id: string;
+  userId: string;
+  status: string;
+  /** Private S3 key for the licence photo — exchange via getDocumentReadUrl. */
+  previewKey: string | null;
+  declineReason: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+    phone: string | null;
+    dob: string | null;
+    dlVerified: boolean;
+  };
+}
+
+/** The DlVerification row the manual override writes. */
+export interface AdminDlRecord {
+  id: string;
+  userId: string;
+  status: string;
+  veriffSessionId: string;
+  verifiedName: string | null;
+  verifiedDob: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AdminUser {

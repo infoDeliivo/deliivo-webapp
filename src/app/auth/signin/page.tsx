@@ -8,7 +8,7 @@ import { authApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import BrandLogo from "@/components/BrandLogo";
 import { buildE164PhoneNumber, PHONE_COUNTRY_OPTIONS, sanitizePhoneLocalNumber } from "@/lib/phone-auth";
-import { getSafeReturnTo, withReturnTo } from "@/lib/auth-redirect";
+import { getSafeReturnTo, resolvePostLoginPath, withReturnTo } from "@/lib/auth-redirect";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { isOnboardingComplete } from "@/lib/onboarding";
 
@@ -33,7 +33,7 @@ export default function SignInPage() {
 
   function redirectAfterLogin(next: 'onboarding' | 'home') {
     const destination = returnTo || getSafeReturnTo();
-    router.replace(next === 'onboarding' ? withReturnTo('/onboarding', destination) : (destination || '/'));
+    router.replace(resolvePostLoginPath(user, destination, next !== 'onboarding'));
   }
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export default function SignInPage() {
   useEffect(() => {
     if (!authLoading && user && !loading) {
       const destination = returnTo || getSafeReturnTo();
-      router.replace(isOnboardingComplete(user) ? (destination || '/') : withReturnTo('/onboarding', destination));
+      router.replace(resolvePostLoginPath(user, destination, isOnboardingComplete(user)));
     }
   }, [authLoading, loading, returnTo, router, user]);
 

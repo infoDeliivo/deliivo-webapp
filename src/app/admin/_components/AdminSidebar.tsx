@@ -14,6 +14,7 @@ import {
   Siren,
   Activity,
   BadgeCheck,
+  IdCard,
 } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
 
@@ -22,6 +23,7 @@ const navItems = [
   { label: 'Users', href: '/admin/users', icon: Users },
   { label: 'Rides', href: '/admin/rides', icon: Car },
   { label: 'Vehicles', href: '/admin/vehicles', icon: BadgeCheck },
+  { label: 'Licences', href: '/admin/dl-verification', icon: IdCard },
   { label: 'SOS', href: '/admin/sos', icon: Siren },
   { label: 'Disputes', href: '/admin/reports', icon: Flag },
   { label: 'Payouts', href: '/admin/payouts', icon: Banknote },

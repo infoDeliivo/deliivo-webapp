@@ -29,12 +29,18 @@ export default function OnboardingPage() {
       router.replace('/auth/signin?returnTo=/onboarding');
       return;
     }
+    // Onboarding collects rider details an admin account has no use for, so an admin
+    // who lands here — by a stale link or a bookmarked URL — is sent to the console.
+    if (user.role === 'ADMIN') {
+      router.replace(getSafeReturnTo() || '/admin');
+      return;
+    }
     if (isOnboardingComplete(user)) {
       router.replace(getSafeReturnTo() || '/');
     }
   }, [loading, router, user]);
 
-  if (loading || !user || isOnboardingComplete(user)) {
+  if (loading || !user || user.role === 'ADMIN' || isOnboardingComplete(user)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-deliivo-cream">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-500" />
