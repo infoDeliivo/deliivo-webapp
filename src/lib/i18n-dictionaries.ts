@@ -628,7 +628,7 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.testFill": "Use test account",
     "payout.countryNoticeTitle": "Important:",
     "payout.countryNoticeCopy":
-      "Payouts can only be sent to Estonian bank accounts. Your address and IBAN must both be Estonian.",
+      "Payouts can only be sent to bank accounts registered in {country}. Your address and IBAN must both be from {country}.",
     "payout.personalTitle": "Confirm your personal details",
     "payout.personalCopy":
       "These are checked against your ID, so they must match your legal documents exactly.",
@@ -644,7 +644,8 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.city": "City",
     "payout.postalCode": "Post code",
     "payout.country": "Country",
-    "payout.countryName": "Estonia",
+    "payout.stripeManagedCopy":
+      "This payout account is managed by Stripe. Complete the steps below to finish setting up your payouts.",
     "payout.bankTitle": "Add a bank account",
     "payout.bankCopy": "This is where your ride earnings are paid out.",
     "payout.bankAccount": "Bank account",
@@ -1812,7 +1813,7 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.testFill": "Kasuta testkontot",
     "payout.countryNoticeTitle": "Oluline:",
     "payout.countryNoticeCopy":
-      "Väljamakseid saab teha ainult Eesti pangakontodele. Nii aadress kui IBAN peavad olema Eesti omad.",
+      "Väljamakseid saab teha ainult riigis {country} registreeritud pangakontodele. Nii aadress kui IBAN peavad olema sealt.",
     "payout.personalTitle": "Kinnita oma isikuandmed",
     "payout.personalCopy":
       "Neid kontrollitakse sinu isikut tõendava dokumendiga, seega peavad need täpselt kattuma.",
@@ -1828,7 +1829,8 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.city": "Linn",
     "payout.postalCode": "Postiindeks",
     "payout.country": "Riik",
-    "payout.countryName": "Eesti",
+    "payout.stripeManagedCopy":
+      "Seda väljamaksekontot haldab Stripe. Väljamaksete seadistamiseks täida allolevad sammud.",
     "payout.bankTitle": "Lisa pangakonto",
     "payout.bankCopy": "Sellele kontole makstakse sinu sõitude tulu.",
     "payout.bankAccount": "Pangakonto",
@@ -2720,7 +2722,7 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.testFill": "Тестовый счёт",
     "payout.countryNoticeTitle": "Важно:",
     "payout.countryNoticeCopy":
-      "Выплаты возможны только на эстонские банковские счета. Адрес и IBAN должны быть эстонскими.",
+      "Выплаты возможны только на банковские счета, открытые в {country}. Адрес и IBAN должны быть оттуда же.",
     "payout.personalTitle": "Подтвердите личные данные",
     "payout.personalCopy":
       "Они сверяются с вашим документом, поэтому должны точно совпадать.",
@@ -2736,7 +2738,8 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.city": "Город",
     "payout.postalCode": "Почтовый индекс",
     "payout.country": "Страна",
-    "payout.countryName": "Эстония",
+    "payout.stripeManagedCopy":
+      "Этот счёт для выплат управляется Stripe. Завершите шаги ниже, чтобы настроить выплаты.",
     "payout.bankTitle": "Добавьте банковский счёт",
     "payout.bankCopy": "На этот счёт будет выплачиваться заработок.",
     "payout.bankAccount": "Банковский счёт",
