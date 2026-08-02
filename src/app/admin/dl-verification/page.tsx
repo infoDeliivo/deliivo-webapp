@@ -20,7 +20,7 @@ import {
 
 const PAGE_SIZE = 20
 
-const STATUS_TABS = ['PENDING', 'APPROVED', 'DECLINED', 'ALL'] as const
+const STATUS_TABS = ['PENDING', 'APPROVED', 'DECLINED', 'SUPERSEDED', 'ALL'] as const
 type StatusTab = (typeof STATUS_TABS)[number]
 
 const statusStyle: Record<string, string> = {
@@ -30,6 +30,8 @@ const statusStyle: Record<string, string> = {
   IDENTITY_MISMATCH: 'bg-red-50 text-red-600',
   RESUBMISSION_REQUESTED: 'bg-blue-50 text-blue-600',
   EXPIRED: 'bg-gray-100 text-gray-500',
+  // Closed out because Veriff approved the driver first — nothing left to decide.
+  SUPERSEDED: 'bg-gray-100 text-gray-500',
 }
 
 type PreviewState = { url?: string; error?: string; loading: boolean }
@@ -258,27 +260,36 @@ export default function AdminDlVerificationPage() {
                     </p>
                   )}
 
-                  <div className="mt-auto flex flex-wrap gap-2 pt-2">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => handleApprove(submission)}
-                      className="rounded-xl bg-[#F97316] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#ea6a0c] disabled:opacity-50"
-                    >
-                      {busy ? 'Processing…' : 'Approve'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        setDeclining(submission)
-                        setDeclineReason('')
-                      }}
-                      className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 disabled:opacity-50"
-                    >
-                      Decline…
-                    </button>
-                  </div>
+                  {/* A superseded submission was closed out by a Veriff approval. The
+                      backend refuses a decision on it with a 409, so the buttons are
+                      hidden rather than offered and then rejected. */}
+                  {submission.status === 'SUPERSEDED' ? (
+                    <p className="mt-auto pt-2 text-xs text-gray-400">
+                      Closed — this driver verified through Veriff.
+                    </p>
+                  ) : (
+                    <div className="mt-auto flex flex-wrap gap-2 pt-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => handleApprove(submission)}
+                        className="rounded-xl bg-[#F97316] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#ea6a0c] disabled:opacity-50"
+                      >
+                        {busy ? 'Processing…' : 'Approve'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          setDeclining(submission)
+                          setDeclineReason('')
+                        }}
+                        className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        Decline…
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )

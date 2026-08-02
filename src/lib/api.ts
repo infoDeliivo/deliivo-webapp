@@ -1241,7 +1241,15 @@ export interface DlVerificationSession {
 }
 
 export interface DlVerificationStatus {
-  status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'RESUBMISSION_REQUESTED' | 'IDENTITY_MISMATCH' | null;
+  // SUPERSEDED: a manual submission closed out because Veriff approved the driver first.
+  status:
+    | 'PENDING'
+    | 'APPROVED'
+    | 'DECLINED'
+    | 'RESUBMISSION_REQUESTED'
+    | 'IDENTITY_MISMATCH'
+    | 'SUPERSEDED'
+    | null;
   sessionUrl?: string | null;
   /** Set when an admin declined a manually uploaded licence — shown to the driver verbatim. */
   declineReason?: string | null;
