@@ -78,21 +78,10 @@ export default function AdminUsersPage() {
     finally { setActionLoading(null); setOpenMenu(null) }
   }
 
-  // Manual driving-licence override. Unlike ban, a failure here is worth surfacing —
-  // an admin who sees the row flip has no other signal that the write succeeded.
-  async function handleToggleDl(userId: string, verified: boolean) {
-    setActionLoading(userId)
-    setError('')
-    try {
-      const res = verified
-        ? await adminApi.unverifyUserDl(userId)
-        : await adminApi.verifyUserDl(userId)
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, dlVerified: res.data.dlVerified } : u))
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to update DL verification')
-    }
-    finally { setActionLoading(null); setOpenMenu(null) }
-  }
+  // Driving licences are reviewed in /admin/dl-verification, where the admin can see
+  // the uploaded document and record a reason. The DL column here is read-only status:
+  // verifying from this page wrote a separate no-document record, which then blocked
+  // the review queue for that driver.
 
   const totalPages = pagination?.totalPages || 1
 
@@ -218,20 +207,10 @@ export default function AdminUsersPage() {
                               Actions <ChevronDown className="w-3 h-3" />
                             </button>
                             {openMenu === u.id && (
-                              <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
+                              <div className="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
                                 <button
                                   type="button"
-                                  className="w-full text-left px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                                  disabled={actionLoading === u.id}
-                                  onClick={() => handleToggleDl(u.id, u.dlVerified)}
-                                >
-                                  {actionLoading === u.id
-                                    ? 'Processing...'
-                                    : u.dlVerified ? 'Unverify DL' : 'Verify DL'}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="w-full text-left px-4 py-2.5 text-xs text-yellow-600 hover:bg-yellow-50 disabled:opacity-50 border-t border-gray-100"
+                                  className="w-full text-left px-4 py-2.5 text-xs text-yellow-600 hover:bg-yellow-50 disabled:opacity-50"
                                   disabled={actionLoading === u.id}
                                   onClick={() => u.isBanned ? handleUnban(u.id) : handleBan(u.id)}
                                 >
