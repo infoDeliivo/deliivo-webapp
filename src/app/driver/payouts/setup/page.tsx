@@ -31,9 +31,14 @@ const FALLBACK_CURRENCY = 'eur';
  * inputs that verify in test mode — a realistic-looking name, address or IBAN leaves the account
  * stuck in `currently_due`, which reads as a bug in our own flow.
  *
- *   dob 1901-01-01        -> successful date-of-birth match
  *   line1 address_full_match -> successful address match
  *   EE382200221020145685  -> payout succeeds
+ *
+ * Stripe also documents dob 1901-01-01 as the successful date-of-birth match, but our
+ * own validator caps age at MAXIMUM_AGE_YEARS (120, stripe.connect.validator.ts), so
+ * that value is rejected as "Date of birth is not valid" before the request leaves us.
+ * A plain adult DOB is used instead: it is not the special match trigger, but it passes
+ * both sides and Stripe accepts any real DOB over 13.
  *
  * Only reachable with a pk_test_ key; see isStripeTestMode().
  */
@@ -42,7 +47,7 @@ const STRIPE_TEST_VALUES = {
   lastName: 'Driver',
   email: 'test-driver@example.com',
   phone: '+37255512345',
-  dob: '1901-01-01',
+  dob: '2000-01-01',
   line1: 'address_full_match',
   line2: '',
   city: 'Tallinn',
