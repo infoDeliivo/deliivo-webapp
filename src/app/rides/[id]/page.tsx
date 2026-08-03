@@ -1116,8 +1116,8 @@ function RideDetailContent() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        <div className={`grid gap-5 ${isOwnRide ? 'lg:grid-cols-1' : 'lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]'} lg:items-start`}>
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className={`grid gap-6 ${isOwnRide ? 'lg:grid-cols-1' : 'lg:grid-cols-[minmax(0,1.35fr)_minmax(460px,0.85fr)]'} lg:items-start`}>
           <main className="space-y-5">
         {/* Route card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
@@ -1309,12 +1309,12 @@ function RideDetailContent() {
             <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
 
             <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                <div>
+              <div className="flex flex-col gap-2">
+                <div className="min-w-0">
                   <p className="text-base font-semibold text-deliivo-dark">{t('rideDetail.yourTripOnThisRide')}</p>
                   <p className="mt-1 text-sm text-deliivo-gray">{t('rideDetail.choosePickupDropoffCopy')}</p>
                 </div>
-                <span className="shrink-0 rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium text-deliivo-gray">
+                <span className="w-fit rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium text-deliivo-gray">
                   {selectablePickupOptions.length} pickup · {selectableDropoffOptions.length} drop-off choices
                 </span>
               </div>
