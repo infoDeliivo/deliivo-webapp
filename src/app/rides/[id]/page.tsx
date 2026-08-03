@@ -1116,8 +1116,8 @@ function RideDetailContent() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className={`grid gap-6 ${isOwnRide ? 'lg:grid-cols-1' : 'lg:grid-cols-[minmax(0,1.35fr)_minmax(460px,0.85fr)]'} lg:items-start`}>
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="grid gap-6">
           <main className="space-y-5">
         {/* Route card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
@@ -1265,7 +1265,7 @@ function RideDetailContent() {
 
           </main>
 
-          <aside className={`space-y-5 ${isOwnRide ? '' : 'lg:sticky lg:top-20'}`}>
+          <aside className="space-y-5">
 
         {/* Booking section */}
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
