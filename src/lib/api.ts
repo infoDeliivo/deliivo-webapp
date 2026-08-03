@@ -2569,6 +2569,7 @@ export interface PublishedRide {
   basePricePerSeat: number;
   currency: string;
   status: string;
+  displayStatus?: string;
   notes?: string;
   routeDistanceMeters?: number;
   routeDurationSeconds?: number;

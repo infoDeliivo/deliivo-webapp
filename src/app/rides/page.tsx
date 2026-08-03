@@ -42,8 +42,10 @@ const STATUS_CONFIG: Record<string, { labelKey: string; className: string }> = {
   ONBOARD: { labelKey: 'rides.onboard', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   DROP_PENDING: { labelKey: 'rides.dropoffPending', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   DRIVER_DROPPED: { labelKey: 'rides.dropoffPending', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
+  COMPLETION_PENDING: { labelKey: 'rides.dropoffPending', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   COMPLETED: { labelKey: 'rides.completed', className: 'bg-green-50 text-green-700 border border-green-200' },
   CANCELLED: { labelKey: 'rides.cancelled', className: 'bg-red-50 text-red-500 border border-red-200' },
+  EXPIRED: { labelKey: 'rides.expired', className: 'bg-gray-50 text-gray-600 border border-gray-200' },
   NO_SHOW: { labelKey: 'rides.noShow', className: 'bg-red-50 text-red-700 border border-red-200' },
   DRIVER_MISSED_PICKUP: { labelKey: 'rides.missedPickup', className: 'bg-red-50 text-red-700 border border-red-200' },
   DISPUTED: { labelKey: 'rides.disputed', className: 'bg-purple-50 text-purple-700 border border-purple-200' },
@@ -68,10 +70,27 @@ const PUBLISHED_VIEW_FILTERS: Array<{
 }> = [
   { id: 'all', labelKey: 'rides.all', statuses: [] },
   { id: 'pending', labelKey: 'rides.pending', statuses: ['PUBLISHED', 'SCHEDULED'] },
-  { id: 'active', labelKey: 'rides.active', statuses: ['READY_TO_START', 'IN_PROGRESS'] },
+  { id: 'active', labelKey: 'rides.active', statuses: ['READY_TO_START', 'IN_PROGRESS', 'COMPLETION_PENDING'] },
   { id: 'completed', labelKey: 'rides.completed', statuses: ['COMPLETED'] },
   { id: 'cancelled', labelKey: 'rides.cancelled', statuses: ['CANCELLED', 'EXPIRED'] },
 ];
+
+function getDepartureAt(departureDate: string, departureTime: string) {
+  const date = new Date(departureDate);
+  const [hours = 0, minutes = 0] = departureTime.split(':').map(Number);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), hours, minutes));
+}
+
+function getPublishedRideDisplayStatus(ride: PublishedRide) {
+  if (ride.displayStatus) return ride.displayStatus;
+  if (!['PUBLISHED', 'SCHEDULED', 'READY_TO_START'].includes(ride.status)) return ride.status;
+  const departureAt = getDepartureAt(ride.departureDate, ride.departureTime);
+  const autoCloseAt = new Date(departureAt.getTime() + 120 * 60 * 1000);
+  const now = new Date();
+  if (now >= autoCloseAt) return 'EXPIRED';
+  if (now >= departureAt) return 'READY_TO_START';
+  return ride.status;
+}
 
 function getBookingStatuses(view: BookingView) {
   const filter = BOOKING_VIEW_FILTERS.find((item) => item.id === view);
@@ -176,7 +195,7 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-4 hover:shadow-md transition-shadow">
+    <div className="flex min-h-[230px] flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-sm font-bold text-primary-600 shrink-0">
@@ -231,7 +250,7 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 pt-2">
+      <div className="mt-auto flex flex-wrap gap-2 pt-2">
         <Link
           href={`/rides/${booking.rideId}`}
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-deliivo-orange px-4 py-2 text-xs font-semibold text-white hover:bg-orange-600 transition-colors"
@@ -269,16 +288,17 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
 
 function PublishedRideCard({ ride }: { ride: PublishedRide }) {
   const { t } = useTranslation();
-  const status = STATUS_CONFIG[ride.status] || STATUS_CONFIG.PUBLISHED;
+  const displayStatus = getPublishedRideDisplayStatus(ride);
+  const status = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.PUBLISHED;
   const dateLabel = new Date(ride.departureDate).toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
   });
-  const canManage = ['PUBLISHED', 'SCHEDULED', 'READY_TO_START', 'IN_PROGRESS'].includes(ride.status);
+  const canManage = ['PUBLISHED', 'SCHEDULED', 'READY_TO_START', 'IN_PROGRESS', 'COMPLETION_PENDING'].includes(displayStatus);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-4 hover:shadow-md transition-shadow">
+    <div className="flex min-h-[230px] flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900">{t('rides.youDriver')}</p>
@@ -315,7 +335,7 @@ function PublishedRideCard({ ride }: { ride: PublishedRide }) {
         </span>
       </div>
 
-      <div className="pt-2">
+      <div className="mt-auto pt-2">
         <Link
           href={canManage ? `/rides/${ride.id}/manage` : `/rides/${ride.id}`}
           className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-deliivo-orange px-4 py-2 text-xs font-semibold text-white hover:bg-orange-600 transition-colors"
@@ -430,9 +450,12 @@ function RidesContent() {
     <div className="flex min-h-screen flex-col bg-deliivo-cream">
       <Navbar />
 
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 px-4 py-6">
-        <h1 className="text-2xl font-bold text-deliivo-dark">{t('rides.myRides')}</h1>
-        <div className="bg-white rounded-2xl p-1.5 shadow-sm flex">
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold text-deliivo-dark">{t('rides.myRides')}</h1>
+        </div>
+
+        <div className="grid grid-cols-2 rounded-2xl bg-white p-1.5 shadow-sm sm:max-w-md">
           <button
             type="button"
             onClick={() => setTab('booked')}
@@ -454,7 +477,7 @@ function RidesContent() {
         </div>
 
         {tab === 'booked' && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 rounded-2xl bg-white p-3 shadow-sm">
             {BOOKING_VIEW_FILTERS.map((filter) => (
               <button
                 key={filter.id}
@@ -476,7 +499,7 @@ function RidesContent() {
         )}
 
         {tab === 'published' && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 rounded-2xl bg-white p-3 shadow-sm">
             {PUBLISHED_VIEW_FILTERS.map((filter) => (
               <button
                 key={filter.id}
@@ -536,11 +559,13 @@ function RidesContent() {
               </Link>
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="grid gap-4 md:grid-cols-2">
               {bookings.map((b) => (
                 <BookingCard key={b.id} booking={b} onAction={loadData} />
               ))}
-              <PaginationControls pagination={bookingsPagination} onPageChange={setBookedPage} />
+              <div className="md:col-span-2">
+                <PaginationControls pagination={bookingsPagination} onPageChange={setBookedPage} />
+              </div>
             </div>
           )
         ) : publishedRides.length === 0 ? (
@@ -569,11 +594,13 @@ function RidesContent() {
             </Link>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="grid gap-4 md:grid-cols-2">
             {publishedRides.map((r) => (
               <PublishedRideCard key={r.id} ride={r} />
             ))}
-            <PaginationControls pagination={publishedPagination} onPageChange={setPublishedPage} />
+            <div className="md:col-span-2">
+              <PaginationControls pagination={publishedPagination} onPageChange={setPublishedPage} />
+            </div>
           </div>
         )}
       </main>
