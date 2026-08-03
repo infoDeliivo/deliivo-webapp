@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = '/';
   };
 
-  const refreshUser = fetchUser;
+  const refreshUser = useCallback(() => fetchUser(false, true), [fetchUser]);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
