@@ -26,7 +26,7 @@ import {
 import ProtectedRoute from '@/components/ProtectedRoute';
 import EmergencySosButton from '@/components/EmergencySosButton';
 import SupportOverrideCard from '@/components/SupportOverrideCard';
-import { driverBookingApi, rideOpsApi, publishRideApi, disputesApi, ratingsApi, DriverPublishedRide, DriverRideBooking, getApiErrorMessage } from '@/lib/api';
+import { driverBookingApi, rideOpsApi, publishRideApi, disputesApi, ratingsApi, trackingApi, DriverPublishedRide, DriverRideBooking, TrackingLink, formatBookingReference, getApiErrorMessage } from '@/lib/api';
 import { getSocket, emitSocketEvent, onSocketEvent, LocationUpdate, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
 import { useAuth } from '@/lib/auth-context';
 import { showError, showSuccess } from '@/lib/app-feedback';
@@ -63,11 +63,14 @@ const [error, setError] = useState('');
   // Live location tracking
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [tracking, setTracking] = useState(false);
+  const [driverTrackingLinksByBookingId, setDriverTrackingLinksByBookingId] = useState<Record<string, TrackingLink[]>>({});
   const watchIdRef = useRef<number | null>(null);
+  const trackingActiveRef = useRef(false);
   const lastLocationSubmitAtRef = useRef(0);
 
   const startTracking = useCallback(() => {
-    if (!navigator.geolocation || tracking) return;
+    if (!navigator.geolocation || trackingActiveRef.current) return;
+    trackingActiveRef.current = true;
     setTracking(true);
 
     watchIdRef.current = navigator.geolocation.watchPosition(
@@ -86,16 +89,20 @@ const [error, setError] = useState('');
           socket.emit('driver:location', { rideId: id, lat, lng });
         }
       },
-      () => { /* geolocation error */ },
+      () => {
+        trackingActiveRef.current = false;
+        setTracking(false);
+      },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
     );
-  }, [id, tracking]);
+  }, [id]);
 
   const stopTracking = useCallback(() => {
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
+    trackingActiveRef.current = false;
     setTracking(false);
   }, []);
 
@@ -186,7 +193,9 @@ const [error, setError] = useState('');
     try {
       const rideRes = await publishRideApi.getRideById(id);
       setRide(rideRes.data);
-      setBookings(rideRes.data.bookings || []);
+      const nextBookings = rideRes.data.bookings || [];
+      setBookings(nextBookings);
+      void loadDriverTrackingLinks(nextBookings);
 
       // Determine phase from status
       const status = rideRes.data.status;
@@ -197,6 +206,51 @@ const [error, setError] = useState('');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('manageRide.failedLoadRide'));
       setPhase('error');
+    }
+  }
+
+  async function loadDriverTrackingLinks(nextBookings = bookings) {
+    const activeBookings = nextBookings.filter((booking) => [
+      'CONFIRMED',
+      'WAITING_FOR_PICKUP',
+      'DRIVER_ARRIVED',
+      'ONBOARD',
+      'DROP_PENDING',
+      'IN_PROGRESS',
+      'COMPLETED',
+    ].includes(booking.status));
+
+    if (activeBookings.length === 0) {
+      setDriverTrackingLinksByBookingId({});
+      return;
+    }
+
+    const entries = await Promise.all(
+      activeBookings.map(async (booking) => {
+        try {
+          const res = await trackingApi.listLinks(booking.id);
+          return [booking.id, res.data || []] as const;
+        } catch {
+          return [booking.id, driverTrackingLinksByBookingId[booking.id] || []] as const;
+        }
+      })
+    );
+
+    setDriverTrackingLinksByBookingId(Object.fromEntries(entries));
+  }
+
+  function trackingUrlFor(link: TrackingLink) {
+    const path = link.trackingUrl || `/tracking/${link.token}`;
+    if (typeof window === 'undefined') return path;
+    return new URL(path, window.location.origin).toString();
+  }
+
+  async function copyTrackingLink(link: TrackingLink) {
+    try {
+      await navigator.clipboard?.writeText(trackingUrlFor(link));
+      showSuccess(t('rideDetail.liveLinkCopied'));
+    } catch {
+      showError(t('rideDetail.couldNotCopyLink'), trackingUrlFor(link));
     }
   }
 
@@ -266,6 +320,28 @@ const [error, setError] = useState('');
     const overrideReason = promptManualOverride('Finish ride manually', 'Use only when the ride is complete but the remaining state is blocking closure.');
     if (overrideReason === null) return;
     await performFinishRide(overrideReason || undefined);
+  }
+
+  function selectManualOperationBooking(candidates: DriverRideBooking[], title: string) {
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0];
+    const list = candidates
+      .map((booking, index) => {
+        const name = booking.passenger?.firstName || t('manageRide.passenger');
+        return `${index + 1}. ${name} - ${formatBookingReference(booking)} - ${booking.status}`;
+      })
+      .join('\n');
+    const answer = window.prompt(`${title}\n\nChoose rider by number, booking reference, or booking ID:\n${list}`, '');
+    if (answer === null) return null;
+    const normalized = answer.trim().toLowerCase();
+    const selectedIndex = Number(normalized);
+    if (Number.isInteger(selectedIndex) && selectedIndex >= 1 && selectedIndex <= candidates.length) {
+      return candidates[selectedIndex - 1];
+    }
+    return candidates.find((booking) => (
+      booking.id.toLowerCase().startsWith(normalized)
+      || formatBookingReference(booking).toLowerCase().startsWith(normalized)
+    )) ?? null;
   }
 
   async function confirmRideLifecycleAction() {
@@ -546,9 +622,9 @@ const [error, setError] = useState('');
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-6 space-y-6">
+      <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.9fr)] lg:items-start">
         {/* Ride status card */}
-        <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
+        <div className="rounded-2xl bg-white shadow-sm overflow-hidden lg:col-span-2">
           <div className={`px-5 py-4 ${phase === 'in_progress' ? 'bg-gradient-to-r from-green-500 to-green-600' : phase === 'completed' ? 'bg-gradient-to-r from-gray-500 to-gray-600' : phase === 'cancelled' ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-deliivo-orange to-primary-600'}`}>
             <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
@@ -593,7 +669,7 @@ const [error, setError] = useState('');
         </div>
 
         {requestCount > 0 && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 lg:col-span-2">
             <p className="text-sm font-semibold text-amber-900">{t('manageRide.requestsWaiting')}</p>
             <p className="text-xs text-amber-800 mt-1">
               {t('manageRide.requestsWaitingCopy', { count: requestCount, plural: requestCount > 1 ? 's' : '' })}
@@ -603,7 +679,7 @@ const [error, setError] = useState('');
 
         {/* Error banner */}
         {error && (
-          <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-4 py-3">
+          <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-4 py-3 lg:col-span-2">
             <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
             <p className="text-sm text-red-600">{error}</p>
             <button type="button" onClick={() => setError('')} className="ml-auto text-red-400 hover:text-red-600">&times;</button>
@@ -611,29 +687,12 @@ const [error, setError] = useState('');
         )}
 
         {phase !== 'completed' && phase !== 'cancelled' && (
-          <EmergencySosButton rideId={ride.id} role="DRIVER" className="w-full" />
-        )}
-
-          {/* Pickup OTP verification is a primary ride-day action. */}
-          {phase === 'in_progress' && pickupOtpBookings.length > 0 && (
-          <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
-                <KeyRound size={16} className="text-deliivo-orange" /> {t('manageRide.pickupOtpTitle')}
-              </h3>
-              <p className="mt-1 text-xs text-deliivo-gray">
-                {t('manageRide.pickupOtpCopy')}
-              </p>
-            </div>
-            {pickupOtpBookings.map(booking => (
-              <OtpVerifySection key={booking.id} booking={booking} onVerified={loadData} />
-            ))}
-          </div>
+          <EmergencySosButton rideId={ride.id} role="DRIVER" className="w-full lg:col-span-2" />
         )}
 
         {/* Ride actions */}
         {phase === 'in_progress' && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
+          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4 lg:col-start-2">
             <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
               <Navigation size={16} className="text-green-500" /> {t('manageRide.inProgressTitle')}
             </h3>
@@ -651,7 +710,7 @@ const [error, setError] = useState('');
         )}
 
         {phase === 'completed' && (
-          <div className="rounded-2xl bg-green-50 border border-green-200 p-5 text-center">
+          <div className="rounded-2xl bg-green-50 border border-green-200 p-5 text-center lg:col-span-2">
             <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
             <p className="text-base font-semibold text-green-800">{t('manageRide.completedTitle')}</p>
             <p className="text-sm text-green-600 mt-1">{t('manageRide.completedCopy')}</p>
@@ -659,7 +718,7 @@ const [error, setError] = useState('');
         )}
 
         {phase === 'cancelled' && (
-          <div className="rounded-2xl bg-red-50 border border-red-200 p-5 text-center">
+          <div className="rounded-2xl bg-red-50 border border-red-200 p-5 text-center lg:col-span-2">
             <XCircle className="h-10 w-10 text-red-500 mx-auto mb-2" />
             <p className="text-base font-semibold text-red-800">{t('manageRide.cancelledTitle')}</p>
             <p className="text-sm text-red-600 mt-1">{t('manageRide.cancelledCopy')}</p>
@@ -668,7 +727,7 @@ const [error, setError] = useState('');
 
         {/* Pending booking requests */}
         {pendingBookings.length > 0 && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
+          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4 lg:col-start-1">
             <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
               <AlertCircle size={16} className="text-amber-500" /> {t('manageRide.pendingRequests', { count: pendingBookings.length })}
             </h3>
@@ -686,7 +745,7 @@ const [error, setError] = useState('');
           </div>
         )}
         {pendingBookings.length === 0 && phase === 'published' && (
-          <div className="rounded-2xl bg-white shadow-sm p-5">
+          <div className="rounded-2xl bg-white shadow-sm p-5 lg:col-start-1">
             <p className="text-sm font-semibold text-deliivo-dark">{t('manageRide.noPendingTitle')}</p>
             <p className="mt-1 text-xs text-deliivo-gray">
               {t('manageRide.noPendingCopy')}
@@ -696,7 +755,7 @@ const [error, setError] = useState('');
 
         {/* Confirmed passengers */}
         {confirmedBookings.length > 0 && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
+          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4 lg:col-start-1">
             <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
               <UserCheck size={16} className="text-green-500" /> {t('manageRide.passengerCount', { count: confirmedBookings.length })}
             </h3>
@@ -710,6 +769,7 @@ const [error, setError] = useState('');
                   onMarkNoShow={() => handleMarkNoShow(booking.id)}
                   onReportIssue={() => handleReportPassengerIssue(booking)}
                   onConfirmDropoff={() => handleConfirmDropoff(booking)}
+                  onPickupOtpVerified={loadData}
                   arrivedLoading={actionLoading === `arrived-${booking.id}`}
                   noShowLoading={actionLoading === `noshow-${booking.id}`}
                   reportLoading={actionLoading === `report-${booking.id}`}
@@ -720,13 +780,13 @@ const [error, setError] = useState('');
             <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">Support context</p>
               <p className="mt-1 text-sm text-deliivo-dark">
-                Share the booking ID, passenger name, pickup status, and ride ID when a manual override or dispute review is needed.
+                Share the booking reference, passenger name, pickup status, and ride ID when a manual override or dispute review is needed.
               </p>
             </div>
           </div>
         )}
         {confirmedBookings.length === 0 && phase !== 'completed' && (
-          <div className="rounded-2xl bg-white shadow-sm p-5">
+          <div className="rounded-2xl bg-white shadow-sm p-5 lg:col-start-1">
             <p className="text-sm font-semibold text-deliivo-dark">{t('manageRide.noPassengersTitle')}</p>
             <p className="mt-1 text-xs text-deliivo-gray">
               {t('manageRide.noPassengersCopy')}
@@ -735,7 +795,7 @@ const [error, setError] = useState('');
         )}
 
         {phase === 'published' && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
+          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4 lg:col-start-2">
             <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
               <Navigation size={16} className="text-deliivo-orange" /> {t('manageRide.driverActions')}
             </h3>
@@ -771,7 +831,7 @@ const [error, setError] = useState('');
         )}
 
         {allowRideSimulation && confirmedBookings.length > 0 && (
-          <div className="rounded-2xl border border-dashed border-deliivo-orange/30 bg-orange-50/40 p-5 space-y-4">
+          <div className="rounded-2xl border border-dashed border-deliivo-orange/30 bg-orange-50/40 p-5 space-y-4 lg:col-start-1">
             <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
               <TestTube2 size={16} className="text-deliivo-orange" /> {t('manageRide.devSimulator')}
             </h3>
@@ -791,7 +851,7 @@ const [error, setError] = useState('');
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-deliivo-dark">
-                          {booking.passenger?.firstName || t('manageRide.passenger')} <span className="text-xs font-normal text-deliivo-gray">#{booking.id.slice(0, 8)}</span>
+                          {booking.passenger?.firstName || t('manageRide.passenger')} <span className="text-xs font-normal text-deliivo-gray">{formatBookingReference(booking)}</span>
                         </p>
                         <p className="text-xs text-deliivo-gray">
                           {t('manageRide.status')}: {booking.status}
@@ -847,7 +907,7 @@ const [error, setError] = useState('');
 
         {/* Location updates continue in the background; only live sharing is shown here. */}
           {phase === 'in_progress' && (
-            <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
+            <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5 lg:col-start-2">
               <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
                 <Share2 size={14} className="text-deliivo-orange" />
@@ -864,21 +924,59 @@ const [error, setError] = useState('');
               <p className="mt-2 text-xs text-deliivo-gray">
                 {t('manageRide.liveSharingCopy')}
               </p>
+              <div className="mt-4 space-y-2">
+                {confirmedBookings.length === 0 ? (
+                  <p className="text-xs text-deliivo-gray">Live links appear here after riders are confirmed.</p>
+                ) : (
+                  confirmedBookings.map((booking) => {
+                    const latestLink = driverTrackingLinksByBookingId[booking.id]?.[0];
+                    return (
+                      <div key={booking.id} className="rounded-xl border border-orange-100 bg-white px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-semibold text-deliivo-dark">
+                              {booking.passenger?.firstName || t('manageRide.passenger')}
+                            </p>
+                            <p className="truncate text-[11px] text-deliivo-gray">
+                              {latestLink ? trackingUrlFor(latestLink) : 'Link will appear when live tracking starts.'}
+                            </p>
+                          </div>
+                          {latestLink && (
+                            <button
+                              type="button"
+                              onClick={() => copyTrackingLink(latestLink)}
+                              className="shrink-0 rounded-full border border-orange-200 px-3 py-1.5 text-xs font-semibold text-deliivo-orange hover:bg-orange-50"
+                            >
+                              {t('common.copy')}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
 
+          <div className="lg:col-start-2">
           <SupportOverrideCard
             title="Driver support and override path"
-            copy="Use this when OTP verification, no-show marking, cancellation, or passenger state does not move as expected. Support should work from the ride and booking IDs below and use admin tools only after checking payment and dispute context."
+            copy="Use this when OTP verification, no-show marking, cancellation, or passenger state does not move as expected. Support should work from the ride ID and booking references below and use admin tools only after checking payment and dispute context."
             identifiers={[
               { label: 'Ride ID', value: ride.id },
               { label: 'Driver ID', value: user?.id },
+              ...confirmedBookings.map((booking) => ({
+                label: `${booking.passenger?.firstName || t('manageRide.passenger')} booking ref`,
+                value: formatBookingReference(booking),
+              })),
             ]}
             supportTopicHref="/contact"
           />
+          </div>
 
           {phase !== 'completed' && phase !== 'cancelled' && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm lg:col-start-2">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold text-amber-950">Manual recovery</h3>
@@ -899,7 +997,7 @@ const [error, setError] = useState('');
                 <button
                   type="button"
                   onClick={async () => {
-                    const target = pickupOtpBookings[0];
+                    const target = selectManualOperationBooking(pickupOtpBookings, 'Manual pickup approval');
                     if (!target) return;
                     const overrideReason = promptManualOverride('Manual OTP verification', 'Use when the pickup OTP cannot be used but the passenger should still be onboarded.');
                     if (overrideReason === null) return;
@@ -929,7 +1027,8 @@ const [error, setError] = useState('');
                 <button
                   type="button"
                   onClick={() => {
-                    const target = confirmedBookings.find((booking) => booking.status === 'ONBOARD');
+                    const dropoffCandidates = confirmedBookings.filter((booking) => booking.status === 'ONBOARD');
+                    const target = selectManualOperationBooking(dropoffCandidates, 'Manual drop-off');
                     if (!target) return;
                     const overrideReason = promptManualOverride('Manual drop-off confirmation', 'Use when drop-off needs to be completed because the normal confirmation path is blocked.');
                     if (overrideReason === null) return;
@@ -1096,7 +1195,7 @@ function BookingRequestCard({
             {t('manageRide.seatsRequested', { count: booking.seatsBooked, plural: booking.seatsBooked > 1 ? 's' : '' })}
             {booking.totalPrice ? ` • ${booking.totalPrice.toFixed(2)}` : ''}
           </p>
-          <p className="text-[11px] text-deliivo-gray">{t('manageRide.bookingNumber', { id: booking.id.slice(0, 8) })} • {statusLabel}</p>
+          <p className="text-[11px] text-deliivo-gray">{t('manageRide.bookingNumber', { id: formatBookingReference(booking) })} • {statusLabel}</p>
         </div>
         <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
           {t('rides.pending')}
@@ -1139,6 +1238,7 @@ function PassengerCard({
   onMarkNoShow,
   onReportIssue,
   onConfirmDropoff,
+  onPickupOtpVerified,
   arrivedLoading,
   noShowLoading,
   reportLoading,
@@ -1150,6 +1250,7 @@ function PassengerCard({
   onMarkNoShow: () => void;
   onReportIssue: () => void;
   onConfirmDropoff: () => void;
+  onPickupOtpVerified: () => void;
   arrivedLoading: boolean;
   noShowLoading: boolean;
   reportLoading: boolean;
@@ -1203,7 +1304,8 @@ function PassengerCard({
     </div>
 
     {ridePhase === 'in_progress' && ['WAITING_FOR_PICKUP', 'DRIVER_ARRIVED'].includes(booking.status) && (
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 space-y-3">
+        <div className="flex flex-wrap gap-2">
         {booking.status === 'WAITING_FOR_PICKUP' && (
           <button
             type="button"
@@ -1226,6 +1328,8 @@ function PassengerCard({
             {t('manageRide.markNoShow')}
           </button>
         )}
+        </div>
+        <OtpVerifySection booking={booking} onVerified={onPickupOtpVerified} />
       </div>
     )}
 
@@ -1361,7 +1465,7 @@ function OtpVerifySection({ booking, onVerified }: { booking: DriverRideBooking;
   return (
     <div className="rounded-xl border border-gray-100 p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-deliivo-dark">{t('manageRide.bookingNumber', { id: booking.id.slice(0, 8) })}</p>
+        <p className="text-sm font-medium text-deliivo-dark">{t('manageRide.bookingNumber', { id: formatBookingReference(booking) })}</p>
         <span className="text-xs px-3 py-1 rounded-full font-medium bg-deliivo-orange text-white">{t('rideDetail.pickup')}</span>
       </div>
 

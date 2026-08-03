@@ -24,7 +24,7 @@ import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import EmergencySosButton from '@/components/EmergencySosButton';
 import SupportOverrideCard from '@/components/SupportOverrideCard';
 import FlowGuide, { FlowGuideStep } from '@/components/FlowGuide';
-import { authApi, searchRidesApi, bookingsApi, rideOpsApi, ratingsApi, trackingApi, disputesApi, paymentMethodsApi, RideDetails, PricePreview, Booking, TrackingLink, Dispute, PaymentMethod, getApiErrorMessage } from '@/lib/api';
+import { authApi, searchRidesApi, bookingsApi, rideOpsApi, ratingsApi, trackingApi, disputesApi, paymentMethodsApi, RideDetails, PricePreview, Booking, TrackingLink, Dispute, PaymentMethod, formatBookingReference, getApiErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { emitSocketEvent, getSocket, onSocketEvent, LocationUpdate, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
 import { isStripeConfigured, StripeProvider } from '@/lib/stripe';
@@ -103,6 +103,11 @@ function buildRiderPointOptions(ride: RideDetails): RiderPointOption[] {
   ];
 }
 
+function waypointForId(ride: RideDetails, waypointId?: string | null) {
+  if (!waypointId) return null;
+  return (ride.waypoints || []).find((waypoint) => waypoint.id === waypointId) || null;
+}
+
 function isWithinConfirmedCancellationWindow(ride: RideDetails, booking: Booking | null) {
   if (booking?.status !== 'CONFIRMED') return false;
   const date = new Date(ride.departureDate);
@@ -133,6 +138,14 @@ function isBookingWindowClosed(ride: RideDetails) {
     && date.getUTCDate() === now.getUTCDate();
   return departureAt <= now.getTime()
     || (sameUtcDay && departureAt - now.getTime() < 3 * 60 * 60 * 1000);
+}
+
+function formatDurationHhMm(totalSeconds?: number | null) {
+  if (!totalSeconds || totalSeconds <= 0) return null;
+  const totalMinutes = Math.round(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
 type LiveSharingLinksCardProps = {
@@ -306,8 +319,11 @@ function RideDetailContent() {
 
   useEffect(() => {
     if (!ride) return;
-    setSelectedPickupValue(myBooking?.pickupWaypointId || ride.bookingContext?.pickupWaypointId || 'origin');
-    setSelectedDropoffValue(myBooking?.dropoffWaypointId || ride.bookingContext?.dropoffWaypointId || 'destination');
+    const points = buildRiderPointOptions(ride);
+    const concretePickup = points.find((point) => point.kind === 'pickup');
+    const concreteDropoff = points.find((point) => point.kind === 'dropoff');
+    setSelectedPickupValue(myBooking?.pickupWaypointId || ride.bookingContext?.pickupWaypointId || concretePickup?.value || 'origin');
+    setSelectedDropoffValue(myBooking?.dropoffWaypointId || ride.bookingContext?.dropoffWaypointId || concreteDropoff?.value || 'destination');
   }, [ride?.id, ride?.bookingContext?.pickupWaypointId, ride?.bookingContext?.dropoffWaypointId, myBooking?.id, myBooking?.pickupWaypointId, myBooking?.dropoffWaypointId]);
 
   useEffect(() => {
@@ -315,6 +331,10 @@ function RideDetailContent() {
     setTravelingWithChildUnderTwo(false);
     setBringingOwnChildSeat(false);
   }, [childSeatControlsEnabled]);
+
+  useEffect(() => {
+    setRatingSubmitted(Boolean(myBooking?.ratingByViewer));
+  }, [myBooking?.id, myBooking?.ratingByViewer?.id]);
 
   useEffect(() => {
     if (!id) return;
@@ -677,11 +697,20 @@ function RideDetailContent() {
     if (!myBooking || ratingStars === 0) return;
     setRatingLoading(true);
     try {
-      await ratingsApi.submitRating(myBooking.id, ratingStars, ratingText || undefined);
+      const res = await ratingsApi.submitRating(myBooking.id, ratingStars, ratingText || undefined);
       setRatingSubmitted(true);
+      setMyBooking((prev) => prev && prev.id === myBooking.id
+        ? { ...prev, ratingByViewer: res.data }
+        : prev);
       showSuccess(t('rideDetail.ratingSubmittedTitle'), t('rideDetail.ratingSubmittedCopy'));
     } catch (err: unknown) {
-      showError(t('rideDetail.couldNotSubmitRating'), getApiErrorMessage(err, t('rideDetail.failedSubmitRating')));
+      const message = getApiErrorMessage(err, t('rideDetail.failedSubmitRating'));
+      if (message.toLowerCase().includes('already submitted')) {
+        setRatingSubmitted(true);
+        showSuccess(t('rideDetail.ratingSubmittedTitle'), t('rideDetail.ratingSubmittedCopy'));
+      } else {
+        showError(t('rideDetail.couldNotSubmitRating'), message);
+      }
     }
     finally { setRatingLoading(false); }
   }
@@ -842,6 +871,14 @@ function RideDetailContent() {
       setBookError(t('rideDetail.selectPaymentCardBeforeBooking'));
       return;
     }
+    if (hasConcretePickupOptions && selectedPickupOption.kind === 'origin') {
+      setBookError('Choose a pickup point for this ride.');
+      return;
+    }
+    if (hasConcreteDropoffOptions && selectedDropoffOption.kind === 'destination') {
+      setBookError('Choose a drop-off point for this ride.');
+      return;
+    }
     setBooking(true);
     setBookError('');
     setPaymentMessage('');
@@ -969,7 +1006,7 @@ function RideDetailContent() {
   const initials = driverName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const vehicleLabel = ride.vehicle ? [ride.vehicle.brand, ride.vehicle.model_name].filter(Boolean).join(' ') : null;
   const dateLabel = new Date(ride.departureDate).toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const durationMin = ride.routeDurationSeconds ? Math.round(ride.routeDurationSeconds / 60) : null;
+  const durationLabel = formatDurationHhMm(ride.routeDurationSeconds);
   const distanceKm = ride.routeDistanceMeters ? (ride.routeDistanceMeters / 1000).toFixed(1) : null;
   const price = ride.segment?.segmentFare ?? ride.basePricePerSeat;
   const previewBreakdown = preview?.priceBreakdown;
@@ -980,8 +1017,30 @@ function RideDetailContent() {
   const selectedDropoffOption = riderPointByValue.get(selectedDropoffValue) ?? riderPointOptions[riderPointOptions.length - 1];
   const pickupOptions = riderPointOptions.filter((option) => ['origin', 'pickup', 'stopover'].includes(option.kind));
   const dropoffOptions = riderPointOptions.filter((option) => ['stopover', 'dropoff', 'destination'].includes(option.kind));
-  const filteredPickupOptions = pickupOptions.filter((option) => option.position < selectedDropoffOption.position);
-  const filteredDropoffOptions = dropoffOptions.filter((option) => option.position > selectedPickupOption.position);
+  const hasConcretePickupOptions = pickupOptions.some((option) => option.kind === 'pickup');
+  const hasConcreteDropoffOptions = dropoffOptions.some((option) => option.kind === 'dropoff');
+  const selectablePickupOptions = hasConcretePickupOptions
+    ? pickupOptions.filter((option) => option.kind !== 'origin')
+    : pickupOptions;
+  const selectableDropoffOptions = hasConcreteDropoffOptions
+    ? dropoffOptions.filter((option) => option.kind !== 'destination')
+    : dropoffOptions;
+  const filteredPickupOptions = selectablePickupOptions.filter((option) => option.position < selectedDropoffOption.position);
+  const filteredDropoffOptions = selectableDropoffOptions.filter((option) => option.position > selectedPickupOption.position);
+  const bookedPickupWaypoint = waypointForId(ride, myBooking?.segmentRide?.bookingContext?.pickupWaypointId);
+  const bookedDropoffWaypoint = waypointForId(ride, myBooking?.segmentRide?.bookingContext?.dropoffWaypointId);
+  const bookedPickupAddress = myBooking?.segmentRide?.segment?.pickupAddress
+    || bookedPickupWaypoint?.address
+    || myBooking?.segmentRide?.originAddress
+    || myBooking?.fullRide?.originAddress
+    || ride.originAddress;
+  const bookedDropoffAddress = myBooking?.segmentRide?.segment?.dropoffAddress
+    || bookedDropoffWaypoint?.address
+    || myBooking?.segmentRide?.destinationAddress
+    || myBooking?.fullRide?.destinationAddress
+    || ride.destinationAddress;
+  const bookedPickupTime = bookedPickupWaypoint?.estimatedArrivalTime || null;
+  const bookedDropoffTime = bookedDropoffWaypoint?.estimatedArrivalTime || null;
   const isOwnRide = user?.id === ride.driverId;
   const bookingGuide = getBookingGuide(Boolean(user));
   const needsTosAcceptance = !user?.tosAcceptedAt || !user?.privacyAcceptedAt;
@@ -1025,7 +1084,7 @@ function RideDetailContent() {
     setSelectedPickupValue(nextValue);
 
     if (selectedDropoffOption.position <= nextPickup.position) {
-      const nextValidDropoff = dropoffOptions.find((option) => option.position > nextPickup.position);
+      const nextValidDropoff = selectableDropoffOptions.find((option) => option.position > nextPickup.position);
       if (nextValidDropoff) {
         setSelectedDropoffValue(nextValidDropoff.value);
       }
@@ -1038,7 +1097,7 @@ function RideDetailContent() {
     setSelectedDropoffValue(nextValue);
 
     if (selectedPickupOption.position >= nextDropoff.position) {
-      const nextValidPickup = [...pickupOptions].reverse().find((option) => option.position < nextDropoff.position);
+      const nextValidPickup = [...selectablePickupOptions].reverse().find((option) => option.position < nextDropoff.position);
       if (nextValidPickup) {
         setSelectedPickupValue(nextValidPickup.value);
       }
@@ -1057,7 +1116,9 @@ function RideDetailContent() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-6 space-y-6">
+      <div className="mx-auto max-w-6xl px-4 py-6">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.85fr)] lg:items-start">
+          <main className="space-y-5">
         {/* Route card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
           <div className="bg-gradient-to-r from-deliivo-orange to-primary-600 px-5 py-4">
@@ -1091,7 +1152,7 @@ function RideDetailContent() {
             <div className="flex flex-wrap gap-4 pt-3 border-t border-gray-50 text-xs text-deliivo-gray">
               <span className="flex items-center gap-1"><Calendar size={13} /> {dateLabel}</span>
               <span className="flex items-center gap-1"><Clock size={13} /> {ride.departureTime}</span>
-              {durationMin && <span className="flex items-center gap-1"><Clock size={13} /> ~{durationMin} min</span>}
+              {durationLabel && <span className="flex items-center gap-1"><Clock size={13} /> ~{durationLabel}</span>}
               {distanceKm && <span className="flex items-center gap-1"><MapPin size={13} /> {distanceKm} km</span>}
             </div>
           </div>
@@ -1202,6 +1263,10 @@ function RideDetailContent() {
         )}
       </div>
 
+          </main>
+
+          <aside className="space-y-5 lg:sticky lg:top-20">
+
         {/* Booking section */}
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
@@ -1250,7 +1315,7 @@ function RideDetailContent() {
                   <p className="mt-1 text-sm text-deliivo-gray">{t('rideDetail.choosePickupDropoffCopy')}</p>
                 </div>
                 <span className="shrink-0 text-xs font-medium text-deliivo-gray">
-                  {pickupOptions.length} pickup · {dropoffOptions.length} drop-off choices
+                  {selectablePickupOptions.length} pickup · {selectableDropoffOptions.length} drop-off choices
                 </span>
               </div>
 
@@ -1635,15 +1700,12 @@ function RideDetailContent() {
                 <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-2">
                 <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookedSegment')}</p>
                 <div className="text-sm text-deliivo-dark space-y-1">
-                  <p><span className="font-medium text-deliivo-gray">{t('rideDetail.pickup')}:</span> {myBooking.segmentRide.originAddress}</p>
-                  <p><span className="font-medium text-deliivo-gray">{t('rideDetail.dropoff')}:</span> {myBooking.segmentRide.destinationAddress}</p>
+                  <p><span className="font-medium text-deliivo-gray">{t('rideDetail.pickup')}:</span> {bookedPickupAddress}</p>
+                  {bookedPickupTime && <p><span className="font-medium text-deliivo-gray">{t('rideDetail.pickupTime')}:</span> {bookedPickupTime}</p>}
+                  <p><span className="font-medium text-deliivo-gray">{t('rideDetail.dropoff')}:</span> {bookedDropoffAddress}</p>
+                  {bookedDropoffTime && <p><span className="font-medium text-deliivo-gray">{t('rideDetail.dropoffTime')}:</span> {bookedDropoffTime}</p>}
                   {myBooking.segmentRide.segment?.segmentFare !== undefined && (
                     <p><span className="font-medium text-deliivo-gray">{t('rideDetail.segmentFare')}:</span> {ride.currency} {myBooking.segmentRide.segment.segmentFare.toFixed(2)}</p>
-                  )}
-                  {myBooking.segmentRide.bookingContext && (
-                    <p className="text-xs text-deliivo-gray">
-                      {t('rideDetail.waypoints')}: {myBooking.segmentRide.bookingContext.pickupWaypointId || t('rideDetail.origin')} - {myBooking.segmentRide.bookingContext.dropoffWaypointId || t('rideDetail.destination')}
-                    </p>
                   )}
                 </div>
               </div>
@@ -1659,12 +1721,10 @@ function RideDetailContent() {
                 </div>
                 <div className="rounded-lg bg-white border border-orange-100 p-3 text-sm text-deliivo-dark">
                   <p className="font-medium">
-                    {myBooking.segmentRide?.segment?.pickupAddress || myBooking.segmentRide?.originAddress || myBooking.fullRide?.originAddress || ride.originAddress}
+                    {bookedPickupAddress}
                   </p>
-                  {myBooking.segmentRide?.bookingContext?.pickupWaypointId && (
-                    <p className="text-xs text-deliivo-gray mt-1 break-all">
-                      {t('rideDetail.waypoint')}: {myBooking.segmentRide.bookingContext.pickupWaypointId}
-                    </p>
+                  {bookedPickupTime && (
+                    <p className="text-xs text-deliivo-gray mt-1">{t('rideDetail.pickupTime')}: {bookedPickupTime}</p>
                   )}
                 </div>
                 <button
@@ -1736,7 +1796,7 @@ function RideDetailContent() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-deliivo-gray">{t('rideDetail.bookingId')}</span>
-                <span className="font-medium text-deliivo-dark">{myBooking.id.slice(0, 8)}</span>
+                <span className="font-medium text-deliivo-dark">{formatBookingReference(myBooking)}</span>
               </div>
             </div>
 
@@ -1917,6 +1977,7 @@ function RideDetailContent() {
               copy="If payment, OTP, pickup arrival, or cancellation gets stuck, contact support with the booking and ride IDs. Support can review the canonical state and apply an admin override when justified."
               identifiers={[
                 { label: 'Ride ID', value: ride.id },
+                { label: 'Booking ref', value: myBooking ? formatBookingReference(myBooking) : '' },
                 { label: 'Booking ID', value: myBooking?.id || '' },
               ]}
             />
@@ -1981,6 +2042,8 @@ function RideDetailContent() {
             <Link href="/rides" className="btn-outline mt-3 py-2 px-6 text-sm inline-block">{t('rides.myRides')}</Link>
           </div>
         )}
+          </aside>
+        </div>
       </div>
     </div>
   );

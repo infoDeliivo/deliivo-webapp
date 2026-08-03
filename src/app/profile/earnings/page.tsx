@@ -27,6 +27,20 @@ function statusClass(status: string) {
   return 'bg-amber-50 text-amber-700 border border-amber-200';
 }
 
+function earningStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PAID: 'Reserved',
+    HELD_IN_ESCROW: 'Reserved',
+    PAYOUT_ELIGIBLE: 'Ready for payout to driver',
+    TRANSFER_CREATED: 'Payout to driver started',
+    PAYOUT_COMPLETED: 'Paid to driver',
+    REFUND_PENDING: 'Refund to rider pending',
+    REFUNDED: 'Refunded to rider',
+    PAYMENT_FAILED: 'Payment failed',
+  };
+  return labels[status] || status.replace(/_/g, ' ');
+}
+
 export default function EarningsPage() {
   return (
     <ProtectedRoute>
@@ -232,7 +246,7 @@ function EarningsContent() {
                       <div className="shrink-0 text-right">
                         <p className="text-sm font-bold text-gray-900">{formatMoney(item.fareAmount, item.currency)}</p>
                         <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(item.status)}`}>
-                          {item.status.replace(/_/g, ' ')}
+                          {earningStatusLabel(item.status)}
                         </span>
                       </div>
                     </div>

@@ -18,6 +18,8 @@ function ChatConversationContent() {
   const [sending, setSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState('');
+  const [chatAvailable, setChatAvailable] = useState(false);
+  const [peerId, setPeerId] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { if (conversationId) loadMessages(); }, [conversationId]);
@@ -28,6 +30,8 @@ function ChatConversationContent() {
     try {
       const res = await chatApi.getMessages(conversationId);
       setMessages((res.data.messages || []).reverse());
+      setChatAvailable(Boolean(res.data.chatAvailable));
+      setPeerId(res.data.peerId || '');
       // Mark as read
       const lastMsg = res.data.messages?.[0];
       if (lastMsg && lastMsg.senderId !== user?.id) {
@@ -39,7 +43,7 @@ function ChatConversationContent() {
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    if (!text.trim() || sending) return;
+    if (!text.trim() || sending || !chatAvailable) return;
 
     const clientMsgId = `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const msgText = text.trim();
@@ -62,7 +66,7 @@ function ChatConversationContent() {
     try {
       // We need the receiverId — we can get it from existing messages
       const peer = messages.find(m => m.senderId !== user?.id);
-      const receiverId = peer?.senderId || '';
+      const receiverId = peerId || peer?.senderId || '';
       if (receiverId) {
         const res = await chatApi.sendMessage(receiverId, msgText, clientMsgId);
         // Replace optimistic with real
@@ -79,6 +83,10 @@ function ChatConversationContent() {
     const invalid = validateImageFile(file);
     if (invalid) {
       setImageError(invalid);
+      return;
+    }
+    if (!chatAvailable) {
+      setImageError('Chat is read-only after the ride is closed.');
       return;
     }
     setImageError('');
@@ -101,7 +109,7 @@ function ChatConversationContent() {
 
     try {
       const peer = messages.find(m => m.senderId !== user?.id);
-      const receiverId = peer?.senderId || '';
+      const receiverId = peerId || peer?.senderId || '';
       if (receiverId) {
         const res = await chatApi.uploadAndSendImage(receiverId, file, clientMsgId);
         setMessages(prev => prev.map(m => m.id === clientMsgId ? res.data : m));
@@ -161,6 +169,11 @@ function ChatConversationContent() {
       {/* Input */}
       <div className="shrink-0 border-t border-gray-100 bg-white">
         {imageError && <p className="px-4 pt-2 text-xs text-red-600">{imageError}</p>}
+        {!chatAvailable && (
+          <p className="px-4 pt-3 text-xs font-medium text-deliivo-gray">
+            This chat is read-only. Messages are available only while the ride is active.
+          </p>
+        )}
         <form onSubmit={handleSend} className="px-4 py-3 flex gap-2">
           <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-deliivo-gray hover:bg-gray-100 disabled:opacity-40 transition-colors">
             {uploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
@@ -168,7 +181,7 @@ function ChatConversationContent() {
               type="file"
               accept="image/*"
               className="hidden"
-              disabled={uploadingImage}
+              disabled={uploadingImage || !chatAvailable}
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) handleSendImage(f);
@@ -180,12 +193,13 @@ function ChatConversationContent() {
             type="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Type a message..."
+            disabled={!chatAvailable}
+            placeholder={chatAvailable ? 'Type a message...' : 'Ride chat is closed'}
             className="flex-1 rounded-full border border-gray-200 px-4 py-2.5 text-sm focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
           />
           <button
             type="submit"
-            disabled={!text.trim() || sending}
+            disabled={!text.trim() || sending || !chatAvailable}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-deliivo-orange text-white hover:bg-orange-600 disabled:opacity-40 transition-colors"
           >
             <Send className="h-4 w-4" />

@@ -102,6 +102,8 @@ const MAX_STOPOVERS = 3;
 const CITY_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_CITY_POINT_RADIUS_KM || '15');
 const STOPOVER_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_STOPOVER_POINT_RADIUS_KM || '5');
 const ROUTE_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_ROUTE_POINT_RADIUS_KM || '10');
+const PLATFORM_FEE_PERCENT_RAW = Number(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT || '0');
+const PLATFORM_FEE_PERCENT = Number.isFinite(PLATFORM_FEE_PERCENT_RAW) ? Math.max(0, PLATFORM_FEE_PERCENT_RAW) : 0;
 const ESTONIA_MAP_CENTER = { lat: 58.5953, lng: 25.0136 };
 const MINIMUM_PUBLISH_LEAD_MS = 3 * 60 * 60 * 1000;
 
@@ -1337,6 +1339,11 @@ function StepPrice({
   const rec = state.recommendation;
   const currency = rec?.currency || 'EUR';
   const grossFullRideFare = state.basePricePerSeat * state.seats;
+  const platformFeeRate = PLATFORM_FEE_PERCENT / 100;
+  const estimatedServiceFeePerSeat = Math.round(state.basePricePerSeat * platformFeeRate * 100) / 100;
+  const estimatedRiderTotalPerSeat = state.basePricePerSeat + estimatedServiceFeePerSeat;
+  const estimatedFullRideServiceFees = estimatedServiceFeePerSeat * state.seats;
+  const estimatedFullRideRiderTotal = estimatedRiderTotalPerSeat * state.seats;
   const recommendationAdjusted = Boolean(
     rec && Math.abs(rec.breakdown.estimatedRouteCost - rec.recommendedPrice) >= 0.01
   );
@@ -1424,17 +1431,35 @@ function StepPrice({
             <Plus className="h-4 w-4" />
           </button>
         </div>
-        <div className="mt-4 grid gap-2 border-t border-gray-100 pt-4 text-sm sm:grid-cols-2">
+        <div className="mt-4 grid gap-3 border-t border-gray-100 pt-4 text-sm sm:grid-cols-2">
           <div>
             <p className="text-xs text-deliivo-gray">{t('publish.yourFarePerRider')}</p>
             <p className="font-semibold text-deliivo-dark">{currency} {state.basePricePerSeat.toFixed(2)}</p>
           </div>
           <div>
+            <p className="text-xs text-deliivo-gray">{t('publish.riderServiceFeeEstimate')}</p>
+            <p className="font-semibold text-deliivo-dark">{currency} {estimatedServiceFeePerSeat.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-deliivo-gray">{t('publish.riderTotalPerSeatEstimate')}</p>
+            <p className="font-semibold text-deliivo-dark">{currency} {estimatedRiderTotalPerSeat.toFixed(2)}</p>
+          </div>
+          <div>
             <p className="text-xs text-deliivo-gray">{t('publish.allSeatsGrossFare', { seats: state.seats })}</p>
             <p className="font-semibold text-deliivo-dark">{currency} {grossFullRideFare.toFixed(2)}</p>
           </div>
+          <div>
+            <p className="text-xs text-deliivo-gray">{t('publish.fullRideServiceFeeEstimate', { seats: state.seats })}</p>
+            <p className="font-semibold text-deliivo-dark">{currency} {estimatedFullRideServiceFees.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-deliivo-gray">{t('publish.fullRideRiderTotalEstimate', { seats: state.seats })}</p>
+            <p className="font-semibold text-deliivo-dark">{currency} {estimatedFullRideRiderTotal.toFixed(2)}</p>
+          </div>
         </div>
-        <p className="mt-3 text-xs leading-5 text-deliivo-gray">{t('publish.grossFareNotice')}</p>
+        <p className="mt-3 text-xs leading-5 text-deliivo-gray">
+          {t('publish.grossFareNotice')} {t('publish.stripeFeeNotice')}
+        </p>
       </div>
 
       {/* Notes */}

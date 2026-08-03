@@ -42,16 +42,42 @@ function setState(nextState: Partial<NotificationState>) {
   emit();
 }
 
-function mapIncomingNotification(payload: NotificationPayload): NotificationRecord {
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function asCreatedAt(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  const text = asString(value);
+  if (text) return text;
+  return new Date().toISOString();
+}
+
+function mapIncomingNotification(payload: NotificationPayload | Record<string, unknown>): NotificationRecord | null {
+  const root = asRecord(payload);
+  const nestedData = asRecord(root?.data);
+  const source = nestedData?.id ? nestedData : root;
+  if (!source) return null;
+
+  const id = asString(source.id);
+  const title = asString(source.title);
+  const body = asString(source.body);
+  if (!id || !title || !body) return null;
+
+  const notificationData = asRecord(source.data);
   return {
-    id: payload.data.id,
-    type: payload.data.notificationType,
-    title: payload.data.title,
-    body: payload.data.body,
-    data: (payload.data.data || {}) as Record<string, unknown>,
+    id,
+    type: asString(source.notificationType) || asString(source.type) || 'GENERAL',
+    title,
+    body,
+    data: notificationData || {},
     isRead: false,
     readAt: null,
-    createdAt: payload.data.createdAt,
+    createdAt: asCreatedAt(source.createdAt),
   };
 }
 
@@ -161,9 +187,25 @@ function startStoreSync(userId: string) {
   };
   socket?.on('connect', handleConnect);
 
-  const unsubIncoming = onSocketEvent<NotificationPayload>('notification:new', (payload) => {
-    upsertIncoming(mapIncomingNotification(payload));
+  const refreshFromRealtime = () => {
+    void loadNotifications(true);
+  };
+
+  const unsubIncoming = onSocketEvent<NotificationPayload | Record<string, unknown>>('notification:new', (payload) => {
+    try {
+      const notification = mapIncomingNotification(payload);
+      if (notification) {
+        upsertIncoming(notification);
+        return;
+      }
+    } catch {
+      // Fall through to refresh; the REST list is the canonical notification state.
+    }
+    refreshFromRealtime();
   });
+  const unsubBooking = onSocketEvent('booking:updated', refreshFromRealtime);
+  const unsubRide = onSocketEvent('ride:updated', refreshFromRealtime);
+  const unsubDispute = onSocketEvent('dispute:updated', refreshFromRealtime);
 
   document.addEventListener('visibilitychange', refreshOnFocus);
   window.addEventListener('focus', refreshOnWindowFocus);
@@ -171,6 +213,9 @@ function startStoreSync(userId: string) {
 
   teardown = () => {
     unsubIncoming();
+    unsubBooking();
+    unsubRide();
+    unsubDispute();
     socket?.off('connect', handleConnect);
     document.removeEventListener('visibilitychange', refreshOnFocus);
     window.removeEventListener('focus', refreshOnWindowFocus);

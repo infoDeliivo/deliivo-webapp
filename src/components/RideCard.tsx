@@ -16,6 +16,7 @@ export interface Ride {
   vehicleColor: string;
   seatsBooked: number;
   seatsTotal: number;
+  availableSeats?: number;
   pricePerSeat: number;
   femaleOnly?: boolean;
   noSmoking?: boolean;
@@ -48,7 +49,8 @@ function StarRating({ rating }: { rating: number }) {
 
 export default function RideCard({ ride }: RideCardProps) {
   const { t } = useTranslation();
-  const seatsLeft = ride.seatsTotal - ride.seatsBooked;
+  const seatsLeft = ride.availableSeats ?? Math.max(0, ride.seatsTotal - ride.seatsBooked);
+  const bookedSeats = Math.max(0, ride.seatsTotal - seatsLeft);
 
   return (
     <article className="card flex flex-col gap-4 transition-shadow hover:shadow-md sm:flex-row sm:items-start">
@@ -126,7 +128,7 @@ export default function RideCard({ ride }: RideCardProps) {
           </span>
           <span className="flex items-center gap-1">
             <Users size={13} className="text-deliivo-gray" />
-            {t('ride.seatsBooked', { booked: ride.seatsBooked, total: ride.seatsTotal })}
+            {t('ride.seatsBooked', { booked: bookedSeats, total: ride.seatsTotal })}
             {seatsLeft <= 1 && seatsLeft > 0 && (
               <span className="ml-1 text-amber-500 font-medium">
                 {t('ride.leftUrgent', { count: seatsLeft })}

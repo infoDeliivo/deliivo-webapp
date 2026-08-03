@@ -92,6 +92,9 @@ function ChatListContent() {
                         {isMe ? 'You: ' : ''}{preview}
                       </p>
                     </div>
+                    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${conv.chatAvailable ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {conv.chatAvailable ? 'Active' : 'Read-only'}
+                    </span>
                     {conv.unreadCount > 0 && (
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-deliivo-orange text-[10px] font-bold text-white shrink-0">
                         {conv.unreadCount}

@@ -23,6 +23,22 @@ function paymentStatusClass(status: string) {
   return 'bg-gray-50 text-gray-600 border border-gray-200';
 }
 
+function paymentStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    CREATED: 'Created',
+    PAYMENT_PENDING: 'Payment pending',
+    PAID: 'Reserved',
+    HELD_IN_ESCROW: 'Reserved',
+    PAYOUT_ELIGIBLE: 'Ready for payout to driver',
+    TRANSFER_CREATED: 'Payout to driver started',
+    PAYOUT_COMPLETED: 'Paid to driver',
+    REFUND_PENDING: 'Refund to rider pending',
+    REFUNDED: 'Refunded to rider',
+    PAYMENT_FAILED: 'Payment failed',
+  };
+  return labels[status] || status.replace(/_/g, ' ');
+}
+
 function PaymentMethodsContent() {
   const { t } = useTranslation();
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
@@ -251,7 +267,7 @@ function PaymentMethodsContent() {
                     <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-gray-900">{formatMoney(tx.amountTotal, tx.currency)}</p>
                       <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${paymentStatusClass(tx.status)}`}>
-                        {tx.status.replace(/_/g, ' ')}
+                        {paymentStatusLabel(tx.status)}
                       </span>
                     </div>
                   </div>
