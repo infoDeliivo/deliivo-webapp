@@ -1320,51 +1320,89 @@ function RideDetailContent() {
               </div>
 
               <div className="grid gap-3">
-                <label className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 focus-within:border-deliivo-orange focus-within:bg-white focus-within:ring-2 focus-within:ring-deliivo-orange/10">
+                <div className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                   <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-100 text-deliivo-orange">
                       <MapPin className="h-3.5 w-3.5" />
                     </span>
                     {t('rideDetail.pickupChoice')}
                   </span>
-                  <select
-                    value={selectedPickupValue}
-                    onChange={(event) => handlePickupChange(event.target.value)}
-                    className="mt-2 min-w-0 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-deliivo-dark outline-none"
-                  >
+                  <div className="mt-3 grid gap-2" role="radiogroup" aria-label={t('rideDetail.pickupChoice')}>
                     {filteredPickupOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {pointKindLabel(option.kind)}: {option.address}
-                      </option>
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handlePickupChange(option.value)}
+                        className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          selectedPickupValue === option.value
+                            ? 'border-deliivo-orange bg-white shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-deliivo-orange/50'
+                        }`}
+                        aria-checked={selectedPickupValue === option.value}
+                        role="radio"
+                      >
+                        <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                          selectedPickupValue === option.value ? 'border-deliivo-orange bg-deliivo-orange' : 'border-gray-300'
+                        }`}>
+                          {selectedPickupValue === option.value && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                            {pointKindLabel(option.kind)}
+                          </span>
+                          <span className="mt-0.5 block break-words text-sm font-semibold text-deliivo-dark">
+                            {option.address}
+                          </span>
+                          <span className="mt-1 block text-xs text-deliivo-gray">
+                            {t('rideDetail.estimatedPickup')}: {option.estimatedArrivalTime || ride.departureTime}
+                          </span>
+                        </span>
+                      </button>
                     ))}
-                  </select>
-                  <span className="mt-1 block text-xs text-deliivo-gray">
-                    {t('rideDetail.estimatedPickup')}: {selectedPickupOption.estimatedArrivalTime || ride.departureTime}
-                  </span>
-                </label>
+                  </div>
+                </div>
 
-                <label className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 focus-within:border-deliivo-orange focus-within:bg-white focus-within:ring-2 focus-within:ring-deliivo-orange/10">
+                <div className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                   <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-red-600">
                       <MapPin className="h-3.5 w-3.5" />
                     </span>
                     {t('rideDetail.dropoffChoice')}
                   </span>
-                  <select
-                    value={selectedDropoffValue}
-                    onChange={(event) => handleDropoffChange(event.target.value)}
-                    className="mt-2 min-w-0 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-deliivo-dark outline-none"
-                  >
+                  <div className="mt-3 grid gap-2" role="radiogroup" aria-label={t('rideDetail.dropoffChoice')}>
                     {filteredDropoffOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {pointKindLabel(option.kind)}: {option.address}
-                      </option>
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleDropoffChange(option.value)}
+                        className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          selectedDropoffValue === option.value
+                            ? 'border-deliivo-orange bg-white shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-deliivo-orange/50'
+                        }`}
+                        aria-checked={selectedDropoffValue === option.value}
+                        role="radio"
+                      >
+                        <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                          selectedDropoffValue === option.value ? 'border-deliivo-orange bg-deliivo-orange' : 'border-gray-300'
+                        }`}>
+                          {selectedDropoffValue === option.value && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                            {pointKindLabel(option.kind)}
+                          </span>
+                          <span className="mt-0.5 block break-words text-sm font-semibold text-deliivo-dark">
+                            {option.address}
+                          </span>
+                          <span className="mt-1 block text-xs text-deliivo-gray">
+                            {t('rideDetail.estimatedDropoff')}: {option.estimatedArrivalTime || t('rideDetail.atDestination')}
+                          </span>
+                        </span>
+                      </button>
                     ))}
-                  </select>
-                  <span className="mt-1 block text-xs text-deliivo-gray">
-                    {t('rideDetail.estimatedDropoff')}: {selectedDropoffOption.estimatedArrivalTime || t('rideDetail.atDestination')}
-                  </span>
-                </label>
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-start gap-3 rounded-xl bg-orange-50/70 px-4 py-3">
@@ -1404,25 +1442,25 @@ function RideDetailContent() {
             )}
 
             {/* Seat selector */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-deliivo-dark">{t('rideDetail.seats')}</span>
-              <div className="flex items-center gap-3">
-                <button type="button" disabled={seats <= 1} onClick={() => setSeats(s => s - 1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 disabled:opacity-30">
+            <div className="space-y-2">
+              <span className="block text-sm font-medium text-deliivo-dark">{t('rideDetail.seats')}</span>
+              <div className="flex items-center justify-center gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3">
+                <button type="button" disabled={seats <= 1} onClick={() => setSeats(s => s - 1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 disabled:opacity-30">
                   <Minus className="h-3.5 w-3.5" />
                 </button>
-                <span className="w-5 text-center font-bold">{seats}</span>
-                <button type="button" disabled={seats >= Math.min(10, ride.availableSeats)} onClick={() => setSeats(s => s + 1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-deliivo-orange bg-deliivo-orange-light text-deliivo-orange disabled:opacity-30">
+                <span className="min-w-10 text-center text-lg font-bold text-deliivo-dark">{seats}</span>
+                <button type="button" disabled={seats >= Math.min(10, ride.availableSeats)} onClick={() => setSeats(s => s + 1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-deliivo-orange bg-deliivo-orange-light text-deliivo-orange disabled:opacity-30">
                   <Plus className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
 
-            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-              <span className="text-sm text-deliivo-dark">{t('rideDetail.requestExpires')}</span>
+            <div className="space-y-2">
+              <span className="block text-sm font-medium text-deliivo-dark">{t('rideDetail.requestExpires')}</span>
               <select
                 value={responseExpiryOption}
                 onChange={(e) => setResponseExpiryOption(e.target.value as typeof responseExpiryOption)}
-                className="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-deliivo-dark focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20 sm:w-auto sm:min-w-44"
+                className="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-deliivo-dark focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
               >
                 {requestExpiryOptions.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
