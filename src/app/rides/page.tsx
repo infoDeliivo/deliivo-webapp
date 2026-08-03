@@ -28,25 +28,25 @@ type PublishedView = 'all' | 'pending' | 'active' | 'completed' | 'cancelled';
 const PAGE_SIZE = 10;
 
 const STATUS_CONFIG: Record<string, { labelKey: string; className: string }> = {
-  PENDING: { labelKey: 'rides.pending', className: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
-  ACCEPTED: { labelKey: 'rides.accepted', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   CONFIRMED: { labelKey: 'rides.confirmed', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  PAYMENT_PENDING: { labelKey: 'rides.pending', className: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
+  PAYMENT_FAILED: { labelKey: 'rides.paymentFailed', className: 'bg-red-50 text-red-700 border border-red-200' },
+  DRIVER_PENDING: { labelKey: 'rides.pending', className: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
   PUBLISHED: { labelKey: 'rides.upcoming', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   SCHEDULED: { labelKey: 'rides.upcoming', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   READY_TO_START: { labelKey: 'rides.readyToStart', className: 'bg-amber-50 text-amber-700 border border-amber-200' },
   WAITING_FOR_PICKUP: { labelKey: 'rides.pickupSoon', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   DRIVER_ARRIVED: { labelKey: 'rides.driverArrived', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
+  OTP_PENDING: { labelKey: 'rides.pickupSoon', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   IN_PROGRESS: { labelKey: 'rides.inProgress', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   ONBOARD: { labelKey: 'rides.onboard', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   DROP_PENDING: { labelKey: 'rides.dropoffPending', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
+  DRIVER_DROPPED: { labelKey: 'rides.dropoffPending', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   COMPLETED: { labelKey: 'rides.completed', className: 'bg-green-50 text-green-700 border border-green-200' },
   CANCELLED: { labelKey: 'rides.cancelled', className: 'bg-red-50 text-red-500 border border-red-200' },
   NO_SHOW: { labelKey: 'rides.noShow', className: 'bg-red-50 text-red-700 border border-red-200' },
   DRIVER_MISSED_PICKUP: { labelKey: 'rides.missedPickup', className: 'bg-red-50 text-red-700 border border-red-200' },
   DISPUTED: { labelKey: 'rides.disputed', className: 'bg-purple-50 text-purple-700 border border-purple-200' },
-  WITHDRAWN: { labelKey: 'rides.withdrawn', className: 'bg-gray-50 text-gray-600 border border-gray-200' },
-  REJECTED: { labelKey: 'rides.rejected', className: 'bg-red-50 text-red-500 border border-red-200' },
-  EXPIRED: { labelKey: 'rides.expired', className: 'bg-gray-50 text-gray-500 border border-gray-200' },
 };
 
 const BOOKING_VIEW_FILTERS: Array<{
@@ -55,10 +55,10 @@ const BOOKING_VIEW_FILTERS: Array<{
   statuses: string[];
 }> = [
   { id: 'all', labelKey: 'rides.all', statuses: [] },
-  { id: 'active', labelKey: 'rides.active', statuses: ['ACCEPTED', 'CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING'] },
-  { id: 'pending', labelKey: 'rides.pending', statuses: ['PENDING', 'PAYMENT_PENDING', 'DRIVER_PENDING'] },
+  { id: 'active', labelKey: 'rides.active', statuses: ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'] },
+  { id: 'pending', labelKey: 'rides.pending', statuses: ['PAYMENT_PENDING', 'DRIVER_PENDING'] },
   { id: 'completed', labelKey: 'rides.completed', statuses: ['COMPLETED'] },
-  { id: 'cancelled', labelKey: 'rides.cancelled', statuses: ['CANCELLED', 'WITHDRAWN', 'REJECTED', 'EXPIRED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DISPUTED'] },
+  { id: 'cancelled', labelKey: 'rides.cancelled', statuses: ['CANCELLED', 'PAYMENT_FAILED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DISPUTED'] },
 ];
 
 const PUBLISHED_VIEW_FILTERS: Array<{
@@ -125,7 +125,7 @@ function PaginationControls({
 function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => void }) {
   const { t } = useTranslation();
   const ride = booking.ride;
-  const status = STATUS_CONFIG[booking.status] || STATUS_CONFIG.PENDING;
+  const status = STATUS_CONFIG[booking.status] || STATUS_CONFIG.DRIVER_PENDING;
   const dateLabel = ride
     ? new Date(ride.departureDate).toLocaleDateString('en-US', {
         weekday: 'short',
@@ -142,8 +142,8 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
     .toUpperCase();
   const [acting, setActing] = useState(false);
 
-  const canWithdraw = ['PENDING', 'PAYMENT_PENDING', 'DRIVER_PENDING'].includes(booking.status);
-  const canCancel = ['ACCEPTED', 'CONFIRMED'].includes(booking.status);
+  const canWithdraw = ['PAYMENT_PENDING', 'DRIVER_PENDING'].includes(booking.status);
+  const canCancel = booking.status === 'CONFIRMED';
 
   async function handleWithdraw(e: React.MouseEvent) {
     e.preventDefault();
@@ -152,7 +152,7 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
     if (reason === null) return;
     setActing(true);
     try {
-      await bookingsApi.cancel(booking.id, reason.trim() || undefined);
+      await bookingsApi.withdraw(booking.id, reason.trim() || undefined);
       onAction();
     } catch {
       // ignore

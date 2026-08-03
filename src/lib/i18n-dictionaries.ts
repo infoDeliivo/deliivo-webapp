@@ -1265,7 +1265,7 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "rideDetail.submitRating": "Submit Rating",
     "rideDetail.ratingSubmitted": "Rating submitted! Thank you.",
     "rideDetail.thisIsYourRide": "This is your ride",
-    "rideDetail.manageOwnRideCopy": "You can manage it from the My Rides page.",
+    "rideDetail.manageOwnRideCopy": "Open the driver dashboard to manage requests, passengers, and ride-day actions.",
     "rideDetail.cardDetailsNotReady":
       "Card details are not ready. Please re-enter the card.",
     "rideDetail.cardSetupFailed": "Card setup failed",
@@ -2290,7 +2290,7 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "rideDetail.submitRating": "Saada hinnang",
     "rideDetail.ratingSubmitted": "Hinnang saadetud. Aitäh!",
     "rideDetail.thisIsYourRide": "See on sinu sõit",
-    "rideDetail.manageOwnRideCopy": "Saad seda hallata lehelt Minu sõidud.",
+    "rideDetail.manageOwnRideCopy": "Ava juhi töölaud, et hallata päringuid, reisijaid ja sõidupäeva tegevusi.",
     "rideDetail.cardDetailsNotReady":
       "Kaardi andmed ei ole valmis. Sisesta kaart uuesti.",
     "rideDetail.cardSetupFailed": "Kaardi seadistamine ebaõnnestus",

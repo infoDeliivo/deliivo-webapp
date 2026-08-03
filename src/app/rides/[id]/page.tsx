@@ -2039,7 +2039,7 @@ function RideDetailContent() {
           <div className="rounded-2xl bg-primary-50 border border-primary-100 p-5 text-center">
             <p className="text-sm font-medium text-deliivo-dark">{t('rideDetail.thisIsYourRide')}</p>
             <p className="text-xs text-deliivo-gray mt-1">{t('rideDetail.manageOwnRideCopy')}</p>
-            <Link href="/rides" className="btn-outline mt-3 py-2 px-6 text-sm inline-block">{t('rides.myRides')}</Link>
+            <Link href={`/rides/${ride.id}/manage`} className="btn-outline mt-3 py-2 px-6 text-sm inline-block">{t('rides.manageRide')}</Link>
           </div>
         )}
           </aside>
