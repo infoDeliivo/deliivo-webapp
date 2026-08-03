@@ -622,9 +622,9 @@ const [error, setError] = useState('');
         </div>
       </div>
 
-      <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.9fr)] lg:items-start">
+      <div className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6">
         {/* Ride status card */}
-        <div className="rounded-2xl bg-white shadow-sm overflow-hidden lg:col-span-2">
+        <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
           <div className={`px-5 py-4 ${phase === 'in_progress' ? 'bg-gradient-to-r from-green-500 to-green-600' : phase === 'completed' ? 'bg-gradient-to-r from-gray-500 to-gray-600' : phase === 'cancelled' ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-deliivo-orange to-primary-600'}`}>
             <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
@@ -669,7 +669,7 @@ const [error, setError] = useState('');
         </div>
 
         {requestCount > 0 && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 lg:col-span-2">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <p className="text-sm font-semibold text-amber-900">{t('manageRide.requestsWaiting')}</p>
             <p className="text-xs text-amber-800 mt-1">
               {t('manageRide.requestsWaitingCopy', { count: requestCount, plural: requestCount > 1 ? 's' : '' })}
@@ -679,7 +679,7 @@ const [error, setError] = useState('');
 
         {/* Error banner */}
         {error && (
-          <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-4 py-3 lg:col-span-2">
+          <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-4 py-3">
             <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
             <p className="text-sm text-red-600">{error}</p>
             <button type="button" onClick={() => setError('')} className="ml-auto text-red-400 hover:text-red-600">&times;</button>
@@ -687,12 +687,12 @@ const [error, setError] = useState('');
         )}
 
         {phase !== 'completed' && phase !== 'cancelled' && (
-          <EmergencySosButton rideId={ride.id} role="DRIVER" className="w-full lg:col-span-2" />
+          <EmergencySosButton rideId={ride.id} role="DRIVER" className="w-full" />
         )}
 
         {/* Ride actions */}
         {phase === 'in_progress' && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4 lg:col-start-2">
+          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
             <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
               <Navigation size={16} className="text-green-500" /> {t('manageRide.inProgressTitle')}
             </h3>
@@ -710,7 +710,7 @@ const [error, setError] = useState('');
         )}
 
         {phase === 'completed' && (
-          <div className="rounded-2xl bg-green-50 border border-green-200 p-5 text-center lg:col-span-2">
+          <div className="rounded-2xl bg-green-50 border border-green-200 p-5 text-center">
             <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
             <p className="text-base font-semibold text-green-800">{t('manageRide.completedTitle')}</p>
             <p className="text-sm text-green-600 mt-1">{t('manageRide.completedCopy')}</p>
@@ -718,7 +718,7 @@ const [error, setError] = useState('');
         )}
 
         {phase === 'cancelled' && (
-          <div className="rounded-2xl bg-red-50 border border-red-200 p-5 text-center lg:col-span-2">
+          <div className="rounded-2xl bg-red-50 border border-red-200 p-5 text-center">
             <XCircle className="h-10 w-10 text-red-500 mx-auto mb-2" />
             <p className="text-base font-semibold text-red-800">{t('manageRide.cancelledTitle')}</p>
             <p className="text-sm text-red-600 mt-1">{t('manageRide.cancelledCopy')}</p>
@@ -727,7 +727,7 @@ const [error, setError] = useState('');
 
         {/* Pending booking requests */}
         {pendingBookings.length > 0 && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4 lg:col-start-1">
+          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
             <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
               <AlertCircle size={16} className="text-amber-500" /> {t('manageRide.pendingRequests', { count: pendingBookings.length })}
             </h3>
@@ -745,7 +745,7 @@ const [error, setError] = useState('');
           </div>
         )}
         {pendingBookings.length === 0 && phase === 'published' && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 lg:col-start-1">
+          <div className="rounded-2xl bg-white shadow-sm p-5">
             <p className="text-sm font-semibold text-deliivo-dark">{t('manageRide.noPendingTitle')}</p>
             <p className="mt-1 text-xs text-deliivo-gray">
               {t('manageRide.noPendingCopy')}
@@ -755,7 +755,7 @@ const [error, setError] = useState('');
 
         {/* Confirmed passengers */}
         {confirmedBookings.length > 0 && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4 lg:col-start-1">
+          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
             <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
               <UserCheck size={16} className="text-green-500" /> {t('manageRide.passengerCount', { count: confirmedBookings.length })}
             </h3>
@@ -786,7 +786,7 @@ const [error, setError] = useState('');
           </div>
         )}
         {confirmedBookings.length === 0 && phase !== 'completed' && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 lg:col-start-1">
+          <div className="rounded-2xl bg-white shadow-sm p-5">
             <p className="text-sm font-semibold text-deliivo-dark">{t('manageRide.noPassengersTitle')}</p>
             <p className="mt-1 text-xs text-deliivo-gray">
               {t('manageRide.noPassengersCopy')}
@@ -795,7 +795,7 @@ const [error, setError] = useState('');
         )}
 
         {phase === 'published' && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4 lg:col-start-2">
+          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
             <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
               <Navigation size={16} className="text-deliivo-orange" /> {t('manageRide.driverActions')}
             </h3>
@@ -831,7 +831,7 @@ const [error, setError] = useState('');
         )}
 
         {allowRideSimulation && confirmedBookings.length > 0 && (
-          <div className="rounded-2xl border border-dashed border-deliivo-orange/30 bg-orange-50/40 p-5 space-y-4 lg:col-start-1">
+          <div className="rounded-2xl border border-dashed border-deliivo-orange/30 bg-orange-50/40 p-5 space-y-4">
             <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
               <TestTube2 size={16} className="text-deliivo-orange" /> {t('manageRide.devSimulator')}
             </h3>
@@ -907,7 +907,7 @@ const [error, setError] = useState('');
 
         {/* Location updates continue in the background; only live sharing is shown here. */}
           {phase === 'in_progress' && (
-            <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5 lg:col-start-2">
+            <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
               <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
                 <Share2 size={14} className="text-deliivo-orange" />
@@ -959,7 +959,7 @@ const [error, setError] = useState('');
             </div>
           )}
 
-          <div className="lg:col-start-2">
+          <div>
           <SupportOverrideCard
             title="Driver support and override path"
             copy="Use this when OTP verification, no-show marking, cancellation, or passenger state does not move as expected. Support should work from the ride ID and booking references below and use admin tools only after checking payment and dispute context."
@@ -976,7 +976,7 @@ const [error, setError] = useState('');
           </div>
 
           {phase !== 'completed' && phase !== 'cancelled' && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm lg:col-start-2">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold text-amber-950">Manual recovery</h3>

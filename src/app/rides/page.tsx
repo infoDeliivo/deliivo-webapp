@@ -195,7 +195,7 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
   }
 
   return (
-    <div className="flex min-h-[230px] flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+    <div className="flex min-h-[200px] flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-sm font-bold text-primary-600 shrink-0">
@@ -298,7 +298,7 @@ function PublishedRideCard({ ride }: { ride: PublishedRide }) {
   const canManage = ['PUBLISHED', 'SCHEDULED', 'READY_TO_START', 'IN_PROGRESS', 'COMPLETION_PENDING'].includes(displayStatus);
 
   return (
-    <div className="flex min-h-[230px] flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+    <div className="flex min-h-[200px] flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900">{t('rides.youDriver')}</p>
@@ -450,12 +450,12 @@ function RidesContent() {
     <div className="flex min-h-screen flex-col bg-deliivo-cream">
       <Navbar />
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold text-deliivo-dark">{t('rides.myRides')}</h1>
         </div>
 
-        <div className="grid grid-cols-2 rounded-2xl bg-white p-1.5 shadow-sm sm:max-w-md">
+        <div className="grid grid-cols-2 rounded-2xl bg-white p-1.5 shadow-sm">
           <button
             type="button"
             onClick={() => setTab('booked')}
@@ -477,7 +477,7 @@ function RidesContent() {
         </div>
 
         {tab === 'booked' && (
-          <div className="flex flex-wrap gap-2 rounded-2xl bg-white p-3 shadow-sm">
+          <div className="flex flex-wrap gap-2">
             {BOOKING_VIEW_FILTERS.map((filter) => (
               <button
                 key={filter.id}
@@ -499,7 +499,7 @@ function RidesContent() {
         )}
 
         {tab === 'published' && (
-          <div className="flex flex-wrap gap-2 rounded-2xl bg-white p-3 shadow-sm">
+          <div className="flex flex-wrap gap-2">
             {PUBLISHED_VIEW_FILTERS.map((filter) => (
               <button
                 key={filter.id}
@@ -559,11 +559,11 @@ function RidesContent() {
               </Link>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="flex flex-col gap-4">
               {bookings.map((b) => (
                 <BookingCard key={b.id} booking={b} onAction={loadData} />
               ))}
-              <div className="md:col-span-2">
+              <div>
                 <PaginationControls pagination={bookingsPagination} onPageChange={setBookedPage} />
               </div>
             </div>
@@ -594,11 +594,11 @@ function RidesContent() {
             </Link>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-4">
             {publishedRides.map((r) => (
               <PublishedRideCard key={r.id} ride={r} />
             ))}
-            <div className="md:col-span-2">
+            <div>
               <PaginationControls pagination={publishedPagination} onPageChange={setPublishedPage} />
             </div>
           </div>

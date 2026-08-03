@@ -1116,8 +1116,8 @@ function RideDetailContent() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl px-4 py-6">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.85fr)] lg:items-start">
+      <div className="mx-auto max-w-5xl px-4 py-6">
+        <div className={`grid gap-5 ${isOwnRide ? 'lg:grid-cols-1' : 'lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]'} lg:items-start`}>
           <main className="space-y-5">
         {/* Route card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
@@ -1265,7 +1265,7 @@ function RideDetailContent() {
 
           </main>
 
-          <aside className="space-y-5 lg:sticky lg:top-20">
+          <aside className={`space-y-5 ${isOwnRide ? '' : 'lg:sticky lg:top-20'}`}>
 
         {/* Booking section */}
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
@@ -2036,10 +2036,12 @@ function RideDetailContent() {
         )}
 
         {isOwnRide && (
-          <div className="rounded-2xl bg-primary-50 border border-primary-100 p-5 text-center">
-            <p className="text-sm font-medium text-deliivo-dark">{t('rideDetail.thisIsYourRide')}</p>
-            <p className="text-xs text-deliivo-gray mt-1">{t('rideDetail.manageOwnRideCopy')}</p>
-            <Link href={`/rides/${ride.id}/manage`} className="btn-outline mt-3 py-2 px-6 text-sm inline-block">{t('rides.manageRide')}</Link>
+          <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.thisIsYourRide')}</p>
+              <p className="mt-1 text-xs text-deliivo-gray">{t('rideDetail.manageOwnRideCopy')}</p>
+            </div>
+            <Link href={`/rides/${ride.id}/manage`} className="inline-flex shrink-0 items-center justify-center rounded-xl bg-deliivo-orange px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-600">{t('rides.manageRide')}</Link>
           </div>
         )}
           </aside>
