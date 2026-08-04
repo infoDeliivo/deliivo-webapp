@@ -19,6 +19,7 @@ import {
   Plus,
   MessageSquare,
   Share2,
+  ChevronDown,
 } from 'lucide-react';
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import EmergencySosButton from '@/components/EmergencySosButton';
@@ -1248,68 +1249,74 @@ function RideDetailContent() {
         )}
 
         {isDriverConfirmedBooking && (
-          <div className="grid gap-5">
-            <SupportOverrideCard
-              title="Booking help and manual fallback"
-              copy="If payment, OTP, pickup arrival, or cancellation gets stuck, contact support with the booking and ride IDs. Support can review the canonical state and apply an admin override when justified."
-              identifiers={[
-                { label: 'Ride ID', value: ride.id },
-                { label: 'Booking ref', value: myBooking ? formatBookingReference(myBooking) : '' },
-                { label: 'Booking ID', value: myBooking?.id || '' },
-              ]}
-            />
+          <details className="group rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-deliivo-dark marker:hidden">
+              <span>Support and recovery</span>
+              <ChevronDown className="h-4 w-4 text-deliivo-orange transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="grid gap-4 border-t border-gray-100 p-4">
+              <SupportOverrideCard
+                title="Booking help and manual fallback"
+                copy="If payment, OTP, pickup arrival, or cancellation gets stuck, contact support with the booking and ride IDs. Support can review the canonical state and apply an admin override when justified."
+                identifiers={[
+                  { label: 'Ride ID', value: ride.id },
+                  { label: 'Booking ref', value: myBooking ? formatBookingReference(myBooking) : '' },
+                  { label: 'Booking ID', value: myBooking?.id || '' },
+                ]}
+              />
 
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-amber-950">Manual recovery</h3>
-                  <p className="mt-1 text-xs text-amber-900">
-                    Use these when the booking is blocked but the ride should continue. Each action carries a reason into the dispute evidence.
-                  </p>
-                  {!allowManualOverride && (
-                    <p className="mt-1 break-all text-[11px] font-medium text-amber-800">
-                      Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-amber-950">Manual recovery</h3>
+                    <p className="mt-1 text-xs text-amber-900">
+                      Use these when the booking is blocked but the ride should continue. Each action carries a reason into the dispute evidence.
                     </p>
-                  )}
+                    {!allowManualOverride && (
+                      <p className="mt-1 break-all text-[11px] font-medium text-amber-800">
+                        Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleManualRideReview('OTP_ISSUE')}
+                    disabled={!allowManualOverride}
+                    className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                  >
+                    Report OTP issue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!myBooking) return;
+                      const reason = promptManualOverride(
+                        'Manual drop-off confirmation',
+                        'Use when the driver has finished the ride but the app cannot complete the normal confirmation path.'
+                      );
+                      if (reason === null) return;
+                      setRiderActionLoading(true);
+                      try {
+                        await rideOpsApi.riderConfirmDropoff(myBooking.id, reason || undefined);
+                        await loadMyBooking();
+                        await loadRide();
+                      } catch (err: unknown) {
+                        setBookError(getApiErrorMessage(err, t('rideDetail.failedConfirmDropoff')));
+                      } finally {
+                        setRiderActionLoading(false);
+                      }
+                    }}
+                    disabled={!allowManualOverride}
+                    className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                  >
+                    Manual drop-off confirm
+                  </button>
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleManualRideReview('OTP_ISSUE')}
-                  disabled={!allowManualOverride}
-                  className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
-                >
-                  Report OTP issue
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!myBooking) return;
-                    const reason = promptManualOverride(
-                      'Manual drop-off confirmation',
-                      'Use when the driver has finished the ride but the app cannot complete the normal confirmation path.'
-                    );
-                    if (reason === null) return;
-                    setRiderActionLoading(true);
-                    try {
-                      await rideOpsApi.riderConfirmDropoff(myBooking.id, reason || undefined);
-                      await loadMyBooking();
-                      await loadRide();
-                    } catch (err: unknown) {
-                      setBookError(getApiErrorMessage(err, t('rideDetail.failedConfirmDropoff')));
-                    } finally {
-                      setRiderActionLoading(false);
-                    }
-                  }}
-                  disabled={!allowManualOverride}
-                  className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
-                >
-                  Manual drop-off confirm
-                </button>
-              </div>
             </div>
-          </div>
+          </details>
         )}
 
           </main>

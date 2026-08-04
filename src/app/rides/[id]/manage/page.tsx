@@ -23,6 +23,7 @@ import {
   Sparkles,
   Share2,
   MessageSquare,
+  ChevronDown,
 } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import EmergencySosButton from '@/components/EmergencySosButton';
@@ -972,92 +973,98 @@ const [error, setError] = useState('');
             </div>
           )}
 
-          <div>
-          <SupportOverrideCard
-            title="Driver support and override path"
-            copy="Use this when OTP verification, no-show marking, cancellation, or passenger state does not move as expected. Support should work from the ride ID and booking references below and use admin tools only after checking payment and dispute context."
-            identifiers={[
-              { label: 'Ride ID', value: ride.id },
-              { label: 'Driver ID', value: user?.id },
-              ...confirmedBookings.map((booking) => ({
-                label: `${booking.passenger?.firstName || t('manageRide.passenger')} booking ref`,
-                value: formatBookingReference(booking),
-              })),
-            ]}
-            supportTopicHref="/contact"
-          />
-          </div>
+          <details className="group rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-deliivo-dark marker:hidden">
+              <span>Support and recovery</span>
+              <ChevronDown className="h-4 w-4 text-deliivo-orange transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="grid gap-4 border-t border-gray-100 p-4">
+              <SupportOverrideCard
+                title="Driver support and override path"
+                copy="Use this when OTP verification, no-show marking, cancellation, or passenger state does not move as expected. Support should work from the ride ID and booking references below and use admin tools only after checking payment and dispute context."
+                identifiers={[
+                  { label: 'Ride ID', value: ride.id },
+                  { label: 'Driver ID', value: user?.id },
+                  ...confirmedBookings.map((booking) => ({
+                    label: `${booking.passenger?.firstName || t('manageRide.passenger')} booking ref`,
+                    value: formatBookingReference(booking),
+                  })),
+                ]}
+                supportTopicHref="/contact"
+              />
 
-          {phase !== 'completed' && phase !== 'cancelled' && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-amber-950">Manual recovery</h3>
-                  <p className="mt-1 text-xs text-amber-900">
-                    Use these only when the normal ride-day control is blocked. Every action is written into the dispute evidence trail.
-                  </p>
-                  {!allowManualOverride && (
-                    <p className="mt-1 break-all text-[11px] font-medium text-amber-800">
-                      Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
-                    </p>
-                  )}
+              {phase !== 'completed' && phase !== 'cancelled' && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-amber-950">Manual recovery</h3>
+                      <p className="mt-1 text-xs text-amber-900">
+                        Use these only when the normal ride-day control is blocked. Every action is written into the dispute evidence trail.
+                      </p>
+                      {!allowManualOverride && (
+                        <p className="mt-1 break-all text-[11px] font-medium text-amber-800">
+                          Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" onClick={handleManualStartRide} disabled={!allowManualOverride || !startWindowOpen} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
+                      Manual start ride
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const target = selectManualOperationBooking(pickupOtpBookings, 'Manual pickup approval');
+                        if (!target) return;
+                        const overrideReason = promptManualOverride('Manual OTP verification', 'Use when the pickup OTP cannot be used but the passenger should still be onboarded.');
+                        if (overrideReason === null) return;
+                        setActionLoading(`manual-pickup-${target.id}`);
+                        try {
+                          await rideOpsApi.verifyPickupOtp(target.id, '000000', overrideReason || undefined);
+                          await loadData();
+                        } catch (err: unknown) {
+                          if (isRecoverableServerFailure(err)) {
+                            enqueueRecoveryAction({ eventType: 'MANUAL_PICKUP_APPROVAL', rideId: id, bookingId: target.id, overrideReason: overrideReason || 'Manual pickup approval' });
+                            setBookings(prev => prev.map(booking => booking.id === target.id ? { ...booking, status: 'ONBOARD' } : booking));
+                            showSuccess('Saved offline', 'Pickup approval will be reconciled when the server is available.');
+                            return;
+                          }
+                          const message = getApiErrorMessage(err, t('manageRide.failedSimulatePickup'));
+                          setError(message);
+                          showError(t('manageRide.couldNotAcceptRequest'), message);
+                        } finally {
+                          setActionLoading('');
+                        }
+                      }}
+                      disabled={Boolean(actionLoading) || !allowManualOverride}
+                      className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                    >
+                      Manual pickup approval
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const dropoffCandidates = confirmedBookings.filter((booking) => booking.status === 'ONBOARD');
+                        const target = selectManualOperationBooking(dropoffCandidates, 'Manual drop-off');
+                        if (!target) return;
+                        const overrideReason = promptManualOverride('Manual drop-off confirmation', 'Use when drop-off needs to be completed because the normal confirmation path is blocked.');
+                        if (overrideReason === null) return;
+                        handleConfirmDropoff(target, overrideReason);
+                      }}
+                      disabled={!allowManualOverride}
+                      className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                    >
+                      Manual drop-off
+                    </button>
+                    <button type="button" onClick={handleManualFinishRide} disabled={!allowManualOverride} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
+                      Manual finish ride
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" onClick={handleManualStartRide} disabled={!allowManualOverride || !startWindowOpen} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
-                  Manual start ride
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const target = selectManualOperationBooking(pickupOtpBookings, 'Manual pickup approval');
-                    if (!target) return;
-                    const overrideReason = promptManualOverride('Manual OTP verification', 'Use when the pickup OTP cannot be used but the passenger should still be onboarded.');
-                    if (overrideReason === null) return;
-                    setActionLoading(`manual-pickup-${target.id}`);
-                    try {
-                      await rideOpsApi.verifyPickupOtp(target.id, '000000', overrideReason || undefined);
-                      await loadData();
-                    } catch (err: unknown) {
-                      if (isRecoverableServerFailure(err)) {
-                        enqueueRecoveryAction({ eventType: 'MANUAL_PICKUP_APPROVAL', rideId: id, bookingId: target.id, overrideReason: overrideReason || 'Manual pickup approval' });
-                        setBookings(prev => prev.map(booking => booking.id === target.id ? { ...booking, status: 'ONBOARD' } : booking));
-                        showSuccess('Saved offline', 'Pickup approval will be reconciled when the server is available.');
-                        return;
-                      }
-                      const message = getApiErrorMessage(err, t('manageRide.failedSimulatePickup'));
-                      setError(message);
-                      showError(t('manageRide.couldNotAcceptRequest'), message);
-                    } finally {
-                      setActionLoading('');
-                    }
-                  }}
-                  disabled={Boolean(actionLoading) || !allowManualOverride}
-                  className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
-                >
-                  Manual pickup approval
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const dropoffCandidates = confirmedBookings.filter((booking) => booking.status === 'ONBOARD');
-                    const target = selectManualOperationBooking(dropoffCandidates, 'Manual drop-off');
-                    if (!target) return;
-                    const overrideReason = promptManualOverride('Manual drop-off confirmation', 'Use when drop-off needs to be completed because the normal confirmation path is blocked.');
-                    if (overrideReason === null) return;
-                    handleConfirmDropoff(target, overrideReason);
-                  }}
-                  disabled={!allowManualOverride}
-                  className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
-                >
-                  Manual drop-off
-                </button>
-                <button type="button" onClick={handleManualFinishRide} disabled={!allowManualOverride} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
-                  Manual finish ride
-                </button>
-              </div>
+              )}
             </div>
-          )}
+          </details>
 
           {confirmRideAction && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
