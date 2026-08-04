@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Check, ChevronLeft, FileText, FlaskConical, Landmark, Loader2, ShieldCheck, Upload, Wallet } from 'lucide-react';
+import { Check, ChevronLeft, FileText, FlaskConical, Landmark, Loader2, Pencil, ShieldCheck, Trash2, Upload, Wallet } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import LoadFailureCard from '@/components/LoadFailureCard';
 import { ConnectAccountOnboarding } from '@stripe/react-connect-js';
@@ -158,8 +158,11 @@ function PayoutSetupContent() {
   const [requirements, setRequirements] = useState<ConnectRequirements | null>(null);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deletingBank, setDeletingBank] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [exiting, setExiting] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [editingBank, setEditingBank] = useState(false);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -245,7 +248,9 @@ function PayoutSetupContent() {
   );
   const pendingRequirements = requirements?.pendingVerification ?? [];
 
-  const hasActionableRequirements = outstanding.details || outstanding.bank || outstanding.document || outstanding.terms;
+  const showDetailsForm = outstanding.details || editingDetails;
+  const showBankForm = outstanding.bank || editingBank;
+  const hasActionableRequirements = showDetailsForm || showBankForm || outstanding.document || outstanding.terms;
 
   const complete = Boolean(
     requirements && requirements.payoutsEnabled && requirements.currentlyDue.length === 0
@@ -269,7 +274,7 @@ function PayoutSetupContent() {
       try {
         let latest = requirements;
 
-        if (outstanding.details) {
+        if (showDetailsForm) {
           const res = await paymentsApi.connectSaveDetails({
             firstName,
             lastName,
@@ -286,9 +291,10 @@ function PayoutSetupContent() {
           });
           latest = res.data;
           setRequirements(latest);
+          setEditingDetails(false);
         }
 
-        if (outstanding.bank) {
+        if (showBankForm) {
           // Tokenised in the browser: the account number never reaches Deliivo's server.
           const token = await createBankAccountToken({
             country: payoutCountry,
@@ -300,6 +306,7 @@ function PayoutSetupContent() {
           latest = res.data;
           setRequirements(latest);
           setAccountNumber('');
+          setEditingBank(false);
         }
 
         if (outstanding.document) {
@@ -358,6 +365,8 @@ function PayoutSetupContent() {
       postalCode,
       requirements,
       saving,
+      showBankForm,
+      showDetailsForm,
       t,
     ]
   );
@@ -389,6 +398,25 @@ function PayoutSetupContent() {
     }
     router.push(returnTo);
   }, [returnTo, router]);
+
+  const handleDeleteBankAccount = useCallback(async () => {
+    const externalAccountId = requirements?.externalAccount?.id;
+    if (!externalAccountId || deletingBank) return;
+    if (!window.confirm(t('payout.removeBankConfirm'))) return;
+
+    setDeletingBank(true);
+    try {
+      const res = await paymentsApi.connectDeleteBankAccount(externalAccountId);
+      setRequirements(res.data);
+      setEditingBank(true);
+      setAccountNumber('');
+      showSuccess(t('payout.bankRemovedTitle'), t('payout.bankRemovedCopy'));
+    } catch (err: unknown) {
+      showError(t('payout.removeBankFailed'), getApiErrorMessage(err, t('payout.removeBankFailed')));
+    } finally {
+      setDeletingBank(false);
+    }
+  }, [deletingBank, requirements?.externalAccount?.id, t]);
 
   const chrome = (body: React.ReactNode) => (
     <div className="min-h-screen bg-deliivo-cream">
@@ -438,7 +466,7 @@ function PayoutSetupContent() {
     );
   }
 
-  if (complete) {
+  if (complete && !editingDetails && !editingBank) {
     return chrome(
       <section className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3">
@@ -457,14 +485,44 @@ function PayoutSetupContent() {
             )}
           </div>
         </div>
-        <button
-          onClick={handleExit}
-          disabled={exiting}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-deliivo-orange px-4 py-2 text-sm font-semibold text-white hover:bg-deliivo-orange-dark disabled:opacity-50"
-        >
-          {exiting && <Loader2 className="w-4 h-4 animate-spin" />}
-          {t('profile.payoutSetupDone')}
-        </button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setEditingDetails(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-deliivo-orange hover:bg-orange-50"
+          >
+            <Pencil className="h-4 w-4" />
+            {t('payout.editPersonalDetails')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditingBank(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-deliivo-orange hover:bg-orange-50"
+          >
+            <Wallet className="h-4 w-4" />
+            {t('payout.replaceBankAccount')}
+          </button>
+          {requirements.externalAccount && (
+            <button
+              type="button"
+              onClick={handleDeleteBankAccount}
+              disabled={deletingBank}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              {deletingBank ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {t('payout.removeBankAccount')}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleExit}
+            disabled={exiting}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-deliivo-orange px-4 py-2 text-sm font-semibold text-white hover:bg-deliivo-orange-dark disabled:opacity-50"
+          >
+            {exiting && <Loader2 className="w-4 h-4 animate-spin" />}
+            {t('profile.payoutSetupDone')}
+          </button>
+        </div>
       </section>
     );
   }
@@ -536,9 +594,11 @@ function PayoutSetupContent() {
         </section>
       )}
 
-      {outstanding.details && (
+      {showDetailsForm && (
         <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
-          <h2 className="text-sm font-semibold text-gray-900">{t('payout.personalTitle')}</h2>
+          <h2 className="text-sm font-semibold text-gray-900">
+            {editingDetails ? t('payout.editPersonalDetails') : t('payout.personalTitle')}
+          </h2>
           <p className="mt-1 text-sm text-deliivo-gray">{t('payout.personalCopy')}</p>
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -730,13 +790,15 @@ function PayoutSetupContent() {
         </section>
       )}
 
-      {outstanding.bank && (
+      {showBankForm && (
         <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
             <Wallet className="h-4 w-4 text-deliivo-orange" />
-            {t('payout.bankTitle')}
+            {editingBank && requirements.externalAccount ? t('payout.replaceBankAccount') : t('payout.bankTitle')}
           </h2>
-          <p className="mt-1 text-sm text-deliivo-gray">{t('payout.bankCopy')}</p>
+          <p className="mt-1 text-sm text-deliivo-gray">
+            {editingBank && requirements.externalAccount ? t('payout.replaceBankCopy') : t('payout.bankCopy')}
+          </p>
 
           <div className="mt-4 grid gap-4">
             <div>
@@ -784,7 +846,7 @@ function PayoutSetupContent() {
         </section>
       )}
 
-      {!outstanding.bank && requirements.externalAccount && (
+      {!showBankForm && requirements.externalAccount && (
         <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
           <h2 className="text-sm font-semibold text-gray-900">{t('payout.bankTitle')}</h2>
           <p className="mt-2 flex items-center gap-2 text-sm font-medium text-gray-900">
@@ -792,6 +854,25 @@ function PayoutSetupContent() {
             {requirements.externalAccount.bankName || t('payout.bankAccount')} ••••{' '}
             {requirements.externalAccount.last4}
           </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setEditingBank(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm font-semibold text-deliivo-orange hover:bg-orange-50"
+            >
+              <Wallet className="h-4 w-4" />
+              {t('payout.replaceBankAccount')}
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteBankAccount}
+              disabled={deletingBank}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              {deletingBank ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {t('payout.removeBankAccount')}
+            </button>
+          </div>
         </section>
       )}
 

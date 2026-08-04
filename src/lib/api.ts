@@ -1247,6 +1247,11 @@ export const paymentsApi = {
       body: JSON.stringify({ token }),
     });
   },
+  connectDeleteBankAccount(externalAccountId: string) {
+    return apiFetch<{ data: ConnectRequirements }>(`/api/v1/payments/connect/bank-account/${encodeURIComponent(externalAccountId)}`, {
+      method: 'DELETE',
+    });
+  },
   connectUploadIdentityDocument(file: File, side: 'front' | 'back' = 'front') {
     return apiFetch<{ data: ConnectRequirements }>(`/api/v1/payments/connect/identity-document?side=${side}`, {
       method: 'POST',
