@@ -165,8 +165,14 @@ const [error, setError] = useState('');
 
       setRide((prev) => (prev ? { ...prev, status: payload.status } : prev));
       if (payload.status === 'IN_PROGRESS') setPhase('in_progress');
-      else if (payload.status === 'COMPLETED') setPhase('completed');
-      else if (payload.status === 'CANCELLED') setPhase('cancelled');
+      else if (payload.status === 'COMPLETED') {
+        setError('');
+        setPhase('completed');
+      }
+      else if (payload.status === 'CANCELLED') {
+        setError('');
+        setPhase('cancelled');
+      }
       else setPhase('published');
     });
 
@@ -197,6 +203,7 @@ const [error, setError] = useState('');
       setRide(rideRes.data);
       const nextBookings = rideRes.data.bookings || [];
       setBookings(nextBookings);
+      setError('');
       void loadDriverTrackingLinks(nextBookings);
 
       // Determine phase from status
@@ -611,6 +618,7 @@ const [error, setError] = useState('');
     departureMinute,
   );
   const startWindowOpen = allowRideSimulation || clockNow >= departureAt - 10 * 60 * 1000;
+  const hasRideSidePanel = requestCount > 0 || phase === 'published' || phase === 'in_progress';
 
   return (
     <div className="min-h-screen min-w-0 overflow-x-clip bg-deliivo-cream">
@@ -625,7 +633,7 @@ const [error, setError] = useState('');
       </div>
 
       <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        <div className={`grid gap-5 lg:items-start ${hasRideSidePanel ? 'lg:grid-cols-[minmax(0,1fr)_360px]' : 'lg:grid-cols-1'}`}>
         {/* Ride status card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
           <div className={`px-5 py-4 ${phase === 'in_progress' ? 'bg-gradient-to-r from-green-500 to-green-600' : phase === 'completed' ? 'bg-gradient-to-r from-gray-500 to-gray-600' : phase === 'cancelled' ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-deliivo-orange to-primary-600'}`}>
@@ -671,6 +679,7 @@ const [error, setError] = useState('');
           </div>
         </div>
 
+        {hasRideSidePanel && (
         <aside className="space-y-4">
           {requestCount > 0 && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
@@ -744,10 +753,11 @@ const [error, setError] = useState('');
             </section>
           )}
         </aside>
+        )}
         </div>
 
         {/* Error banner */}
-        {error && (
+        {error && phase !== 'completed' && phase !== 'cancelled' && (
           <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-4 py-3">
             <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
             <p className="text-sm text-red-600">{error}</p>
