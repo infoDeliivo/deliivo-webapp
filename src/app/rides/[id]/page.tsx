@@ -20,6 +20,8 @@ import {
   MessageSquare,
   Share2,
   ChevronDown,
+  ShieldCheck,
+  ExternalLink,
 } from 'lucide-react';
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import EmergencySosButton from '@/components/EmergencySosButton';
@@ -1006,6 +1008,10 @@ function RideDetailContent() {
   const driverName = ride.driver?.firstName || t('rideDetail.driverFallback');
   const initials = driverName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const vehicleLabel = ride.vehicle ? [ride.vehicle.brand, ride.vehicle.model_name].filter(Boolean).join(' ') : null;
+  const vehicleDetails = ride.vehicle
+    ? [ride.vehicle.type, ride.vehicle.color].filter(Boolean).join(' / ')
+    : '';
+  const driverProfileHref = `/profile/users/${ride.driverId}`;
   const dateLabel = new Date(ride.departureDate).toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const durationLabel = formatDurationHhMm(ride.routeDurationSeconds);
   const distanceKm = ride.routeDistanceMeters ? (ride.routeDistanceMeters / 1000).toFixed(1) : null;
@@ -1146,30 +1152,60 @@ function RideDetailContent() {
         </div>
 
         {/* Driver card */}
-        <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-white p-4 shadow-sm sm:gap-4 sm:p-5">
-          <div className="h-14 w-14 shrink-0 rounded-full bg-primary-100 flex items-center justify-center">
-            {ride.driver?.avatarUrl ? (
-              <img src={ride.driver.avatarUrl} alt={driverName} className="h-full w-full rounded-full object-cover" />
-            ) : (
-              <span className="text-lg font-semibold text-primary-600">{initials}</span>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-base font-semibold text-deliivo-dark">{driverName}</p>
-            {ride.driver?.rating && (
-              <div className="flex items-center gap-1 mt-0.5">
-                <Star size={14} className="fill-amber-400 text-amber-400" />
-                <span className="text-sm text-deliivo-gray">{ride.driver.rating.toFixed(1)}</span>
+        <Link
+          href={driverProfileHref}
+          className="group block rounded-2xl bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5"
+        >
+          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+              <div className="h-16 w-16 shrink-0 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden">
+                {ride.driver?.avatarUrl ? (
+                  <img src={ride.driver.avatarUrl} alt={driverName} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-lg font-semibold text-primary-600">{initials}</span>
+                )}
               </div>
-            )}
-          </div>
-          {vehicleLabel && (
-            <div className="min-w-0 max-w-[45%] text-right text-sm">
-              <p className="flex min-w-0 items-start justify-end gap-1 break-words font-medium text-deliivo-dark"><Car size={14} className="mt-0.5 shrink-0" /> {vehicleLabel}</p>
-              {ride.vehicle?.color && <p className="text-xs text-deliivo-gray mt-0.5">{ride.vehicle.color}</p>}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-base font-bold text-deliivo-dark group-hover:text-deliivo-orange">{driverName}</p>
+                  {ride.driver?.isVerified && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700">
+                      <ShieldCheck className="h-3 w-3" /> Verified
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-deliivo-gray">
+                  {ride.driver?.rating && (
+                    <span className="inline-flex items-center gap-1">
+                      <Star size={13} className="fill-amber-400 text-amber-400" />
+                      {ride.driver.rating.toFixed(1)} ({ride.driver.ratingCount || 0})
+                    </span>
+                  )}
+                  {ride.driver?.successfulCompletedRides !== undefined && (
+                    <span>{ride.driver.successfulCompletedRides} completed rides</span>
+                  )}
+                  <span className="inline-flex items-center gap-1 font-semibold text-deliivo-orange">
+                    View profile <ExternalLink className="h-3 w-3" />
+                  </span>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
+
+            <div className="flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 sm:max-w-[48%]">
+              {ride.vehicle?.imageUrl ? (
+                <img src={ride.vehicle.imageUrl} alt={vehicleLabel || 'Vehicle'} className="h-12 w-16 shrink-0 rounded-lg object-cover" />
+              ) : (
+                <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-lg bg-white text-deliivo-orange">
+                  <Car className="h-5 w-5" />
+                </div>
+              )}
+              <div className="min-w-0 text-sm">
+                <p className="truncate font-bold text-deliivo-dark">{vehicleLabel || 'Vehicle details'}</p>
+                {vehicleDetails && <p className="mt-0.5 truncate text-xs text-deliivo-gray">{vehicleDetails}</p>}
+              </div>
+            </div>
+          </div>
+        </Link>
 
         {/* Details */}
         <div className="rounded-2xl bg-white p-5 shadow-sm">
@@ -1805,16 +1841,41 @@ function RideDetailContent() {
             )}
 
               {myBooking.segmentRide && (
-              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookedSegment')}</p>
-                <div className="mt-3 space-y-2 text-sm text-deliivo-dark">
-                  <p><span className="font-medium text-deliivo-gray">{t('rideDetail.pickup')}:</span> {bookedPickupAddress}</p>
-                  {bookedPickupTime && <p><span className="font-medium text-deliivo-gray">{t('rideDetail.pickupTime')}:</span> {bookedPickupTime}</p>}
-                  <p><span className="font-medium text-deliivo-gray">{t('rideDetail.dropoff')}:</span> {bookedDropoffAddress}</p>
-                  {bookedDropoffTime && <p><span className="font-medium text-deliivo-gray">{t('rideDetail.dropoffTime')}:</span> {bookedDropoffTime}</p>}
+              <div className="rounded-2xl border border-orange-100 bg-orange-50/50 p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-deliivo-dark">{t('rideDetail.bookedSegment')}</p>
+                    <p className="mt-0.5 text-xs text-deliivo-gray">Your exact pickup and drop-off for this booking.</p>
+                  </div>
                   {myBooking.segmentRide.segment?.segmentFare !== undefined && (
-                    <p><span className="font-medium text-deliivo-gray">{t('rideDetail.segmentFare')}:</span> {ride.currency} {myBooking.segmentRide.segment.segmentFare.toFixed(2)}</p>
+                    <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-deliivo-orange">
+                      {ride.currency} {myBooking.segmentRide.segment.segmentFare.toFixed(2)}
+                    </span>
                   )}
+                </div>
+
+                <div className="mt-4 flex gap-3">
+                  <div className="flex flex-col items-center pt-1">
+                    <span className="h-3 w-3 rounded-full border-2 border-deliivo-orange bg-white" />
+                    <span className="my-1 w-0.5 flex-1 bg-orange-200" />
+                    <span className="h-3 w-3 rounded-full bg-deliivo-orange" />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-deliivo-gray">{t('rideDetail.pickup')}</p>
+                        {bookedPickupTime && <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-deliivo-dark">{bookedPickupTime}</span>}
+                      </div>
+                      <p className="mt-1 break-words text-sm font-semibold text-deliivo-dark">{bookedPickupAddress}</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-deliivo-gray">{t('rideDetail.dropoff')}</p>
+                        {bookedDropoffTime && <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-deliivo-dark">{bookedDropoffTime}</span>}
+                      </div>
+                      <p className="mt-1 break-words text-sm font-semibold text-deliivo-dark">{bookedDropoffAddress}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
