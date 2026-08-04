@@ -22,6 +22,7 @@ import {
   TestTube2,
   Sparkles,
   Share2,
+  MessageSquare,
 } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import EmergencySosButton from '@/components/EmergencySosButton';
@@ -1344,6 +1345,13 @@ function PassengerCard({
     {ridePhase === 'in_progress' && ['WAITING_FOR_PICKUP', 'DRIVER_ARRIVED'].includes(booking.status) && (
       <div className="mt-3 space-y-3">
         <div className="flex flex-wrap gap-2">
+        <Link
+          href={`/chat/start/${booking.passengerId}`}
+          className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          Message
+        </Link>
         {booking.status === 'WAITING_FOR_PICKUP' && (
           <button
             type="button"
@@ -1372,7 +1380,14 @@ function PassengerCard({
     )}
 
     {ridePhase === 'in_progress' && booking.status === 'ONBOARD' && (
-      <div className="mt-3">
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Link
+          href={`/chat/start/${booking.passengerId}`}
+          className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          Message
+        </Link>
         <button
           type="button"
           onClick={onConfirmDropoff}

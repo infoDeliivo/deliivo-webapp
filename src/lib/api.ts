@@ -1065,6 +1065,11 @@ export const chatApi = {
       method: 'POST', body: JSON.stringify({ receiverId, text, clientMsgId, type: 'TEXT' }),
     });
   },
+  openConversation(receiverId: string) {
+    return apiFetch<{ data: { id: string; conversationId: string; chatAvailable: boolean; peerId: string } }>('/api/v1/chat/open', {
+      method: 'POST', body: JSON.stringify({ receiverId }),
+    });
+  },
   // Upload an image via the presigned flow (target=chat_image), then send it as
   // an IMAGE message with the confirmed public URL.
   async uploadAndSendImage(receiverId: string, file: File, clientMsgId: string) {
