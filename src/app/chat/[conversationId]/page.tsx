@@ -1,16 +1,18 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Send, Loader2, ImagePlus } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { chatApi, ChatMessage, validateImageFile } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { featureFlags } from '@/lib/features';
+import { getSafeReturnTo } from '@/lib/auth-redirect';
 
 function ChatConversationContent() {
   const { conversationId } = useParams<{ conversationId: string }>();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +23,7 @@ function ChatConversationContent() {
   const [chatAvailable, setChatAvailable] = useState(false);
   const [peerId, setPeerId] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const backHref = getSafeReturnTo(`?${searchParams.toString()}`) || '/chat';
 
   useEffect(() => { if (conversationId) loadMessages(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -127,7 +130,7 @@ function ChatConversationContent() {
     <div className="flex flex-col h-screen bg-deliivo-cream">
       {/* Header */}
       <header className="bg-white border-b border-orange-100 px-4 py-3 flex items-center gap-3 shrink-0">
-        <Link href="/chat" className="flex items-center gap-1 text-sm text-gray-600 hover:text-deliivo-orange">
+        <Link href={backHref} className="flex items-center gap-1 text-sm text-gray-600 hover:text-deliivo-orange">
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <h1 className="text-base font-semibold text-gray-900">Chat</h1>

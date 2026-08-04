@@ -2,16 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { chatApi, getApiErrorMessage } from '@/lib/api';
 import { featureFlags } from '@/lib/features';
+import { getSafeReturnTo, withReturnTo } from '@/lib/auth-redirect';
 
 function StartChatContent() {
   const { peerId } = useParams<{ peerId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [error, setError] = useState('');
+  const returnTo = getSafeReturnTo(`?${searchParams.toString()}`);
+  const backHref = returnTo || '/rides';
 
   useEffect(() => {
     if (!peerId || !featureFlags.webChat) return;
@@ -20,7 +24,7 @@ function StartChatContent() {
     async function openConversation() {
       try {
         const res = await chatApi.openConversation(peerId);
-        if (!cancelled) router.replace(`/chat/${res.data.conversationId || res.data.id}`);
+        if (!cancelled) router.replace(withReturnTo(`/chat/${res.data.conversationId || res.data.id}`, returnTo));
       } catch (err: unknown) {
         if (!cancelled) setError(getApiErrorMessage(err, 'Chat is available only while the ride is active.'));
       }
@@ -30,13 +34,13 @@ function StartChatContent() {
     return () => {
       cancelled = true;
     };
-  }, [peerId, router]);
+  }, [peerId, returnTo, router]);
 
   if (!featureFlags.webChat) {
     return (
       <div className="min-h-screen bg-deliivo-cream">
         <header className="flex items-center gap-3 border-b border-orange-100 bg-white px-4 py-3">
-          <Link href="/rides" className="flex items-center gap-1 text-sm text-gray-600 hover:text-deliivo-orange">
+          <Link href={backHref} className="flex items-center gap-1 text-sm text-gray-600 hover:text-deliivo-orange">
             <ArrowLeft className="h-4 w-4" /> Rides
           </Link>
         </header>
@@ -54,7 +58,7 @@ function StartChatContent() {
   return (
     <div className="min-h-screen bg-deliivo-cream">
       <header className="flex items-center gap-3 border-b border-orange-100 bg-white px-4 py-3">
-        <Link href="/rides" className="flex items-center gap-1 text-sm text-gray-600 hover:text-deliivo-orange">
+        <Link href={backHref} className="flex items-center gap-1 text-sm text-gray-600 hover:text-deliivo-orange">
           <ArrowLeft className="h-4 w-4" /> Rides
         </Link>
       </header>
@@ -65,7 +69,7 @@ function StartChatContent() {
               <MessageSquare className="mx-auto h-10 w-10 text-orange-200" />
               <p className="mt-3 text-base font-semibold text-deliivo-dark">Could not open chat</p>
               <p className="mt-2 text-sm text-deliivo-gray">{error}</p>
-              <Link href="/rides" className="mt-5 inline-flex rounded-xl bg-deliivo-orange px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600">
+              <Link href={backHref} className="mt-5 inline-flex rounded-xl bg-deliivo-orange px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600">
                 Back to rides
               </Link>
             </>

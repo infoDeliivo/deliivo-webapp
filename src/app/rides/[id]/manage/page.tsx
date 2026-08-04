@@ -35,6 +35,7 @@ import { showError, showSuccess } from '@/lib/app-feedback';
 import { useTranslation } from '@/lib/i18n-context';
 import { getRideStatusLabel } from '@/lib/ride-status';
 import { enqueueRecoveryAction, isRecoverableServerFailure } from '@/lib/recovery-outbox';
+import { withReturnTo } from '@/lib/auth-redirect';
 
 type RidePhase = 'loading' | 'published' | 'in_progress' | 'completed' | 'cancelled' | 'error';
 
@@ -619,6 +620,7 @@ const [error, setError] = useState('');
   );
   const startWindowOpen = allowRideSimulation || clockNow >= departureAt - 10 * 60 * 1000;
   const hasRideSidePanel = requestCount > 0 || phase === 'published' || phase === 'in_progress';
+  const currentManageRideHref = `/rides/${id}/manage`;
 
   return (
     <div className="min-h-screen min-w-0 overflow-x-clip bg-deliivo-cream">
@@ -830,6 +832,7 @@ const [error, setError] = useState('');
                   onReportIssue={() => handleReportPassengerIssue(booking)}
                   onConfirmDropoff={() => handleConfirmDropoff(booking)}
                   onPickupOtpVerified={loadData}
+                  returnTo={currentManageRideHref}
                   arrivedLoading={actionLoading === `arrived-${booking.id}`}
                   noShowLoading={actionLoading === `noshow-${booking.id}`}
                   reportLoading={actionLoading === `report-${booking.id}`}
@@ -1263,6 +1266,7 @@ function PassengerCard({
   onReportIssue,
   onConfirmDropoff,
   onPickupOtpVerified,
+  returnTo,
   arrivedLoading,
   noShowLoading,
   reportLoading,
@@ -1275,6 +1279,7 @@ function PassengerCard({
   onReportIssue: () => void;
   onConfirmDropoff: () => void;
   onPickupOtpVerified: () => void;
+  returnTo: string;
   arrivedLoading: boolean;
   noShowLoading: boolean;
   reportLoading: boolean;
@@ -1342,7 +1347,7 @@ function PassengerCard({
         <div className="flex flex-wrap gap-2 lg:justify-end">
           {(showPickupActions || showOnboardActions) && (
             <Link
-              href={`/chat/start/booking/${booking.id}`}
+              href={withReturnTo(`/chat/start/booking/${booking.id}`, returnTo)}
               className="inline-flex h-9 items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3.5 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
             >
               <MessageSquare className="h-3.5 w-3.5" />

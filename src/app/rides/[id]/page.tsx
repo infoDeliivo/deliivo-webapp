@@ -1011,7 +1011,8 @@ function RideDetailContent() {
   const vehicleDetails = ride.vehicle
     ? [ride.vehicle.type, ride.vehicle.color].filter(Boolean).join(' / ')
     : '';
-  const driverProfileHref = `/profile/users/${ride.driverId}`;
+  const currentRideHref = `/rides/${id}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
+  const driverProfileHref = withReturnTo(`/profile/users/${ride.driverId}`, currentRideHref);
   const dateLabel = new Date(ride.departureDate).toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const durationLabel = formatDurationHhMm(ride.routeDurationSeconds);
   const distanceKm = ride.routeDistanceMeters ? (ride.routeDistanceMeters / 1000).toFixed(1) : null;
@@ -1756,7 +1757,7 @@ function RideDetailContent() {
 
               {canUseRideChat && (
                 <Link
-                  href={`/chat/start/booking/${myBooking.id}`}
+                  href={withReturnTo(`/chat/start/booking/${myBooking.id}`, currentRideHref)}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
                 >
                   <MessageSquare className="h-4 w-4" />

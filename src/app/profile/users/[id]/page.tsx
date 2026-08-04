@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Car, CheckCircle, Loader2, MessageCircle, PawPrint, Star, User } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { userApi } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n-context';
+import { getSafeReturnTo } from '@/lib/auth-redirect';
 
 type PublicProfile = {
   user: {
@@ -41,6 +42,7 @@ export default function PublicProfilePage() {
 
 function PublicProfileContent() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const { t } = useTranslation();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,9 +62,10 @@ function PublicProfileContent() {
   }
 
   if (error || !profile) {
+    const backHref = getSafeReturnTo(`?${searchParams.toString()}`) || '/search';
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <Link href="/search" className="inline-flex items-center gap-1 text-sm text-deliivo-gray hover:text-deliivo-dark"><ArrowLeft className="h-4 w-4" /> {t('common.back')}</Link>
+        <Link href={backHref} className="inline-flex items-center gap-1 text-sm text-deliivo-gray hover:text-deliivo-dark"><ArrowLeft className="h-4 w-4" /> {t('common.back')}</Link>
         <div className="mt-6 rounded-2xl bg-white p-8 text-center shadow-sm">
           <p className="text-sm text-red-600">{error || t('profile.publicProfileNotFound')}</p>
         </div>
@@ -84,10 +87,11 @@ function PublicProfileContent() {
     no_pets: t('profile.noPets'),
     depends_on_animal: t('profile.dependsOnAnimal'),
   };
+  const backHref = getSafeReturnTo(`?${searchParams.toString()}`) || '/search';
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
-      <Link href="/search" className="inline-flex items-center gap-1 text-sm text-deliivo-gray hover:text-deliivo-dark"><ArrowLeft className="h-4 w-4" /> {t('common.back')}</Link>
+      <Link href={backHref} className="inline-flex items-center gap-1 text-sm text-deliivo-gray hover:text-deliivo-dark"><ArrowLeft className="h-4 w-4" /> {t('common.back')}</Link>
 
       <section className="mt-5 rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
