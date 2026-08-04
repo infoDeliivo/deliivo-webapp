@@ -22,7 +22,7 @@ import {
   Route,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { getApiErrorMessage, userApi, travelPreferencesApi, TravelPreference, UserFullProfile, validateImageFile } from '@/lib/api';
+import { getApiErrorMessage, userApi, travelPreferencesApi, TravelPreference, UserFullProfile, validateImageFile, UPLOAD_ACCEPT } from '@/lib/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { showError, showSuccess } from '@/lib/app-feedback';
@@ -201,7 +201,7 @@ function ProfileContent() {
             </div>
             <label className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-deliivo-orange text-white shadow-sm hover:bg-orange-600 transition-colors">
               {avatarUploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
-              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarUploading} />
+              <input type="file" accept={UPLOAD_ACCEPT} className="hidden" onChange={handleAvatarUpload} disabled={avatarUploading} />
             </label>
           </div>
           <h2 className="text-lg font-bold">{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || t('profile.user')}</h2>

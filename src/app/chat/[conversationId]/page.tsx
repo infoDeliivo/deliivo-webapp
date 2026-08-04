@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Send, Loader2, ImagePlus } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import { chatApi, ChatMessage, validateImageFile } from '@/lib/api';
+import { chatApi, ChatMessage, validateImageFile, UPLOAD_ACCEPT } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { featureFlags } from '@/lib/features';
 
@@ -166,7 +166,7 @@ function ChatConversationContent() {
             {uploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
             <input
               type="file"
-              accept="image/*"
+              accept={UPLOAD_ACCEPT}
               className="hidden"
               disabled={uploadingImage}
               onChange={(e) => {

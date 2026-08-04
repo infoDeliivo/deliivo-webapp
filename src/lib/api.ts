@@ -259,12 +259,15 @@ export function getApiErrorMessage(error: unknown, fallback = 'Request failed') 
 // ---- Presigned uploads (presign -> PUT direct to storage -> confirm) ----
 // Backend contract: docs/uploads-frontend-integration.md.
 export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
-export const UPLOAD_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+export const UPLOAD_MIME = ['image/jpeg', 'image/png'];
+
+// Value for a file input's `accept` attribute, kept in sync with UPLOAD_MIME.
+export const UPLOAD_ACCEPT = UPLOAD_MIME.join(',');
 
 // Client-side pre-check mirroring backend confirm limits. Returns an error
 // message, or null when the file is acceptable.
 export function validateImageFile(file: File): string | null {
-  if (!UPLOAD_MIME.includes(file.type)) return 'Only JPG, PNG, and WEBP images are allowed.';
+  if (!UPLOAD_MIME.includes(file.type)) return 'Only JPG and PNG images are allowed.';
   if (file.size > UPLOAD_MAX_BYTES) return 'Images must be 5 MB or smaller.';
   return null;
 }
@@ -272,12 +275,11 @@ export function validateImageFile(file: File): string | null {
 const MIME_EXT: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
-  'image/webp': 'webp',
 };
 
 function fileExtension(file: File): string {
   const fromName = file.name.split('.').pop()?.toLowerCase();
-  if (fromName && ['jpg', 'jpeg', 'png', 'webp'].includes(fromName)) return fromName;
+  if (fromName && ['jpg', 'jpeg', 'png'].includes(fromName)) return fromName;
   return MIME_EXT[file.type] || 'jpg';
 }
 

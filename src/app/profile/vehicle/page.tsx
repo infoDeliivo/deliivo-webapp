@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Car, Plus, Trash2, ArrowLeft, Upload, CheckCircle, Camera, Eye, Loader2 } from 'lucide-react';
-import { vehicleApi, dlVerificationApi, Vehicle, VehicleType, VehicleDocument, validateImageFile } from '@/lib/api';
+import { vehicleApi, dlVerificationApi, Vehicle, VehicleType, VehicleDocument, validateImageFile, UPLOAD_ACCEPT } from '@/lib/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { useTranslation } from '@/lib/i18n-context';
@@ -414,7 +414,7 @@ function VehicleContent() {
                 </span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept={UPLOAD_ACCEPT}
                   className="hidden"
                   disabled={uploadingImageFor === v.id}
                   onChange={(e) => {
@@ -629,7 +629,7 @@ function VehicleContent() {
                     )}
                     <input
                       type="file"
-                      accept="image/*"
+                      accept={UPLOAD_ACCEPT}
                       className="hidden"
                       disabled={uploading}
                       onChange={(e) => {
