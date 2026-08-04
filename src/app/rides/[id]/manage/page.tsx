@@ -1519,16 +1519,11 @@ function OtpVerifySection({ booking, onVerified }: { booking: DriverRideBooking;
   }
 
   return (
-    <div className="rounded-xl border border-orange-100 bg-orange-50/40 px-3 py-2">
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto] sm:items-center">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-deliivo-orange">
-            <KeyRound className="h-3.5 w-3.5" />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-xs font-bold text-deliivo-dark">Pickup OTP</p>
-            <p className="text-[11px] font-medium text-deliivo-orange">{formatBookingReference(booking)}</p>
-          </div>
+    <div className="rounded-lg border border-orange-100 bg-orange-50/40 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="mr-auto flex min-w-0 items-center gap-1.5">
+          <KeyRound className="h-3.5 w-3.5 shrink-0 text-deliivo-orange" />
+          <span className="text-xs font-bold uppercase text-deliivo-dark">Pickup OTP</span>
         </div>
         <input
           type="text"
@@ -1536,21 +1531,24 @@ function OtpVerifySection({ booking, onVerified }: { booking: DriverRideBooking;
           maxLength={6}
           value={otp}
           onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-          placeholder={t('manageRide.enterOtp')}
-          className="h-9 rounded-xl border border-orange-100 bg-white px-3 text-center text-sm font-bold tracking-[0.25em] focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
+          placeholder="6-digit"
+          className="h-8 w-28 rounded-lg border border-orange-100 bg-white px-2 text-center text-xs font-bold tracking-[0.18em] focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
         />
         <button
           type="button"
           onClick={handleVerify}
           disabled={loading || otp.length < 6}
-          className="inline-flex h-9 items-center justify-center rounded-xl bg-deliivo-orange px-4 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
+          className="inline-flex h-8 items-center justify-center rounded-lg bg-deliivo-orange px-3 text-xs font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
         >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('manageRide.verify')}
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t('manageRide.verify')}
         </button>
       </div>
 
-      {success && <p className="text-xs text-green-600 font-medium">{success}</p>}
-      {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
+      {(success || error) && (
+        <p className={`mt-1 text-xs font-medium ${success ? 'text-green-600' : 'text-red-600'}`}>
+          {success || error}
+        </p>
+      )}
     </div>
   );
 }
