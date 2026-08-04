@@ -20,6 +20,7 @@ async function proxyRequest(req: NextRequest) {
   const init: RequestInit = {
     method: req.method,
     headers,
+    cache: 'no-store',
   };
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -47,6 +48,7 @@ async function proxyRequest(req: NextRequest) {
       status: res.status,
       headers: {
         'content-type': contentType,
+        'cache-control': 'no-store',
       },
     });
   } catch (error: unknown) {

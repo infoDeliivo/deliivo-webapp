@@ -104,14 +104,14 @@ export default function SignInPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,#fff1e6_0%,#fffaf5_45%,#f7f7f5_100%)] px-4 py-8 sm:py-12">
-      <div className="grid w-full max-w-5xl overflow-hidden rounded-[2rem] bg-white shadow-xl ring-1 ring-black/5 lg:grid-cols-[1.12fr_0.88fr]">
-        <aside className="hidden min-h-[680px] bg-gradient-to-br from-[#fb7a20] via-[#ef6412] to-[#d94b08] p-8 lg:flex lg:flex-col lg:justify-center">
-          <div className="overflow-hidden rounded-[1.75rem] bg-orange-100 shadow-2xl ring-1 ring-white/30 aspect-[2.58/1]">
+      <div className="grid w-full max-w-4xl overflow-hidden rounded-[2rem] bg-white shadow-xl ring-1 ring-black/5 lg:grid-cols-[0.95fr_1.05fr]">
+        <aside className="hidden min-h-[620px] border-r border-orange-100 bg-[#fff7ef] p-8 lg:flex lg:flex-col lg:justify-center">
+          <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-orange-100 aspect-[2.58/1]">
             <img src="/signin-baltic-carpooling.png" alt="A shared ride travelling through the Baltics" className="h-auto w-full" />
           </div>
-          <div className="mt-9 text-white">
+          <div className="mt-8 text-deliivo-dark">
             <p className="text-3xl font-bold tracking-tight">Travel together across the Baltics</p>
-            <p className="mt-3 max-w-md text-base leading-7 text-orange-50">Verified profiles, clear pickup points, and simple city-to-city rides.</p>
+            <p className="mt-3 max-w-md text-base leading-7 text-deliivo-gray">Verified profiles, clear pickup points, and simple city-to-city rides.</p>
           </div>
         </aside>
 

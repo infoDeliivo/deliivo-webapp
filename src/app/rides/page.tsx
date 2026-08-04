@@ -28,25 +28,27 @@ type PublishedView = 'all' | 'pending' | 'active' | 'completed' | 'cancelled';
 const PAGE_SIZE = 10;
 
 const STATUS_CONFIG: Record<string, { labelKey: string; className: string }> = {
-  PENDING: { labelKey: 'rides.pending', className: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
-  ACCEPTED: { labelKey: 'rides.accepted', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   CONFIRMED: { labelKey: 'rides.confirmed', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  PAYMENT_PENDING: { labelKey: 'rides.pending', className: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
+  PAYMENT_FAILED: { labelKey: 'rides.paymentFailed', className: 'bg-red-50 text-red-700 border border-red-200' },
+  DRIVER_PENDING: { labelKey: 'rides.pending', className: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
   PUBLISHED: { labelKey: 'rides.upcoming', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   SCHEDULED: { labelKey: 'rides.upcoming', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   READY_TO_START: { labelKey: 'rides.readyToStart', className: 'bg-amber-50 text-amber-700 border border-amber-200' },
   WAITING_FOR_PICKUP: { labelKey: 'rides.pickupSoon', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   DRIVER_ARRIVED: { labelKey: 'rides.driverArrived', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
+  OTP_PENDING: { labelKey: 'rides.pickupSoon', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   IN_PROGRESS: { labelKey: 'rides.inProgress', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   ONBOARD: { labelKey: 'rides.onboard', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   DROP_PENDING: { labelKey: 'rides.dropoffPending', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
+  DRIVER_DROPPED: { labelKey: 'rides.dropoffPending', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
+  COMPLETION_PENDING: { labelKey: 'rides.dropoffPending', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
   COMPLETED: { labelKey: 'rides.completed', className: 'bg-green-50 text-green-700 border border-green-200' },
   CANCELLED: { labelKey: 'rides.cancelled', className: 'bg-red-50 text-red-500 border border-red-200' },
+  EXPIRED: { labelKey: 'rides.expired', className: 'bg-gray-50 text-gray-600 border border-gray-200' },
   NO_SHOW: { labelKey: 'rides.noShow', className: 'bg-red-50 text-red-700 border border-red-200' },
   DRIVER_MISSED_PICKUP: { labelKey: 'rides.missedPickup', className: 'bg-red-50 text-red-700 border border-red-200' },
   DISPUTED: { labelKey: 'rides.disputed', className: 'bg-purple-50 text-purple-700 border border-purple-200' },
-  WITHDRAWN: { labelKey: 'rides.withdrawn', className: 'bg-gray-50 text-gray-600 border border-gray-200' },
-  REJECTED: { labelKey: 'rides.rejected', className: 'bg-red-50 text-red-500 border border-red-200' },
-  EXPIRED: { labelKey: 'rides.expired', className: 'bg-gray-50 text-gray-500 border border-gray-200' },
 };
 
 const BOOKING_VIEW_FILTERS: Array<{
@@ -55,10 +57,10 @@ const BOOKING_VIEW_FILTERS: Array<{
   statuses: string[];
 }> = [
   { id: 'all', labelKey: 'rides.all', statuses: [] },
-  { id: 'active', labelKey: 'rides.active', statuses: ['ACCEPTED', 'CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING'] },
-  { id: 'pending', labelKey: 'rides.pending', statuses: ['PENDING', 'PAYMENT_PENDING', 'DRIVER_PENDING'] },
+  { id: 'active', labelKey: 'rides.active', statuses: ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'] },
+  { id: 'pending', labelKey: 'rides.pending', statuses: ['PAYMENT_PENDING', 'DRIVER_PENDING'] },
   { id: 'completed', labelKey: 'rides.completed', statuses: ['COMPLETED'] },
-  { id: 'cancelled', labelKey: 'rides.cancelled', statuses: ['CANCELLED', 'WITHDRAWN', 'REJECTED', 'EXPIRED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DISPUTED'] },
+  { id: 'cancelled', labelKey: 'rides.cancelled', statuses: ['CANCELLED', 'PAYMENT_FAILED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DISPUTED'] },
 ];
 
 const PUBLISHED_VIEW_FILTERS: Array<{
@@ -68,10 +70,27 @@ const PUBLISHED_VIEW_FILTERS: Array<{
 }> = [
   { id: 'all', labelKey: 'rides.all', statuses: [] },
   { id: 'pending', labelKey: 'rides.pending', statuses: ['PUBLISHED', 'SCHEDULED'] },
-  { id: 'active', labelKey: 'rides.active', statuses: ['READY_TO_START', 'IN_PROGRESS'] },
+  { id: 'active', labelKey: 'rides.active', statuses: ['READY_TO_START', 'IN_PROGRESS', 'COMPLETION_PENDING'] },
   { id: 'completed', labelKey: 'rides.completed', statuses: ['COMPLETED'] },
   { id: 'cancelled', labelKey: 'rides.cancelled', statuses: ['CANCELLED', 'EXPIRED'] },
 ];
+
+function getDepartureAt(departureDate: string, departureTime: string) {
+  const date = new Date(departureDate);
+  const [hours = 0, minutes = 0] = departureTime.split(':').map(Number);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), hours, minutes));
+}
+
+function getPublishedRideDisplayStatus(ride: PublishedRide) {
+  if (ride.displayStatus) return ride.displayStatus;
+  if (!['PUBLISHED', 'SCHEDULED', 'READY_TO_START'].includes(ride.status)) return ride.status;
+  const departureAt = getDepartureAt(ride.departureDate, ride.departureTime);
+  const autoCloseAt = new Date(departureAt.getTime() + 120 * 60 * 1000);
+  const now = new Date();
+  if (now >= autoCloseAt) return 'EXPIRED';
+  if (now >= departureAt) return 'READY_TO_START';
+  return ride.status;
+}
 
 function getBookingStatuses(view: BookingView) {
   const filter = BOOKING_VIEW_FILTERS.find((item) => item.id === view);
@@ -125,7 +144,7 @@ function PaginationControls({
 function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => void }) {
   const { t } = useTranslation();
   const ride = booking.ride;
-  const status = STATUS_CONFIG[booking.status] || STATUS_CONFIG.PENDING;
+  const status = STATUS_CONFIG[booking.status] || STATUS_CONFIG.DRIVER_PENDING;
   const dateLabel = ride
     ? new Date(ride.departureDate).toLocaleDateString('en-US', {
         weekday: 'short',
@@ -142,8 +161,8 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
     .toUpperCase();
   const [acting, setActing] = useState(false);
 
-  const canWithdraw = ['PENDING', 'PAYMENT_PENDING', 'DRIVER_PENDING'].includes(booking.status);
-  const canCancel = ['ACCEPTED', 'CONFIRMED'].includes(booking.status);
+  const canWithdraw = ['PAYMENT_PENDING', 'DRIVER_PENDING'].includes(booking.status);
+  const canCancel = booking.status === 'CONFIRMED';
 
   async function handleWithdraw(e: React.MouseEvent) {
     e.preventDefault();
@@ -152,7 +171,7 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
     if (reason === null) return;
     setActing(true);
     try {
-      await bookingsApi.cancel(booking.id, reason.trim() || undefined);
+      await bookingsApi.withdraw(booking.id, reason.trim() || undefined);
       onAction();
     } catch {
       // ignore
@@ -176,7 +195,7 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-4 hover:shadow-md transition-shadow">
+    <div className="flex min-h-[200px] flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-sm font-bold text-primary-600 shrink-0">
@@ -231,7 +250,7 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 pt-2">
+      <div className="mt-auto flex flex-wrap gap-2 pt-2">
         <Link
           href={`/rides/${booking.rideId}`}
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-deliivo-orange px-4 py-2 text-xs font-semibold text-white hover:bg-orange-600 transition-colors"
@@ -269,16 +288,17 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
 
 function PublishedRideCard({ ride }: { ride: PublishedRide }) {
   const { t } = useTranslation();
-  const status = STATUS_CONFIG[ride.status] || STATUS_CONFIG.PUBLISHED;
+  const displayStatus = getPublishedRideDisplayStatus(ride);
+  const status = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.PUBLISHED;
   const dateLabel = new Date(ride.departureDate).toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
   });
-  const canManage = ['PUBLISHED', 'SCHEDULED', 'READY_TO_START', 'IN_PROGRESS'].includes(ride.status);
+  const canManage = ['PUBLISHED', 'SCHEDULED', 'READY_TO_START', 'IN_PROGRESS', 'COMPLETION_PENDING'].includes(displayStatus);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-4 hover:shadow-md transition-shadow">
+    <div className="flex min-h-[200px] flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900">{t('rides.youDriver')}</p>
@@ -315,7 +335,7 @@ function PublishedRideCard({ ride }: { ride: PublishedRide }) {
         </span>
       </div>
 
-      <div className="pt-2">
+      <div className="mt-auto pt-2">
         <Link
           href={canManage ? `/rides/${ride.id}/manage` : `/rides/${ride.id}`}
           className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-deliivo-orange px-4 py-2 text-xs font-semibold text-white hover:bg-orange-600 transition-colors"
@@ -430,9 +450,12 @@ function RidesContent() {
     <div className="flex min-h-screen flex-col bg-deliivo-cream">
       <Navbar />
 
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 px-4 py-6">
-        <h1 className="text-2xl font-bold text-deliivo-dark">{t('rides.myRides')}</h1>
-        <div className="bg-white rounded-2xl p-1.5 shadow-sm flex">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold text-deliivo-dark">{t('rides.myRides')}</h1>
+        </div>
+
+        <div className="grid grid-cols-2 rounded-2xl bg-white p-1.5 shadow-sm">
           <button
             type="button"
             onClick={() => setTab('booked')}
@@ -536,11 +559,13 @@ function RidesContent() {
               </Link>
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
               {bookings.map((b) => (
                 <BookingCard key={b.id} booking={b} onAction={loadData} />
               ))}
-              <PaginationControls pagination={bookingsPagination} onPageChange={setBookedPage} />
+              <div>
+                <PaginationControls pagination={bookingsPagination} onPageChange={setBookedPage} />
+              </div>
             </div>
           )
         ) : publishedRides.length === 0 ? (
@@ -569,11 +594,13 @@ function RidesContent() {
             </Link>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             {publishedRides.map((r) => (
               <PublishedRideCard key={r.id} ride={r} />
             ))}
-            <PaginationControls pagination={publishedPagination} onPageChange={setPublishedPage} />
+            <div>
+              <PaginationControls pagination={publishedPagination} onPageChange={setPublishedPage} />
+            </div>
           </div>
         )}
       </main>

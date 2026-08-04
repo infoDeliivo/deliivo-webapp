@@ -8,7 +8,13 @@ let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 let lifecycleListenersAttached = false;
 
 function resolveSocketUrl(): string {
-  if (process.env.NEXT_PUBLIC_SOCKET_URL) return process.env.NEXT_PUBLIC_SOCKET_URL;
+  const configuredUrl = process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_BACKEND_URL || '';
+  if (configuredUrl) {
+    if (typeof window === 'undefined') return configuredUrl;
+    const isLocalConfiguredUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(configuredUrl);
+    const isLocalPage = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    if (!isLocalConfiguredUrl || isLocalPage) return configuredUrl;
+  }
   if (typeof window !== 'undefined') return window.location.origin;
   return '';
 }

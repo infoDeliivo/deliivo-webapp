@@ -272,6 +272,12 @@ export function validateImageFile(file: File): string | null {
   return null;
 }
 
+export function validateStripeIdentityDocument(file: File): string | null {
+  if (!STRIPE_IDENTITY_DOCUMENT_MIME.includes(file.type)) return 'Only JPG, PNG, and PDF files are allowed.';
+  if (file.size > STRIPE_IDENTITY_DOCUMENT_MAX_BYTES) return 'Files must be 8 MB or smaller.';
+  return null;
+}
+
 const MIME_EXT: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -348,6 +354,11 @@ async function uploadViaPresign<T>(
     body: JSON.stringify({ target, key, ...extra }),
   });
   return confirm.data;
+}
+
+export function formatBookingReference(booking: { id: string; bookingReference?: string }) {
+  if (booking.bookingReference) return booking.bookingReference;
+  return `DLV-${booking.id.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(-6)}`;
 }
 
 // Auth API
@@ -1055,11 +1066,21 @@ export const chatApi = {
   getMessages(conversationId: string, cursor?: string, limit = 30) {
     const params = new URLSearchParams({ limit: String(limit) });
     if (cursor) params.set('cursor', cursor);
-    return apiFetch<{ data: { messages: ChatMessage[]; nextCursor: string | null } }>(`/api/v1/chat/${conversationId}/messages?${params}`);
+    return apiFetch<{ data: { messages: ChatMessage[]; nextCursor: string | null; chatAvailable: boolean; peerId?: string } }>(`/api/v1/chat/${conversationId}/messages?${params}`);
   },
   sendMessage(receiverId: string, text: string, clientMsgId: string) {
     return apiFetch<{ data: ChatMessage }>('/api/v1/chat/send', {
       method: 'POST', body: JSON.stringify({ receiverId, text, clientMsgId, type: 'TEXT' }),
+    });
+  },
+  openConversation(receiverId: string) {
+    return apiFetch<{ data: { id: string; conversationId: string; chatAvailable: boolean; peerId: string } }>('/api/v1/chat/open', {
+      method: 'POST', body: JSON.stringify({ receiverId }),
+    });
+  },
+  openBookingConversation(bookingId: string) {
+    return apiFetch<{ data: { id: string; conversationId: string; chatAvailable: boolean; peerId: string; bookingId: string } }>('/api/v1/chat/open-booking', {
+      method: 'POST', body: JSON.stringify({ bookingId }),
     });
   },
   // Upload an image via the presigned flow (target=chat_image), then send it as
@@ -1173,6 +1194,7 @@ export interface ConversationItem {
   lastMessage: { id: string; text: string | null; senderId: string; createdAt: string; type: string } | null;
   unreadCount: number;
   updatedAt: string;
+  chatAvailable?: boolean;
 }
 
 export interface ChatMessage {
@@ -1223,6 +1245,21 @@ export const paymentsApi = {
     return apiFetch<{ data: ConnectRequirements }>('/api/v1/payments/connect/bank-account', {
       method: 'POST',
       body: JSON.stringify({ token }),
+    });
+  },
+  connectDeleteBankAccount(externalAccountId: string) {
+    return apiFetch<{ data: ConnectRequirements }>(`/api/v1/payments/connect/bank-account/${encodeURIComponent(externalAccountId)}`, {
+      method: 'DELETE',
+    });
+  },
+  connectUploadIdentityDocument(file: File, side: 'front' | 'back' = 'front') {
+    return apiFetch<{ data: ConnectRequirements }>(`/api/v1/payments/connect/identity-document?side=${side}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.type,
+        'x-file-name': encodeURIComponent(file.name || `identity-document-${side}`),
+      },
+      body: file,
     });
   },
   connectAcceptTerms() {
@@ -2139,6 +2176,9 @@ export interface PublicTrackingData {
   departureDate?: string;
   departureTime: string;
   location: LocationUpdateRecord | null;
+  activeTarget?: 'pickup' | 'dropoff' | 'complete' | 'none';
+  activeTargetAddress?: string | null;
+  activeEta?: { distanceMeters: number; minutes: number; label: string } | null;
   eta?: {
     pickup: { distanceMeters: number; minutes: number; label: string } | null;
     dropoff: { distanceMeters: number; minutes: number; label: string } | null;
@@ -2360,6 +2400,7 @@ export interface CreateBookingInput {
 
 export interface Booking {
   id: string;
+  bookingReference?: string;
   rideId: string;
   passengerId: string;
   seatsBooked: number;
@@ -2434,6 +2475,12 @@ export interface Booking {
   } | null;
   pickupOtp?: string | null;
   dropOtp?: string | null;
+  ratingByViewer?: {
+    id: string;
+    stars: number;
+    reviewText: string | null;
+    createdAt: string;
+  } | null;
 }
 
 // Types
@@ -2555,6 +2602,7 @@ export interface PublishedRide {
   basePricePerSeat: number;
   currency: string;
   status: string;
+  displayStatus?: string;
   notes?: string;
   routeDistanceMeters?: number;
   routeDurationSeconds?: number;
@@ -2566,6 +2614,7 @@ export interface PublishedRide {
 
 export interface DriverRideBooking {
   id: string;
+  bookingReference?: string;
   rideId: string;
   passengerId: string;
   passenger?: { id: string; firstName: string | null; avatarUrl: string | null };

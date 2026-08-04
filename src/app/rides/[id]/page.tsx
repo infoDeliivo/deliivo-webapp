@@ -19,12 +19,15 @@ import {
   Plus,
   MessageSquare,
   Share2,
+  ChevronDown,
+  ShieldCheck,
+  ExternalLink,
 } from 'lucide-react';
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import EmergencySosButton from '@/components/EmergencySosButton';
 import SupportOverrideCard from '@/components/SupportOverrideCard';
 import FlowGuide, { FlowGuideStep } from '@/components/FlowGuide';
-import { authApi, searchRidesApi, bookingsApi, rideOpsApi, ratingsApi, trackingApi, disputesApi, paymentMethodsApi, RideDetails, PricePreview, Booking, TrackingLink, Dispute, PaymentMethod, getApiErrorMessage } from '@/lib/api';
+import { authApi, searchRidesApi, bookingsApi, rideOpsApi, ratingsApi, trackingApi, disputesApi, paymentMethodsApi, RideDetails, PricePreview, Booking, TrackingLink, Dispute, PaymentMethod, formatBookingReference, getApiErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { emitSocketEvent, getSocket, onSocketEvent, LocationUpdate, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
 import { isStripeConfigured, StripeProvider } from '@/lib/stripe';
@@ -103,6 +106,11 @@ function buildRiderPointOptions(ride: RideDetails): RiderPointOption[] {
   ];
 }
 
+function waypointForId(ride: RideDetails, waypointId?: string | null) {
+  if (!waypointId) return null;
+  return (ride.waypoints || []).find((waypoint) => waypoint.id === waypointId) || null;
+}
+
 function isWithinConfirmedCancellationWindow(ride: RideDetails, booking: Booking | null) {
   if (booking?.status !== 'CONFIRMED') return false;
   const date = new Date(ride.departureDate);
@@ -133,6 +141,14 @@ function isBookingWindowClosed(ride: RideDetails) {
     && date.getUTCDate() === now.getUTCDate();
   return departureAt <= now.getTime()
     || (sameUtcDay && departureAt - now.getTime() < 3 * 60 * 60 * 1000);
+}
+
+function formatDurationHhMm(totalSeconds?: number | null) {
+  if (!totalSeconds || totalSeconds <= 0) return null;
+  const totalMinutes = Math.round(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
 type LiveSharingLinksCardProps = {
@@ -306,8 +322,11 @@ function RideDetailContent() {
 
   useEffect(() => {
     if (!ride) return;
-    setSelectedPickupValue(myBooking?.pickupWaypointId || ride.bookingContext?.pickupWaypointId || 'origin');
-    setSelectedDropoffValue(myBooking?.dropoffWaypointId || ride.bookingContext?.dropoffWaypointId || 'destination');
+    const points = buildRiderPointOptions(ride);
+    const concretePickup = points.find((point) => point.kind === 'pickup');
+    const concreteDropoff = points.find((point) => point.kind === 'dropoff');
+    setSelectedPickupValue(myBooking?.pickupWaypointId || ride.bookingContext?.pickupWaypointId || concretePickup?.value || 'origin');
+    setSelectedDropoffValue(myBooking?.dropoffWaypointId || ride.bookingContext?.dropoffWaypointId || concreteDropoff?.value || 'destination');
   }, [ride?.id, ride?.bookingContext?.pickupWaypointId, ride?.bookingContext?.dropoffWaypointId, myBooking?.id, myBooking?.pickupWaypointId, myBooking?.dropoffWaypointId]);
 
   useEffect(() => {
@@ -315,6 +334,10 @@ function RideDetailContent() {
     setTravelingWithChildUnderTwo(false);
     setBringingOwnChildSeat(false);
   }, [childSeatControlsEnabled]);
+
+  useEffect(() => {
+    setRatingSubmitted(Boolean(myBooking?.ratingByViewer));
+  }, [myBooking?.id, myBooking?.ratingByViewer?.id]);
 
   useEffect(() => {
     if (!id) return;
@@ -677,11 +700,20 @@ function RideDetailContent() {
     if (!myBooking || ratingStars === 0) return;
     setRatingLoading(true);
     try {
-      await ratingsApi.submitRating(myBooking.id, ratingStars, ratingText || undefined);
+      const res = await ratingsApi.submitRating(myBooking.id, ratingStars, ratingText || undefined);
       setRatingSubmitted(true);
+      setMyBooking((prev) => prev && prev.id === myBooking.id
+        ? { ...prev, ratingByViewer: res.data }
+        : prev);
       showSuccess(t('rideDetail.ratingSubmittedTitle'), t('rideDetail.ratingSubmittedCopy'));
     } catch (err: unknown) {
-      showError(t('rideDetail.couldNotSubmitRating'), getApiErrorMessage(err, t('rideDetail.failedSubmitRating')));
+      const message = getApiErrorMessage(err, t('rideDetail.failedSubmitRating'));
+      if (message.toLowerCase().includes('already submitted')) {
+        setRatingSubmitted(true);
+        showSuccess(t('rideDetail.ratingSubmittedTitle'), t('rideDetail.ratingSubmittedCopy'));
+      } else {
+        showError(t('rideDetail.couldNotSubmitRating'), message);
+      }
     }
     finally { setRatingLoading(false); }
   }
@@ -842,6 +874,14 @@ function RideDetailContent() {
       setBookError(t('rideDetail.selectPaymentCardBeforeBooking'));
       return;
     }
+    if (hasConcretePickupOptions && selectedPickupOption.kind === 'origin') {
+      setBookError('Choose a pickup point for this ride.');
+      return;
+    }
+    if (hasConcreteDropoffOptions && selectedDropoffOption.kind === 'destination') {
+      setBookError('Choose a drop-off point for this ride.');
+      return;
+    }
     setBooking(true);
     setBookError('');
     setPaymentMessage('');
@@ -968,8 +1008,13 @@ function RideDetailContent() {
   const driverName = ride.driver?.firstName || t('rideDetail.driverFallback');
   const initials = driverName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const vehicleLabel = ride.vehicle ? [ride.vehicle.brand, ride.vehicle.model_name].filter(Boolean).join(' ') : null;
+  const vehicleDetails = ride.vehicle
+    ? [ride.vehicle.type, ride.vehicle.color].filter(Boolean).join(' / ')
+    : '';
+  const currentRideHref = `/rides/${id}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
+  const driverProfileHref = withReturnTo(`/profile/users/${ride.driverId}`, currentRideHref);
   const dateLabel = new Date(ride.departureDate).toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const durationMin = ride.routeDurationSeconds ? Math.round(ride.routeDurationSeconds / 60) : null;
+  const durationLabel = formatDurationHhMm(ride.routeDurationSeconds);
   const distanceKm = ride.routeDistanceMeters ? (ride.routeDistanceMeters / 1000).toFixed(1) : null;
   const price = ride.segment?.segmentFare ?? ride.basePricePerSeat;
   const previewBreakdown = preview?.priceBreakdown;
@@ -980,8 +1025,30 @@ function RideDetailContent() {
   const selectedDropoffOption = riderPointByValue.get(selectedDropoffValue) ?? riderPointOptions[riderPointOptions.length - 1];
   const pickupOptions = riderPointOptions.filter((option) => ['origin', 'pickup', 'stopover'].includes(option.kind));
   const dropoffOptions = riderPointOptions.filter((option) => ['stopover', 'dropoff', 'destination'].includes(option.kind));
-  const filteredPickupOptions = pickupOptions.filter((option) => option.position < selectedDropoffOption.position);
-  const filteredDropoffOptions = dropoffOptions.filter((option) => option.position > selectedPickupOption.position);
+  const hasConcretePickupOptions = pickupOptions.some((option) => option.kind === 'pickup');
+  const hasConcreteDropoffOptions = dropoffOptions.some((option) => option.kind === 'dropoff');
+  const selectablePickupOptions = hasConcretePickupOptions
+    ? pickupOptions.filter((option) => option.kind !== 'origin')
+    : pickupOptions;
+  const selectableDropoffOptions = hasConcreteDropoffOptions
+    ? dropoffOptions.filter((option) => option.kind !== 'destination')
+    : dropoffOptions;
+  const filteredPickupOptions = selectablePickupOptions.filter((option) => option.position < selectedDropoffOption.position);
+  const filteredDropoffOptions = selectableDropoffOptions.filter((option) => option.position > selectedPickupOption.position);
+  const bookedPickupWaypoint = waypointForId(ride, myBooking?.segmentRide?.bookingContext?.pickupWaypointId);
+  const bookedDropoffWaypoint = waypointForId(ride, myBooking?.segmentRide?.bookingContext?.dropoffWaypointId);
+  const bookedPickupAddress = myBooking?.segmentRide?.segment?.pickupAddress
+    || bookedPickupWaypoint?.address
+    || myBooking?.segmentRide?.originAddress
+    || myBooking?.fullRide?.originAddress
+    || ride.originAddress;
+  const bookedDropoffAddress = myBooking?.segmentRide?.segment?.dropoffAddress
+    || bookedDropoffWaypoint?.address
+    || myBooking?.segmentRide?.destinationAddress
+    || myBooking?.fullRide?.destinationAddress
+    || ride.destinationAddress;
+  const bookedPickupTime = bookedPickupWaypoint?.estimatedArrivalTime || null;
+  const bookedDropoffTime = bookedDropoffWaypoint?.estimatedArrivalTime || null;
   const isOwnRide = user?.id === ride.driverId;
   const bookingGuide = getBookingGuide(Boolean(user));
   const needsTosAcceptance = !user?.tosAcceptedAt || !user?.privacyAcceptedAt;
@@ -993,6 +1060,7 @@ function RideDetailContent() {
   const disputeEligibleStatuses = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED', 'DISPUTED'];
   const openDispute = myDisputes.find((dispute) => ['OPEN', 'EVIDENCE_COLLECTED', 'NEEDS_MANUAL_REVIEW', 'WAITING_FOR_USER_RESPONSE', 'ESCALATED'].includes(dispute.status));
   const isDriverConfirmedBooking = Boolean(myBooking && !['PENDING', 'PAYMENT_PENDING', 'DRIVER_PENDING', 'PAYMENT_FAILED', 'REJECTED', 'CANCELLED'].includes(myBooking.status));
+  const canUseRideChat = Boolean(myBooking && ride.status === 'IN_PROGRESS' && ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'].includes(myBooking.status));
   const cancellationWindowClosed = isWithinConfirmedCancellationWindow(ride, myBooking);
   const bookingWindowClosed = isBookingWindowClosed(ride);
 
@@ -1004,28 +1072,13 @@ function RideDetailContent() {
     return t('rideDetail.mainDestination');
   }
 
-  function pointChipLabel(kind: RiderPointKind) {
-    if (kind === 'origin') return t('rideDetail.mainDeparture');
-    if (kind === 'pickup') return t('rideDetail.pickupPointType');
-    if (kind === 'stopover') return t('rideDetail.stopoverPointType');
-    if (kind === 'dropoff') return t('rideDetail.dropoffPointType');
-    return t('rideDetail.mainDestination');
-  }
-
-  function pointChipClass(kind: RiderPointKind) {
-    if (kind === 'pickup' || kind === 'origin') return 'bg-orange-50 text-deliivo-orange';
-    if (kind === 'dropoff') return 'bg-red-50 text-red-600';
-    if (kind === 'stopover') return 'bg-blue-50 text-blue-700';
-    return 'bg-gray-100 text-deliivo-gray';
-  }
-
   function handlePickupChange(nextValue: string) {
     const nextPickup = riderPointByValue.get(nextValue);
     if (!nextPickup) return;
     setSelectedPickupValue(nextValue);
 
     if (selectedDropoffOption.position <= nextPickup.position) {
-      const nextValidDropoff = dropoffOptions.find((option) => option.position > nextPickup.position);
+      const nextValidDropoff = selectableDropoffOptions.find((option) => option.position > nextPickup.position);
       if (nextValidDropoff) {
         setSelectedDropoffValue(nextValidDropoff.value);
       }
@@ -1038,7 +1091,7 @@ function RideDetailContent() {
     setSelectedDropoffValue(nextValue);
 
     if (selectedPickupOption.position >= nextDropoff.position) {
-      const nextValidPickup = [...pickupOptions].reverse().find((option) => option.position < nextDropoff.position);
+      const nextValidPickup = [...selectablePickupOptions].reverse().find((option) => option.position < nextDropoff.position);
       if (nextValidPickup) {
         setSelectedPickupValue(nextValidPickup.value);
       }
@@ -1057,7 +1110,9 @@ function RideDetailContent() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-6 space-y-6">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start">
+          <main className="space-y-5">
         {/* Route card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
           <div className="bg-gradient-to-r from-deliivo-orange to-primary-600 px-5 py-4">
@@ -1091,82 +1146,91 @@ function RideDetailContent() {
             <div className="flex flex-wrap gap-4 pt-3 border-t border-gray-50 text-xs text-deliivo-gray">
               <span className="flex items-center gap-1"><Calendar size={13} /> {dateLabel}</span>
               <span className="flex items-center gap-1"><Clock size={13} /> {ride.departureTime}</span>
-              {durationMin && <span className="flex items-center gap-1"><Clock size={13} /> ~{durationMin} min</span>}
+              {durationLabel && <span className="flex items-center gap-1"><Clock size={13} /> ~{durationLabel}</span>}
               {distanceKm && <span className="flex items-center gap-1"><MapPin size={13} /> {distanceKm} km</span>}
             </div>
           </div>
         </div>
 
         {/* Driver card */}
-        <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-white p-4 shadow-sm sm:gap-4 sm:p-5">
-          <div className="h-14 w-14 shrink-0 rounded-full bg-primary-100 flex items-center justify-center">
-            {ride.driver?.avatarUrl ? (
-              <img src={ride.driver.avatarUrl} alt={driverName} className="h-full w-full rounded-full object-cover" />
-            ) : (
-              <span className="text-lg font-semibold text-primary-600">{initials}</span>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-base font-semibold text-deliivo-dark">{driverName}</p>
-            {ride.driver?.rating && (
-              <div className="flex items-center gap-1 mt-0.5">
-                <Star size={14} className="fill-amber-400 text-amber-400" />
-                <span className="text-sm text-deliivo-gray">{ride.driver.rating.toFixed(1)}</span>
+        <Link
+          href={driverProfileHref}
+          className="group block rounded-2xl bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5"
+        >
+          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+              <div className="h-16 w-16 shrink-0 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden">
+                {ride.driver?.avatarUrl ? (
+                  <img src={ride.driver.avatarUrl} alt={driverName} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-lg font-semibold text-primary-600">{initials}</span>
+                )}
               </div>
-            )}
-          </div>
-          {vehicleLabel && (
-            <div className="min-w-0 max-w-[45%] text-right text-sm">
-              <p className="flex min-w-0 items-start justify-end gap-1 break-words font-medium text-deliivo-dark"><Car size={14} className="mt-0.5 shrink-0" /> {vehicleLabel}</p>
-              {ride.vehicle?.color && <p className="text-xs text-deliivo-gray mt-0.5">{ride.vehicle.color}</p>}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-base font-bold text-deliivo-dark group-hover:text-deliivo-orange">{driverName}</p>
+                  {ride.driver?.isVerified && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700">
+                      <ShieldCheck className="h-3 w-3" /> Verified
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-deliivo-gray">
+                  {ride.driver?.rating && (
+                    <span className="inline-flex items-center gap-1">
+                      <Star size={13} className="fill-amber-400 text-amber-400" />
+                      {ride.driver.rating.toFixed(1)} ({ride.driver.ratingCount || 0})
+                    </span>
+                  )}
+                  {ride.driver?.successfulCompletedRides !== undefined && (
+                    <span>{ride.driver.successfulCompletedRides} completed rides</span>
+                  )}
+                  <span className="inline-flex items-center gap-1 font-semibold text-deliivo-orange">
+                    View profile <ExternalLink className="h-3 w-3" />
+                  </span>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
+
+            <div className="flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 sm:max-w-[48%]">
+              {ride.vehicle?.imageUrl ? (
+                <img src={ride.vehicle.imageUrl} alt={vehicleLabel || 'Vehicle'} className="h-12 w-16 shrink-0 rounded-lg object-cover" />
+              ) : (
+                <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-lg bg-white text-deliivo-orange">
+                  <Car className="h-5 w-5" />
+                </div>
+              )}
+              <div className="min-w-0 text-sm">
+                <p className="truncate font-bold text-deliivo-dark">{vehicleLabel || 'Vehicle details'}</p>
+                {vehicleDetails && <p className="mt-0.5 truncate text-xs text-deliivo-gray">{vehicleDetails}</p>}
+              </div>
+            </div>
+          </div>
+        </Link>
 
         {/* Details */}
-        <div className="rounded-2xl bg-white shadow-sm p-5 space-y-3">
-          <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.rideInfo')}</h3>
-          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-            <div className="flex items-center gap-2"><Users size={16} className="text-deliivo-orange" /><span>{t('manageRide.availableSeats', { available: ride.availableSeats, total: ride.totalSeats })}</span></div>
-            <div className="flex items-center gap-2"><span className="text-lg font-bold text-primary-500">{ride.currency} {price.toFixed(2)}</span><span className="text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></div>
+        <div className="rounded-2xl bg-white p-5 shadow-sm">
+          <div className="border-b border-gray-100 pb-3">
+            <h3 className="text-base font-bold text-deliivo-dark">{t('rideDetail.rideInfo')}</h3>
           </div>
-          {ride.waypoints.length > 0 && (
-            <div className="pt-3 border-t border-gray-50 space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('rideDetail.publishedRoutePoints')}</p>
-              <div className="space-y-2">
-                {ride.waypoints
-                  .slice()
-                  .sort((a, b) => a.orderIndex - b.orderIndex)
-                  .map((waypoint) => (
-                    <div key={waypoint.id} className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                      <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${waypoint.waypointType === 'PICKUP' ? 'bg-orange-100 text-deliivo-orange' : waypoint.waypointType === 'DROPOFF' ? 'bg-red-100 text-red-600' : 'bg-white text-deliivo-orange'}`}>
-                        <MapPin className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-                          {pointKindLabel(toRiderPointKind(waypoint.waypointType))}
-                        </p>
-                        <p className="text-sm font-medium text-deliivo-dark">{waypoint.address}</p>
-                        {waypoint.estimatedArrivalTime && (
-                          <p className="text-xs text-deliivo-gray">{t('rideDetail.estimatedTime')}: {waypoint.estimatedArrivalTime}</p>
-                        )}
-                      </div>
-                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${pointChipClass(toRiderPointKind(waypoint.waypointType))}`}>
-                        {pointChipLabel(toRiderPointKind(waypoint.waypointType))}
-                      </span>
-                    </div>
-                  ))}
-              </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <div className="rounded-xl bg-gray-50 px-4 py-3">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase text-deliivo-gray"><Users size={14} className="text-deliivo-orange" /> Seats</p>
+              <p className="mt-1 font-semibold text-deliivo-dark">{t('manageRide.availableSeats', { available: ride.availableSeats, total: ride.totalSeats })}</p>
             </div>
-          )}
+            <div className="rounded-xl bg-gray-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase text-deliivo-gray">Price</p>
+              <p className="mt-1"><span className="text-lg font-bold text-primary-500">{ride.currency} {price.toFixed(2)}</span><span className="ml-1 text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></p>
+            </div>
+          </div>
           {ride.notes && (
-            <div className="pt-3 border-t border-gray-50">
+            <div className="mt-4 border-t border-gray-100 pt-4">
               <p className="flex items-center gap-2 text-xs font-medium text-deliivo-gray mb-1"><MessageSquare size={12} /> {t('rideDetail.driverNotes')}</p>
               <p className="text-sm text-deliivo-dark">{ride.notes}</p>
             </div>
           )}
         {(ride.femaleOnly || ride.noSmoking || ride.alcoholFreeRide || ride.noBicycles || ride.childSeatAvailable) && (
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
             {ride.femaleOnly && (
               <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-600">
                 <CheckCircle className="h-3 w-3" /> {t('ride.womenOnlyRide')}
@@ -1202,6 +1266,100 @@ function RideDetailContent() {
         )}
       </div>
 
+        {!isOwnRide && myBooking && ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'ONBOARD', 'DROP_PENDING', 'IN_PROGRESS', 'COMPLETED'].includes(myBooking.status) && (
+          <LiveSharingLinksCard
+            trackingLinks={trackingLinks}
+            trackingBusy={trackingBusy}
+            trackingMessage={trackingMessage}
+            activeTrackingUrl={activeTrackingUrl}
+            locale={locale}
+            title={t('rideDetail.liveSharingLink')}
+            description={t('rideDetail.liveSharingLinkCopy')}
+            emptyText={t('rideDetail.noSharingLink')}
+            createLabel={t('rideDetail.createCopyLiveLink')}
+            creatingLabel={t('rideDetail.creating')}
+            copyLabel={t('common.copy')}
+            onCreate={handleCreateTrackingLink}
+            onCopy={handleCopyTrackingLink}
+            trackingUrlFor={trackingUrlFor}
+          />
+        )}
+
+        {isDriverConfirmedBooking && (
+          <details className="group rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-deliivo-dark marker:hidden">
+              <span>Support and recovery</span>
+              <ChevronDown className="h-4 w-4 text-deliivo-orange transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="grid gap-4 border-t border-gray-100 p-4">
+              <SupportOverrideCard
+                title="Booking help and manual fallback"
+                copy="If payment, OTP, pickup arrival, or cancellation gets stuck, contact support with the booking and ride IDs. Support can review the canonical state and apply an admin override when justified."
+                identifiers={[
+                  { label: 'Ride ID', value: ride.id },
+                  { label: 'Booking ref', value: myBooking ? formatBookingReference(myBooking) : '' },
+                  { label: 'Booking ID', value: myBooking?.id || '' },
+                ]}
+              />
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-amber-950">Manual recovery</h3>
+                    <p className="mt-1 text-xs text-amber-900">
+                      Use these when the booking is blocked but the ride should continue. Each action carries a reason into the dispute evidence.
+                    </p>
+                    {!allowManualOverride && (
+                      <p className="mt-1 break-all text-[11px] font-medium text-amber-800">
+                        Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleManualRideReview('OTP_ISSUE')}
+                    disabled={!allowManualOverride}
+                    className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                  >
+                    Report OTP issue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!myBooking) return;
+                      const reason = promptManualOverride(
+                        'Manual drop-off confirmation',
+                        'Use when the driver has finished the ride but the app cannot complete the normal confirmation path.'
+                      );
+                      if (reason === null) return;
+                      setRiderActionLoading(true);
+                      try {
+                        await rideOpsApi.riderConfirmDropoff(myBooking.id, reason || undefined);
+                        await loadMyBooking();
+                        await loadRide();
+                      } catch (err: unknown) {
+                        setBookError(getApiErrorMessage(err, t('rideDetail.failedConfirmDropoff')));
+                      } finally {
+                        setRiderActionLoading(false);
+                      }
+                    }}
+                    disabled={!allowManualOverride}
+                    className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                  >
+                    Manual drop-off confirm
+                  </button>
+                </div>
+              </div>
+            </div>
+          </details>
+        )}
+
+          </main>
+
+          <aside className="space-y-5 lg:sticky lg:top-20">
+
         {/* Booking section */}
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
@@ -1234,83 +1392,123 @@ function RideDetailContent() {
         )}
 
         {user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
+          <div className="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
             <FlowGuide
               storageKey="deliivo.booking.quick-guide.v1"
               eyebrow="Booking guide"
               title={bookingGuide.title}
               steps={bookingGuide.steps}
             />
-            <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
+            <div className="mt-5 border-b border-gray-100 pb-3">
+              <h3 className="text-base font-bold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
+            </div>
 
-            <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                <div>
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-col gap-2">
+                <div className="min-w-0">
                   <p className="text-base font-semibold text-deliivo-dark">{t('rideDetail.yourTripOnThisRide')}</p>
                   <p className="mt-1 text-sm text-deliivo-gray">{t('rideDetail.choosePickupDropoffCopy')}</p>
                 </div>
-                <span className="shrink-0 text-xs font-medium text-deliivo-gray">
-                  {pickupOptions.length} pickup · {dropoffOptions.length} drop-off choices
+                <span className="w-fit rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium text-deliivo-gray">
+                  {selectablePickupOptions.length} pickup · {selectableDropoffOptions.length} drop-off choices
                 </span>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 focus-within:border-deliivo-orange focus-within:bg-white focus-within:ring-2 focus-within:ring-deliivo-orange/10">
+              <div className="grid gap-3">
+                <div className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                   <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-100 text-deliivo-orange">
                       <MapPin className="h-3.5 w-3.5" />
                     </span>
                     {t('rideDetail.pickupChoice')}
                   </span>
-                  <select
-                    value={selectedPickupValue}
-                    onChange={(event) => handlePickupChange(event.target.value)}
-                    className="mt-2 min-w-0 w-full bg-transparent text-sm font-semibold text-deliivo-dark outline-none"
-                  >
+                  <div className="mt-3 grid gap-2" role="radiogroup" aria-label={t('rideDetail.pickupChoice')}>
                     {filteredPickupOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {pointKindLabel(option.kind)}: {option.address}
-                      </option>
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handlePickupChange(option.value)}
+                        className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          selectedPickupValue === option.value
+                            ? 'border-deliivo-orange bg-white shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-deliivo-orange/50'
+                        }`}
+                        aria-checked={selectedPickupValue === option.value}
+                        role="radio"
+                      >
+                        <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                          selectedPickupValue === option.value ? 'border-deliivo-orange bg-deliivo-orange' : 'border-gray-300'
+                        }`}>
+                          {selectedPickupValue === option.value && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                            {pointKindLabel(option.kind)}
+                          </span>
+                          <span className="mt-0.5 block break-words text-sm font-semibold text-deliivo-dark">
+                            {option.address}
+                          </span>
+                          <span className="mt-1 block text-xs text-deliivo-gray">
+                            {t('rideDetail.estimatedPickup')}: {option.estimatedArrivalTime || ride.departureTime}
+                          </span>
+                        </span>
+                      </button>
                     ))}
-                  </select>
-                  <span className="mt-1 block text-xs text-deliivo-gray">
-                    {t('rideDetail.estimatedPickup')}: {selectedPickupOption.estimatedArrivalTime || ride.departureTime}
-                  </span>
-                </label>
+                  </div>
+                </div>
 
-                <label className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 focus-within:border-deliivo-orange focus-within:bg-white focus-within:ring-2 focus-within:ring-deliivo-orange/10">
+                <div className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                   <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-red-600">
                       <MapPin className="h-3.5 w-3.5" />
                     </span>
                     {t('rideDetail.dropoffChoice')}
                   </span>
-                  <select
-                    value={selectedDropoffValue}
-                    onChange={(event) => handleDropoffChange(event.target.value)}
-                    className="mt-2 min-w-0 w-full bg-transparent text-sm font-semibold text-deliivo-dark outline-none"
-                  >
+                  <div className="mt-3 grid gap-2" role="radiogroup" aria-label={t('rideDetail.dropoffChoice')}>
                     {filteredDropoffOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {pointKindLabel(option.kind)}: {option.address}
-                      </option>
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleDropoffChange(option.value)}
+                        className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          selectedDropoffValue === option.value
+                            ? 'border-deliivo-orange bg-white shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-deliivo-orange/50'
+                        }`}
+                        aria-checked={selectedDropoffValue === option.value}
+                        role="radio"
+                      >
+                        <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                          selectedDropoffValue === option.value ? 'border-deliivo-orange bg-deliivo-orange' : 'border-gray-300'
+                        }`}>
+                          {selectedDropoffValue === option.value && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                            {pointKindLabel(option.kind)}
+                          </span>
+                          <span className="mt-0.5 block break-words text-sm font-semibold text-deliivo-dark">
+                            {option.address}
+                          </span>
+                          <span className="mt-1 block text-xs text-deliivo-gray">
+                            {t('rideDetail.estimatedDropoff')}: {option.estimatedArrivalTime || t('rideDetail.atDestination')}
+                          </span>
+                        </span>
+                      </button>
                     ))}
-                  </select>
-                  <span className="mt-1 block text-xs text-deliivo-gray">
-                    {t('rideDetail.estimatedDropoff')}: {selectedDropoffOption.estimatedArrivalTime || t('rideDetail.atDestination')}
-                  </span>
-                </label>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center gap-3 rounded-xl bg-orange-50/70 px-4 py-3">
+              <div className="flex items-start gap-3 rounded-xl bg-orange-50/70 px-4 py-3">
                 <div className="flex shrink-0 items-center gap-1.5" aria-hidden="true">
                   <span className="h-2.5 w-2.5 rounded-full border-2 border-deliivo-orange bg-white" />
                   <span className="h-0.5 w-8 bg-orange-200" />
                   <span className="h-2.5 w-2.5 rounded-full bg-deliivo-orange" />
                 </div>
                 <p className="min-w-0 text-sm font-medium text-deliivo-dark">
-                  <span className="block truncate">{selectedPickupOption.address}</span>
-                  <span className="block truncate text-deliivo-gray">to {selectedDropoffOption.address}</span>
+                  <span className="block break-words">{selectedPickupOption.address}</span>
+                  <span className="block break-words text-deliivo-gray">to {selectedDropoffOption.address}</span>
                 </p>
                 {previewBreakdown && (
                   <span className="ml-auto shrink-0 text-sm font-bold text-deliivo-orange">
@@ -1339,25 +1537,25 @@ function RideDetailContent() {
             )}
 
             {/* Seat selector */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-deliivo-dark">{t('rideDetail.seats')}</span>
-              <div className="flex items-center gap-3">
-                <button type="button" disabled={seats <= 1} onClick={() => setSeats(s => s - 1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 disabled:opacity-30">
+            <div className="space-y-2">
+              <span className="block text-sm font-medium text-deliivo-dark">{t('rideDetail.seats')}</span>
+              <div className="flex items-center justify-center gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3">
+                <button type="button" disabled={seats <= 1} onClick={() => setSeats(s => s - 1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 disabled:opacity-30">
                   <Minus className="h-3.5 w-3.5" />
                 </button>
-                <span className="w-5 text-center font-bold">{seats}</span>
-                <button type="button" disabled={seats >= Math.min(10, ride.availableSeats)} onClick={() => setSeats(s => s + 1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-deliivo-orange bg-deliivo-orange-light text-deliivo-orange disabled:opacity-30">
+                <span className="min-w-10 text-center text-lg font-bold text-deliivo-dark">{seats}</span>
+                <button type="button" disabled={seats >= Math.min(10, ride.availableSeats)} onClick={() => setSeats(s => s + 1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-deliivo-orange bg-deliivo-orange-light text-deliivo-orange disabled:opacity-30">
                   <Plus className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
 
-            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-              <span className="text-sm text-deliivo-dark">{t('rideDetail.requestExpires')}</span>
+            <div className="space-y-2">
+              <span className="block text-sm font-medium text-deliivo-dark">{t('rideDetail.requestExpires')}</span>
               <select
                 value={responseExpiryOption}
                 onChange={(e) => setResponseExpiryOption(e.target.value as typeof responseExpiryOption)}
-                className="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-deliivo-dark focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20 sm:w-auto sm:min-w-44"
+                className="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-deliivo-dark focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
               >
                 {requestExpiryOptions.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -1480,7 +1678,7 @@ function RideDetailContent() {
               <div className="overflow-hidden rounded-xl border border-primary-100 bg-primary-50">
                 <div className="border-b border-primary-100 px-4 py-3">
                   <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.priceBreakdown')}</p>
-                  <p className="mt-0.5 truncate text-xs text-deliivo-gray">
+                  <p className="mt-0.5 break-words text-xs text-deliivo-gray">
                     {selectedPickupOption.address} {t('search.toLabel').toLowerCase()} {selectedDropoffOption.address}
                   </p>
                 </div>
@@ -1541,20 +1739,32 @@ function RideDetailContent() {
 
         {/* Rider booking panel — show OTP, actions */}
         {!isOwnRide && myBooking && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.yourBooking')}</h3>
+          <div className="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="text-base font-bold text-deliivo-dark">{t('rideDetail.yourBooking')}</h3>
               <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getBookingStatusBadgeClass(myBooking.status)}`}>
                 {getRideStatusLabel(myBooking.status, t)}
               </span>
             </div>
 
-            <EmergencySosButton
-              rideId={ride.id}
-              bookingId={myBooking.id}
-              role="RIDER"
-              className="w-full"
-            />
+            <div className="grid gap-2">
+              <EmergencySosButton
+                rideId={ride.id}
+                bookingId={myBooking.id}
+                role="RIDER"
+                className="w-full"
+              />
+
+              {canUseRideChat && (
+                <Link
+                  href={withReturnTo(`/chat/start/booking/${myBooking.id}`, currentRideHref)}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  Message driver
+                </Link>
+              )}
+            </div>
 
             {myBooking.status === 'DRIVER_PENDING' && myBooking.decisionDeadline && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-1">
@@ -1632,19 +1842,41 @@ function RideDetailContent() {
             )}
 
               {myBooking.segmentRide && (
-                <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-2">
-                <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookedSegment')}</p>
-                <div className="text-sm text-deliivo-dark space-y-1">
-                  <p><span className="font-medium text-deliivo-gray">{t('rideDetail.pickup')}:</span> {myBooking.segmentRide.originAddress}</p>
-                  <p><span className="font-medium text-deliivo-gray">{t('rideDetail.dropoff')}:</span> {myBooking.segmentRide.destinationAddress}</p>
+              <div className="rounded-2xl border border-orange-100 bg-orange-50/50 p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-deliivo-dark">{t('rideDetail.bookedSegment')}</p>
+                    <p className="mt-0.5 text-xs text-deliivo-gray">Your exact pickup and drop-off for this booking.</p>
+                  </div>
                   {myBooking.segmentRide.segment?.segmentFare !== undefined && (
-                    <p><span className="font-medium text-deliivo-gray">{t('rideDetail.segmentFare')}:</span> {ride.currency} {myBooking.segmentRide.segment.segmentFare.toFixed(2)}</p>
+                    <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-deliivo-orange">
+                      {ride.currency} {myBooking.segmentRide.segment.segmentFare.toFixed(2)}
+                    </span>
                   )}
-                  {myBooking.segmentRide.bookingContext && (
-                    <p className="text-xs text-deliivo-gray">
-                      {t('rideDetail.waypoints')}: {myBooking.segmentRide.bookingContext.pickupWaypointId || t('rideDetail.origin')} - {myBooking.segmentRide.bookingContext.dropoffWaypointId || t('rideDetail.destination')}
-                    </p>
-                  )}
+                </div>
+
+                <div className="mt-4 flex gap-3">
+                  <div className="flex flex-col items-center pt-1">
+                    <span className="h-3 w-3 rounded-full border-2 border-deliivo-orange bg-white" />
+                    <span className="my-1 w-0.5 flex-1 bg-orange-200" />
+                    <span className="h-3 w-3 rounded-full bg-deliivo-orange" />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-deliivo-gray">{t('rideDetail.pickup')}</p>
+                        {bookedPickupTime && <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-deliivo-dark">{bookedPickupTime}</span>}
+                      </div>
+                      <p className="mt-1 break-words text-sm font-semibold text-deliivo-dark">{bookedPickupAddress}</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-deliivo-gray">{t('rideDetail.dropoff')}</p>
+                        {bookedDropoffTime && <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-deliivo-dark">{bookedDropoffTime}</span>}
+                      </div>
+                      <p className="mt-1 break-words text-sm font-semibold text-deliivo-dark">{bookedDropoffAddress}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1659,12 +1891,10 @@ function RideDetailContent() {
                 </div>
                 <div className="rounded-lg bg-white border border-orange-100 p-3 text-sm text-deliivo-dark">
                   <p className="font-medium">
-                    {myBooking.segmentRide?.segment?.pickupAddress || myBooking.segmentRide?.originAddress || myBooking.fullRide?.originAddress || ride.originAddress}
+                    {bookedPickupAddress}
                   </p>
-                  {myBooking.segmentRide?.bookingContext?.pickupWaypointId && (
-                    <p className="text-xs text-deliivo-gray mt-1 break-all">
-                      {t('rideDetail.waypoint')}: {myBooking.segmentRide.bookingContext.pickupWaypointId}
-                    </p>
+                  {bookedPickupTime && (
+                    <p className="text-xs text-deliivo-gray mt-1">{t('rideDetail.pickupTime')}: {bookedPickupTime}</p>
                   )}
                 </div>
                 <button
@@ -1707,7 +1937,9 @@ function RideDetailContent() {
               </div>
             )}
 
-            <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-2 text-sm">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm">
+              <p className="mb-3 text-xs font-bold uppercase text-deliivo-gray">Fare summary</p>
+              <div className="space-y-2">
               {bookedBreakdown && (
                 <>
                   <div className="flex items-center justify-between">
@@ -1736,28 +1968,10 @@ function RideDetailContent() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-deliivo-gray">{t('rideDetail.bookingId')}</span>
-                <span className="font-medium text-deliivo-dark">{myBooking.id.slice(0, 8)}</span>
+                <span className="font-medium text-deliivo-dark">{formatBookingReference(myBooking)}</span>
+              </div>
               </div>
             </div>
-
-            {['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'ONBOARD', 'DROP_PENDING', 'IN_PROGRESS', 'COMPLETED'].includes(myBooking.status) && (
-              <LiveSharingLinksCard
-                trackingLinks={trackingLinks}
-                trackingBusy={trackingBusy}
-                trackingMessage={trackingMessage}
-                activeTrackingUrl={activeTrackingUrl}
-                locale={locale}
-                title={t('rideDetail.liveSharingLink')}
-                description={t('rideDetail.liveSharingLinkCopy')}
-                emptyText={t('rideDetail.noSharingLink')}
-                createLabel={t('rideDetail.createCopyLiveLink')}
-                creatingLabel={t('rideDetail.creating')}
-                copyLabel={t('common.copy')}
-                onCreate={handleCreateTrackingLink}
-                onCopy={handleCopyTrackingLink}
-                trackingUrlFor={trackingUrlFor}
-              />
-            )}
 
             {(myBooking.status === 'PENDING' || myBooking.status === 'PAYMENT_PENDING' || myBooking.status === 'DRIVER_PENDING') && (
               <div className="space-y-3">
@@ -1910,77 +2124,17 @@ function RideDetailContent() {
           </div>
         )}
 
-        {isDriverConfirmedBooking && (
-          <>
-            <SupportOverrideCard
-              title="Booking help and manual fallback"
-              copy="If payment, OTP, pickup arrival, or cancellation gets stuck, contact support with the booking and ride IDs. Support can review the canonical state and apply an admin override when justified."
-              identifiers={[
-                { label: 'Ride ID', value: ride.id },
-                { label: 'Booking ID', value: myBooking?.id || '' },
-              ]}
-            />
-
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-amber-950">Manual recovery</h3>
-                  <p className="mt-1 text-xs text-amber-900">
-                    Use these when the booking is blocked but the ride should continue. Each action carries a reason into the dispute evidence.
-                  </p>
-                  {!allowManualOverride && (
-                    <p className="mt-1 break-all text-[11px] font-medium text-amber-800">
-                      Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleManualRideReview('OTP_ISSUE')}
-                  disabled={!allowManualOverride}
-                  className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
-                >
-                  Report OTP issue
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!myBooking) return;
-                    const reason = promptManualOverride(
-                      'Manual drop-off confirmation',
-                      'Use when the driver has finished the ride but the app cannot complete the normal confirmation path.'
-                    );
-                    if (reason === null) return;
-                    setRiderActionLoading(true);
-                    try {
-                      await rideOpsApi.riderConfirmDropoff(myBooking.id, reason || undefined);
-                      await loadMyBooking();
-                      await loadRide();
-                    } catch (err: unknown) {
-                      setBookError(getApiErrorMessage(err, t('rideDetail.failedConfirmDropoff')));
-                    } finally {
-                      setRiderActionLoading(false);
-                    }
-                  }}
-                  disabled={!allowManualOverride}
-                  className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
-                >
-                  Manual drop-off confirm
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
         {isOwnRide && (
-          <div className="rounded-2xl bg-primary-50 border border-primary-100 p-5 text-center">
-            <p className="text-sm font-medium text-deliivo-dark">{t('rideDetail.thisIsYourRide')}</p>
-            <p className="text-xs text-deliivo-gray mt-1">{t('rideDetail.manageOwnRideCopy')}</p>
-            <Link href="/rides" className="btn-outline mt-3 py-2 px-6 text-sm inline-block">{t('rides.myRides')}</Link>
+          <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.thisIsYourRide')}</p>
+              <p className="mt-1 text-xs text-deliivo-gray">{t('rideDetail.manageOwnRideCopy')}</p>
+            </div>
+            <Link href={`/rides/${ride.id}/manage`} className="inline-flex shrink-0 items-center justify-center rounded-xl bg-deliivo-orange px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-600">{t('rides.manageRide')}</Link>
           </div>
         )}
+          </aside>
+        </div>
       </div>
     </div>
   );

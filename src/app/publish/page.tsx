@@ -102,6 +102,8 @@ const MAX_STOPOVERS = 3;
 const CITY_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_CITY_POINT_RADIUS_KM || '15');
 const STOPOVER_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_STOPOVER_POINT_RADIUS_KM || '5');
 const ROUTE_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_ROUTE_POINT_RADIUS_KM || '10');
+const PLATFORM_FEE_PERCENT_RAW = Number(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT || '0');
+const PLATFORM_FEE_PERCENT = Number.isFinite(PLATFORM_FEE_PERCENT_RAW) ? Math.max(0, PLATFORM_FEE_PERCENT_RAW) : 0;
 const ESTONIA_MAP_CENTER = { lat: 58.5953, lng: 25.0136 };
 const MINIMUM_PUBLISH_LEAD_MS = 3 * 60 * 60 * 1000;
 
@@ -632,8 +634,8 @@ function StepStopovers({
     return (
       <div className="space-y-2">
         {items.map((item) => (
-          <div key={`${key}-${item.placeId}`} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-deliivo-orange shrink-0">
+          <div key={`${key}-${item.placeId}`} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-deliivo-orange shrink-0">
               <MapPin className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
@@ -664,7 +666,7 @@ function StepStopovers({
     return (
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-deliivo-orange">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-deliivo-orange">
             {stepNumber}
           </div>
           <div>
@@ -672,7 +674,7 @@ function StepStopovers({
             <p className="text-xs text-deliivo-gray">{helper}</p>
           </div>
         </div>
-        <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-deliivo-orange">
+        <span className="rounded-full bg-gray-50 px-2.5 py-1 text-xs font-semibold text-deliivo-orange">
           {countLabel}
         </span>
       </div>
@@ -692,7 +694,7 @@ function StepStopovers({
   }
 
   return (
-    <div className="space-y-5 lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start lg:gap-6 lg:space-y-0">
+    <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start lg:gap-6 lg:space-y-0">
       <div className="lg:hidden">
         <h2 className="text-xl font-bold text-deliivo-dark">{t('publish.meetingPointsTitle')}</h2>
         <p className="mt-1 text-sm text-deliivo-gray">{t('publish.meetingPointsCopy')}</p>
@@ -719,24 +721,24 @@ function StepStopovers({
         )}
       </div>
 
-      <div className="space-y-5 lg:col-start-1 lg:row-start-1">
+      <div className="space-y-4 lg:col-start-1 lg:row-start-1">
       <div className="hidden lg:block">
         <h2 className="text-xl font-bold text-deliivo-dark">{t('publish.meetingPointsTitle')}</h2>
         <p className="mt-1 text-sm text-deliivo-gray">{t('publish.meetingPointsCopy')}</p>
       </div>
 
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-        <p className="text-sm font-semibold text-amber-900">{t('publish.meetingPointsRequirement')}</p>
+      <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm">
+        <p className="text-sm font-semibold text-deliivo-dark">{t('publish.meetingPointsRequirement')}</p>
         <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${state.pickups.length > 0 ? 'bg-green-100 text-green-700' : 'bg-white text-amber-800'}`}>
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${state.pickups.length > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-deliivo-gray'}`}>
             {state.pickups.length > 0 ? <CheckCircle className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
             {t('publish.pickupRequired')}
           </span>
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${state.dropoffs.length > 0 ? 'bg-green-100 text-green-700' : 'bg-white text-amber-800'}`}>
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${state.dropoffs.length > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-deliivo-gray'}`}>
             {state.dropoffs.length > 0 ? <CheckCircle className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
             {t('publish.dropoffRequired')}
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-2.5 py-1 text-deliivo-gray">
             {t('publish.stopoversOptional')}
           </span>
         </div>
@@ -808,13 +810,13 @@ function StepStopovers({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 rounded-2xl bg-gray-100 p-1.5">
+      <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-white p-1 shadow-sm ring-1 ring-gray-100">
         {pointSections.map((section, index) => (
           <button
             key={section.key}
             type="button"
             onClick={() => setActivePointSection(section.key)}
-            className={`rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors ${activePointSection === section.key ? 'bg-white text-deliivo-dark shadow-sm' : 'text-deliivo-gray hover:text-deliivo-dark'}`}
+            className={`rounded-lg px-2 py-2 text-xs font-semibold transition-colors ${activePointSection === section.key ? 'bg-gray-100 text-deliivo-dark' : 'text-deliivo-gray hover:text-deliivo-dark'}`}
           >
             <span className="block">{index + 1}. {section.label}</span>
             <span className="mt-0.5 block text-[11px] font-medium text-deliivo-orange">{section.count}/{section.max}</span>
@@ -822,7 +824,7 @@ function StepStopovers({
         ))}
       </div>
 
-      <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
         {pointError && (
           <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {pointError}
@@ -840,7 +842,7 @@ function StepStopovers({
             t('publish.originPickupSearchCopy', { count: MAX_ORIGIN_PICKUPS }),
             t('publish.selectedCount', { count: state.pickups.length, max: MAX_ORIGIN_PICKUPS }),
           )}
-          <div className="rounded-xl bg-green-50 px-3 py-2 text-xs text-green-800">
+          <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600">
             <span className="font-semibold">{t('publish.originContext')}:</span> {state.origin?.address || t('publish.notSelected')} | {t('publish.withinRadiusKm', { radius: CITY_POINT_RADIUS_KM })}
           </div>
           {renderSelectedList(state.pickups, 'pickups', t('publish.noPickupPointsSelected'))}
@@ -876,7 +878,7 @@ function StepStopovers({
             t('publish.stopoverSearchCopy', { count: MAX_STOPOVERS }),
             t('publish.selectedCount', { count: state.stopovers.length, max: MAX_STOPOVERS }),
           )}
-          <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-800">
+          <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600">
             <span className="font-semibold">{t('publish.selectedStopoverContext')}:</span> {selectedStopoverSuggestion?.address || t('publish.chooseSuggestedStopover')} | {t('publish.withinRadiusKm', { radius: STOPOVER_POINT_RADIUS_KM })}
           </div>
           {loadingStopoverSuggestions ? (
@@ -897,7 +899,7 @@ function StepStopovers({
                     key={suggestion.placeId}
                     type="button"
                     onClick={() => setSelectedStopoverSuggestion(suggestion)}
-                    className={`flex min-w-0 items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                    className={`flex min-w-0 items-start gap-2 rounded-xl border px-3 py-2 text-left transition-all ${
                       selected
                         ? 'border-deliivo-orange bg-deliivo-orange-light'
                         : 'border-gray-100 bg-white hover:border-primary-200'
@@ -959,7 +961,7 @@ function StepStopovers({
             t('publish.destinationDropoffSearchCopy', { count: MAX_DESTINATION_DROPOFFS }),
             t('publish.selectedCount', { count: state.dropoffs.length, max: MAX_DESTINATION_DROPOFFS }),
           )}
-          <div className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-800">
+          <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600">
             <span className="font-semibold">{t('publish.destinationContext')}:</span> {state.destination?.address || t('publish.notSelected')} | {t('publish.withinRadiusKm', { radius: CITY_POINT_RADIUS_KM })}
           </div>
           {renderSelectedList(state.dropoffs, 'dropoffs', t('publish.noDropoffPointsSelected'))}
@@ -1337,6 +1339,11 @@ function StepPrice({
   const rec = state.recommendation;
   const currency = rec?.currency || 'EUR';
   const grossFullRideFare = state.basePricePerSeat * state.seats;
+  const platformFeeRate = PLATFORM_FEE_PERCENT / 100;
+  const estimatedServiceFeePerSeat = Math.round(state.basePricePerSeat * platformFeeRate * 100) / 100;
+  const estimatedRiderTotalPerSeat = state.basePricePerSeat + estimatedServiceFeePerSeat;
+  const estimatedFullRideServiceFees = estimatedServiceFeePerSeat * state.seats;
+  const estimatedFullRideRiderTotal = estimatedRiderTotalPerSeat * state.seats;
   const recommendationAdjusted = Boolean(
     rec && Math.abs(rec.breakdown.estimatedRouteCost - rec.recommendedPrice) >= 0.01
   );
@@ -1424,17 +1431,35 @@ function StepPrice({
             <Plus className="h-4 w-4" />
           </button>
         </div>
-        <div className="mt-4 grid gap-2 border-t border-gray-100 pt-4 text-sm sm:grid-cols-2">
+        <div className="mt-4 grid gap-3 border-t border-gray-100 pt-4 text-sm sm:grid-cols-2">
           <div>
             <p className="text-xs text-deliivo-gray">{t('publish.yourFarePerRider')}</p>
             <p className="font-semibold text-deliivo-dark">{currency} {state.basePricePerSeat.toFixed(2)}</p>
           </div>
           <div>
+            <p className="text-xs text-deliivo-gray">{t('publish.riderServiceFeeEstimate')}</p>
+            <p className="font-semibold text-deliivo-dark">{currency} {estimatedServiceFeePerSeat.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-deliivo-gray">{t('publish.riderTotalPerSeatEstimate')}</p>
+            <p className="font-semibold text-deliivo-dark">{currency} {estimatedRiderTotalPerSeat.toFixed(2)}</p>
+          </div>
+          <div>
             <p className="text-xs text-deliivo-gray">{t('publish.allSeatsGrossFare', { seats: state.seats })}</p>
             <p className="font-semibold text-deliivo-dark">{currency} {grossFullRideFare.toFixed(2)}</p>
           </div>
+          <div>
+            <p className="text-xs text-deliivo-gray">{t('publish.fullRideServiceFeeEstimate', { seats: state.seats })}</p>
+            <p className="font-semibold text-deliivo-dark">{currency} {estimatedFullRideServiceFees.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-deliivo-gray">{t('publish.fullRideRiderTotalEstimate', { seats: state.seats })}</p>
+            <p className="font-semibold text-deliivo-dark">{currency} {estimatedFullRideRiderTotal.toFixed(2)}</p>
+          </div>
         </div>
-        <p className="mt-3 text-xs leading-5 text-deliivo-gray">{t('publish.grossFareNotice')}</p>
+        <p className="mt-3 text-xs leading-5 text-deliivo-gray">
+          {t('publish.grossFareNotice')} {t('publish.stripeFeeNotice')}
+        </p>
       </div>
 
       {/* Notes */}

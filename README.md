@@ -21,3 +21,10 @@ npm run dev
 ## Required environment variables
 
 Copy `.env.example` to `.env.local` for local work, or configure them in Vercel project settings.
+
+For split deployments such as Railway web + Railway API:
+
+- `BACKEND_URL` must be the backend service URL reachable from the Next.js server.
+- `NEXT_PUBLIC_SOCKET_URL` should be the public backend URL used by the browser for Socket.IO.
+- `NEXT_PUBLIC_BACKEND_URL` can be set to the same public backend URL as a fallback.
+- The backend `ALLOWED_ORIGINS` must include the public webapp URL.

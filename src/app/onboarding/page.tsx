@@ -109,6 +109,11 @@ function OnboardingForm() {
       router.replace('/');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t('onboarding.failed');
+      if (msg.toLowerCase().includes('already completed')) {
+        await refreshUser();
+        router.replace('/');
+        return;
+      }
       setError(msg);
     } finally {
       setLoading(false);

@@ -53,6 +53,18 @@ export default function PublicTrackingPage() {
   const liveLocation = data.location ? { lat: data.location.lat, lng: data.location.lng } : null;
   const departureDate = data.departureDate ? new Date(data.departureDate).toLocaleDateString() : null;
   const lastUpdated = data.location?.timestamp ? new Date(data.location.timestamp).toLocaleTimeString() : null;
+  const targetLabel = data.activeTarget === 'dropoff'
+    ? 'Drop-off'
+    : data.activeTarget === 'complete'
+      ? 'Completed'
+      : data.activeTarget === 'pickup'
+        ? 'Pickup'
+        : 'Pending';
+  const targetAddress = data.activeTargetAddress || (data.activeTarget === 'dropoff' ? data.dropoff || data.destinationAddress : data.pickup || data.originAddress);
+  const activeEtaLabel = data.activeEta?.label
+    || (data.activeTarget === 'pickup' && data.eta?.scheduledPickupTime ? `Scheduled ${data.eta.scheduledPickupTime}` : null)
+    || (data.activeTarget === 'dropoff' && data.eta?.scheduledDropoffTime ? `Scheduled ${data.eta.scheduledDropoffTime}` : null)
+    || (data.activeTarget === 'complete' ? 'Ride complete' : 'Waiting for driver location');
 
   return (
     <main className="min-h-screen bg-deliivo-cream">
@@ -92,6 +104,14 @@ export default function PublicTrackingPage() {
                 <Radio className="h-3.5 w-3.5 text-green-600" /> Ride status
               </p>
               <p className="mt-1 font-medium text-deliivo-dark">{data.rideStatus} / {data.bookingStatus}</p>
+            </div>
+            <div className="rounded-xl border border-green-100 bg-green-50/60 p-3">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-green-700">
+                <MapPin className="h-3.5 w-3.5" /> Current target
+              </p>
+              <p className="mt-1 font-semibold text-deliivo-dark">{targetLabel}</p>
+              <p className="mt-0.5 text-xs text-deliivo-gray">{targetAddress}</p>
+              <p className="mt-1 text-xs font-medium text-green-700">{activeEtaLabel}</p>
             </div>
             <div className="rounded-xl border border-gray-100 p-3">
               <p className="flex items-center gap-1.5 text-xs font-medium text-deliivo-gray">

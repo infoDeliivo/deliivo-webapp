@@ -278,6 +278,14 @@ function SearchPageContent() {
   // Ride alert
   const [alertCreating, setAlertCreating] = useState(false);
   const [alertCreated, setAlertCreated] = useState(false);
+  const visibleResults = canUseWomenOnly ? results : results.filter((ride) => !ride.femaleOnly);
+  const visibleTotal = canUseWomenOnly ? total : visibleResults.length;
+
+  useEffect(() => {
+    if (authLoading || canUseWomenOnly) return;
+    setFemaleOnly(false);
+    setResults((current) => current.filter((ride) => !ride.femaleOnly));
+  }, [authLoading, canUseWomenOnly]);
 
   useEffect(() => {
     if (authLoading || !user) {
@@ -290,16 +298,18 @@ function SearchPageContent() {
   }, [authLoading, user]);
 
   useEffect(() => {
+    if (authLoading) return;
     if (hydratedQueryRef.current) return;
     hydratedQueryRef.current = true;
 
     const from = searchParams.get('from');
     const to = searchParams.get('to');
     const female = searchParams.get('femaleOnly');
+    const requestedWomenOnly = canUseWomenOnly && (female === '1' || female === 'true');
     const querySeats = Number(searchParams.get('seats') || '1');
     const hydratedSeats = Number.isInteger(querySeats) && querySeats >= 1 && querySeats <= 10 ? querySeats : 1;
     setSeats(hydratedSeats);
-    if (female === '1' || female === 'true') setFemaleOnly(true);
+    setFemaleOnly(requestedWomenOnly);
     if (!from && !to) return;
 
     async function resolvePlace(input: string | null, scope: 'baltic' | 'europe'): Promise<PlaceSelection | null> {
@@ -337,14 +347,16 @@ function SearchPageContent() {
             destinationLng: resolvedTo.lng,
             departureDate: date || undefined,
             seatsRequired: hydratedSeats,
-            femaleOnly: female === '1' || female === 'true' || undefined,
+            femaleOnly: requestedWomenOnly || undefined,
             sortBy,
             departurePeriod: departurePeriod || undefined,
             limit: 20,
           };
           const res = await searchRidesApi.search(params);
-          setResults(res.data.rides || []);
-          setTotal(res.data.pagination?.total || 0);
+          const rides = res.data.rides || [];
+          const visibleRides = canUseWomenOnly ? rides : rides.filter((ride) => !ride.femaleOnly);
+          setResults(visibleRides);
+          setTotal(canUseWomenOnly ? (res.data.pagination?.total || 0) : visibleRides.length);
         } catch (err: unknown) {
           setError(err instanceof Error ? err.message : t('search.failed'));
           setResults([]);
@@ -353,7 +365,7 @@ function SearchPageContent() {
         }
       }
     });
-  }, [searchParams]);
+  }, [authLoading, canUseWomenOnly, searchParams]);
 
   async function handleCreateAlert() {
     if (!origin || !destination || !date) return;
@@ -397,15 +409,17 @@ function SearchPageContent() {
         destinationLng: destination.lng,
         departureDate: date || undefined,
         seatsRequired: seats,
-        femaleOnly: femaleOnly || undefined,
+        femaleOnly: (canUseWomenOnly && femaleOnly) || undefined,
         maxPrice: maxPrice || undefined,
         sortBy,
         departurePeriod: departurePeriod || undefined,
         limit: 20,
       };
       const res = await searchRidesApi.search(params);
-      setResults(res.data.rides || []);
-      setTotal(res.data.pagination?.total || 0);
+      const rides = res.data.rides || [];
+      const visibleRides = canUseWomenOnly ? rides : rides.filter((ride) => !ride.femaleOnly);
+      setResults(visibleRides);
+      setTotal(canUseWomenOnly ? (res.data.pagination?.total || 0) : visibleRides.length);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('search.failed');
       setError(message);
@@ -534,7 +548,7 @@ function SearchPageContent() {
                     {origin?.address?.split(',')[0]} to {destination?.address?.split(',')[0]}
                   </h1>
                   <p className="mt-0.5 text-sm text-deliivo-gray">
-                    {loading ? t('common.searching') : t('search.resultsFound', { total, plural: total !== 1 ? 's' : '' })}
+                    {loading ? t('common.searching') : t('search.resultsFound', { total: visibleTotal, plural: visibleTotal !== 1 ? 's' : '' })}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs text-deliivo-gray">
                     {date && <span className="rounded-full bg-white px-3 py-1 shadow-sm">{new Date(`${date}T00:00:00`).toLocaleDateString()}</span>}
@@ -548,7 +562,7 @@ function SearchPageContent() {
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="h-8 w-8 animate-spin text-deliivo-orange" />
                 </div>
-              ) : results.length === 0 ? (
+              ) : visibleResults.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-2xl bg-white py-20 px-6 text-center shadow-sm">
                   <Search size={48} className="text-gray-200 mb-4" />
                   <h2 className="text-lg font-semibold text-deliivo-dark">{t('search.noResultsTitle')}</h2>
@@ -558,7 +572,7 @@ function SearchPageContent() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  {results.map((ride) => (
+                  {visibleResults.map((ride) => (
                     <RideResultCard key={ride.id + (ride.segmentId || '')} ride={ride} />
                   ))}
                 </div>
@@ -567,7 +581,7 @@ function SearchPageContent() {
           )}
 
           {/* Ride alert — shown after search with no results */}
-          {user && searched && !loading && results.length === 0 && origin && destination && date && (
+          {user && searched && !loading && visibleResults.length === 0 && origin && destination && date && (
             <div className="rounded-2xl bg-white shadow-sm p-5 mb-6">
               {alertCreated ? (
                 <div className="flex items-center gap-2">
