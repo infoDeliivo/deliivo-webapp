@@ -1432,29 +1432,23 @@ function StepPrice({
           </button>
         </div>
         <div className="mt-4 grid gap-3 border-t border-gray-100 pt-4 text-sm sm:grid-cols-2">
-          <div>
-            <p className="text-xs text-deliivo-gray">{t('publish.yourFarePerRider')}</p>
-            <p className="font-semibold text-deliivo-dark">{currency} {state.basePricePerSeat.toFixed(2)}</p>
+          <div className="rounded-xl bg-gray-50 px-3 py-3">
+            <p className="text-xs font-medium text-deliivo-gray">{t('publish.driverReceivesPerSeat')}</p>
+            <p className="mt-1 text-base font-semibold text-deliivo-dark">{currency} {state.basePricePerSeat.toFixed(2)}</p>
           </div>
-          <div>
-            <p className="text-xs text-deliivo-gray">{t('publish.riderServiceFeeEstimate')}</p>
-            <p className="font-semibold text-deliivo-dark">{currency} {estimatedServiceFeePerSeat.toFixed(2)}</p>
+          <div className="rounded-xl bg-orange-50 px-3 py-3">
+            <p className="text-xs font-medium text-deliivo-gray">{t('publish.riderPaysPerSeat')}</p>
+            <p className="mt-1 text-base font-semibold text-deliivo-orange">{currency} {estimatedRiderTotalPerSeat.toFixed(2)}</p>
+            <p className="mt-1 text-[11px] text-deliivo-gray">{t('publish.includesServiceFee', { amount: `${currency} ${estimatedServiceFeePerSeat.toFixed(2)}` })}</p>
           </div>
-          <div>
-            <p className="text-xs text-deliivo-gray">{t('publish.riderTotalPerSeatEstimate')}</p>
-            <p className="font-semibold text-deliivo-dark">{currency} {estimatedRiderTotalPerSeat.toFixed(2)}</p>
+          <div className="rounded-xl bg-gray-50 px-3 py-3">
+            <p className="text-xs font-medium text-deliivo-gray">{t('publish.fullRideGrossFare', { seats: state.seats })}</p>
+            <p className="mt-1 text-base font-semibold text-deliivo-dark">{currency} {grossFullRideFare.toFixed(2)}</p>
           </div>
-          <div>
-            <p className="text-xs text-deliivo-gray">{t('publish.allSeatsGrossFare', { seats: state.seats })}</p>
-            <p className="font-semibold text-deliivo-dark">{currency} {grossFullRideFare.toFixed(2)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-deliivo-gray">{t('publish.fullRideServiceFeeEstimate', { seats: state.seats })}</p>
-            <p className="font-semibold text-deliivo-dark">{currency} {estimatedFullRideServiceFees.toFixed(2)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-deliivo-gray">{t('publish.fullRideRiderTotalEstimate', { seats: state.seats })}</p>
-            <p className="font-semibold text-deliivo-dark">{currency} {estimatedFullRideRiderTotal.toFixed(2)}</p>
+          <div className="rounded-xl bg-gray-50 px-3 py-3">
+            <p className="text-xs font-medium text-deliivo-gray">{t('publish.fullRideRiderTotal', { seats: state.seats })}</p>
+            <p className="mt-1 text-base font-semibold text-deliivo-dark">{currency} {estimatedFullRideRiderTotal.toFixed(2)}</p>
+            <p className="mt-1 text-[11px] text-deliivo-gray">{t('publish.includesServiceFee', { amount: `${currency} ${estimatedFullRideServiceFees.toFixed(2)}` })}</p>
           </div>
         </div>
         <p className="mt-3 text-xs leading-5 text-deliivo-gray">

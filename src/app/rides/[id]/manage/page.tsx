@@ -621,6 +621,11 @@ const [error, setError] = useState('');
   const startWindowOpen = allowRideSimulation || clockNow >= departureAt - 10 * 60 * 1000;
   const hasRideSidePanel = requestCount > 0 || phase === 'published' || phase === 'in_progress';
   const currentManageRideHref = `/rides/${id}/manage`;
+  const phaseLabel =
+    phase === 'in_progress' ? t('rides.inProgress')
+      : phase === 'completed' ? t('rides.completed')
+        : phase === 'cancelled' ? t('rides.cancelled')
+          : t('manageRide.publishedStatus');
 
   return (
     <div className="min-h-screen min-w-0 overflow-x-clip bg-deliivo-cream">
@@ -636,6 +641,7 @@ const [error, setError] = useState('');
 
       <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
         <div className={`grid gap-5 lg:items-start ${hasRideSidePanel ? 'lg:grid-cols-[minmax(0,1fr)_360px]' : 'lg:grid-cols-1'}`}>
+        <div className="space-y-5">
         {/* Ride status card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
           <div className={`px-5 py-4 ${phase === 'in_progress' ? 'bg-gradient-to-r from-green-500 to-green-600' : phase === 'completed' ? 'bg-gradient-to-r from-gray-500 to-gray-600' : phase === 'cancelled' ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-deliivo-orange to-primary-600'}`}>
@@ -647,7 +653,7 @@ const [error, setError] = useState('');
                 </p>
               </div>
               <span className="shrink-0 rounded-full bg-white/20 px-3 py-1.5 text-xs font-bold text-white">
-                {phase === 'in_progress' ? t('rides.inProgress') : phase === 'completed' ? t('rides.completed') : phase === 'cancelled' ? t('rides.cancelled') : t('rides.published')}
+                {phaseLabel}
               </span>
             </div>
           </div>
@@ -671,7 +677,7 @@ const [error, setError] = useState('');
               </div>
               <div className="rounded-xl bg-gray-50 px-3 py-2">
                 <p className="text-[11px] text-deliivo-gray">{t('manageRide.status')}</p>
-                <p className="text-sm font-semibold text-deliivo-dark">{phase === 'in_progress' ? t('rides.inProgress') : phase === 'completed' ? t('rides.completed') : phase === 'cancelled' ? t('rides.cancelled') : t('rides.published')}</p>
+                <p className="text-sm font-semibold text-deliivo-dark">{phaseLabel}</p>
               </div>
               <div className="rounded-xl bg-gray-50 px-3 py-2">
                 <p className="text-[11px] text-deliivo-gray">{t('manageRide.rideId')}</p>
@@ -679,6 +685,37 @@ const [error, setError] = useState('');
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Pending booking requests */}
+        {pendingBookings.length > 0 && (
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="mb-4 border-b border-gray-100 pb-3">
+              <h3 className="flex items-center gap-2 text-base font-bold text-deliivo-dark">
+                <AlertCircle size={16} className="text-amber-500" /> {t('manageRide.pendingRequests', { count: pendingBookings.length })}
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {pendingBookings.map(booking => (
+                <BookingRequestCard
+                  key={booking.id}
+                  booking={booking}
+                  onAccept={() => handleAcceptBooking(booking.id)}
+                  onReject={() => openRejectDialog(booking)}
+                  loading={actionLoading === `accept-${booking.id}` || actionLoading === `reject-${booking.id}`}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+        {pendingBookings.length === 0 && phase === 'published' && (
+          <div className="rounded-2xl bg-white shadow-sm p-5">
+            <p className="text-sm font-semibold text-deliivo-dark">{t('manageRide.noPendingTitle')}</p>
+            <p className="mt-1 text-xs text-deliivo-gray">
+              {t('manageRide.noPendingCopy')}
+            </p>
+          </div>
+        )}
         </div>
 
         {hasRideSidePanel && (
@@ -749,7 +786,7 @@ const [error, setError] = useState('');
               </div>
               {!startWindowOpen && (
                 <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Start becomes available 10 minutes before departure. Mock environments must set both `ALLOW_RIDE_SIMULATION=true` and `NEXT_PUBLIC_ALLOW_RIDE_SIMULATION=true`.
+                  {t('manageRide.startAvailableSoon')}
                 </p>
               )}
             </section>
@@ -780,36 +817,6 @@ const [error, setError] = useState('');
             <XCircle className="h-10 w-10 text-red-500 mx-auto mb-2" />
             <p className="text-base font-semibold text-red-800">{t('manageRide.cancelledTitle')}</p>
             <p className="text-sm text-red-600 mt-1">{t('manageRide.cancelledCopy')}</p>
-          </div>
-        )}
-
-        {/* Pending booking requests */}
-        {pendingBookings.length > 0 && (
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <div className="mb-4 border-b border-gray-100 pb-3">
-              <h3 className="flex items-center gap-2 text-base font-bold text-deliivo-dark">
-                <AlertCircle size={16} className="text-amber-500" /> {t('manageRide.pendingRequests', { count: pendingBookings.length })}
-              </h3>
-            </div>
-            <div className="space-y-3">
-              {pendingBookings.map(booking => (
-                <BookingRequestCard
-                  key={booking.id}
-                  booking={booking}
-                  onAccept={() => handleAcceptBooking(booking.id)}
-                  onReject={() => openRejectDialog(booking)}
-                  loading={actionLoading === `accept-${booking.id}` || actionLoading === `reject-${booking.id}`}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-        {pendingBookings.length === 0 && phase === 'published' && (
-          <div className="rounded-2xl bg-white shadow-sm p-5">
-            <p className="text-sm font-semibold text-deliivo-dark">{t('manageRide.noPendingTitle')}</p>
-            <p className="mt-1 text-xs text-deliivo-gray">
-              {t('manageRide.noPendingCopy')}
-            </p>
           </div>
         )}
 

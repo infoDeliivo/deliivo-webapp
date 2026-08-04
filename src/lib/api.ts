@@ -260,9 +260,12 @@ export function getApiErrorMessage(error: unknown, fallback = 'Request failed') 
 // Backend contract: docs/uploads-frontend-integration.md.
 export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 export const UPLOAD_MIME = ['image/jpeg', 'image/png'];
+export const STRIPE_IDENTITY_DOCUMENT_MAX_BYTES = 8 * 1024 * 1024;
+export const STRIPE_IDENTITY_DOCUMENT_MIME = ['image/jpeg', 'image/png', 'application/pdf'];
 
 // Value for a file input's `accept` attribute, kept in sync with UPLOAD_MIME.
 export const UPLOAD_ACCEPT = UPLOAD_MIME.join(',');
+export const STRIPE_IDENTITY_DOCUMENT_ACCEPT = STRIPE_IDENTITY_DOCUMENT_MIME.join(',');
 
 // Client-side pre-check mirroring backend confirm limits. Returns an error
 // message, or null when the file is acceptable.

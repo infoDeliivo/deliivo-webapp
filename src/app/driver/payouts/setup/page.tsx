@@ -9,7 +9,7 @@ import LoadFailureCard from '@/components/LoadFailureCard';
 import { ConnectAccountOnboarding } from '@stripe/react-connect-js';
 import { ConnectProvider, createBankAccountToken } from '@/lib/stripe-connect';
 import { isStripeConfigured, isStripeTestMode } from '@/lib/stripe';
-import { ApiError, ConnectRequirements, getApiErrorMessage, paymentsApi, validateStripeIdentityDocument } from '@/lib/api';
+import { ApiError, ConnectRequirements, getApiErrorMessage, paymentsApi, STRIPE_IDENTITY_DOCUMENT_ACCEPT, validateStripeIdentityDocument } from '@/lib/api';
 import { showError, showSuccess } from '@/lib/app-feedback';
 import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from '@/lib/i18n-context';
@@ -896,7 +896,7 @@ function PayoutSetupContent() {
             <span className="mt-1 text-xs text-deliivo-gray">{t('payout.identityDocumentHint')}</span>
             <input
               type="file"
-              accept="image/jpeg,image/png,application/pdf"
+              accept={STRIPE_IDENTITY_DOCUMENT_ACCEPT}
               className="hidden"
               onChange={(event) => {
                 const file = event.target.files?.[0] || null;

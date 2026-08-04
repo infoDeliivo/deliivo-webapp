@@ -324,6 +324,11 @@ const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
     'publish.allSeatsGrossFare': 'Brutotulu, kui kõik {seats} kohta broneeritakse kogu marsruudile',
     'publish.fullRideServiceFeeEstimate': 'Hinnangulised teenustasud, kui kõik {seats} kohta broneeritakse',
     'publish.fullRideRiderTotalEstimate': 'Hinnanguline reisijate kogusumma, kui kõik {seats} kohta broneeritakse',
+    'publish.driverReceivesPerSeat': 'Juhi tasu koha kohta',
+    'publish.riderPaysPerSeat': 'Reisija maksab koha kohta',
+    'publish.includesServiceFee': 'Sisaldab teenustasu: {amount}',
+    'publish.fullRideGrossFare': 'Juhi tasu, kui kõik {seats} kohta broneeritakse',
+    'publish.fullRideRiderTotal': 'Reisijate kogusumma, kui kõik {seats} kohta broneeritakse',
     'publish.grossFareNotice': 'See on sõidu brutohind enne platvormitasusid, tagasimakseid või korrigeerimisi. Väljamakse kuvatakse eraldi pärast broneeringuid.',
     'publish.stripeFeeNotice': 'Stripe töötlemis- ja väljamaksekulud kinnitab makseteenuse pakkuja pärast broneeringuid.',
     'publish.pricePerSeat': 'Hind koha kohta ({currency})',
@@ -533,6 +538,11 @@ const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
     'publish.allSeatsGrossFare': 'Валовая выручка, если все {seats} мест забронируют весь маршрут',
     'publish.fullRideServiceFeeEstimate': 'Ориентировочные сервисные комиссии, если все {seats} мест забронированы',
     'publish.fullRideRiderTotalEstimate': 'Ориентировочная общая сумма пассажиров, если все {seats} мест забронированы',
+    'publish.driverReceivesPerSeat': 'Доход водителя за место',
+    'publish.riderPaysPerSeat': 'Пассажир платит за место',
+    'publish.includesServiceFee': 'Включает сервисный сбор: {amount}',
+    'publish.fullRideGrossFare': 'Доход водителя, если все {seats} мест забронированы',
+    'publish.fullRideRiderTotal': 'Сумма пассажиров, если все {seats} мест забронированы',
     'publish.grossFareNotice': 'Это валовая стоимость поездки до комиссий платформы, возвратов или корректировок. Ваша выплата будет показана отдельно после бронирований.',
     'publish.stripeFeeNotice': 'Комиссии Stripe за обработку и выплаты подтверждаются платежным провайдером после бронирований.',
     'publish.pricePerSeat': 'Цена за место ({currency})',
@@ -1069,6 +1079,11 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
       "Estimated service fees if all {seats} seats book",
     "publish.fullRideRiderTotalEstimate":
       "Estimated rider total if all {seats} seats book",
+    "publish.driverReceivesPerSeat": "Driver fare per seat",
+    "publish.riderPaysPerSeat": "Rider pays per seat",
+    "publish.includesServiceFee": "Includes service fee: {amount}",
+    "publish.fullRideGrossFare": "Driver fare if all {seats} seats book",
+    "publish.fullRideRiderTotal": "Rider total if all {seats} seats book",
     "publish.grossFareNotice":
       "This is gross ride fare before platform fees, refunds, or adjustments. Your payout is shown separately after bookings.",
     "publish.stripeFeeNotice":
@@ -1392,6 +1407,7 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "manageRide.requests": "Requests",
     "manageRide.passengers": "Passengers",
     "manageRide.status": "Status",
+    "manageRide.publishedStatus": "Published",
     "manageRide.rideId": "Ride ID",
     "manageRide.requestsWaiting": "New booking requests waiting",
     "manageRide.requestsWaitingCopy":
@@ -1419,6 +1435,7 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "manageRide.driverActions": "Driver actions",
     "manageRide.driverActionsCopy":
       "Start the ride when boarding begins, or cancel it before departure if plans change.",
+    "manageRide.startAvailableSoon": "Start becomes available 10 minutes before departure.",
     "manageRide.startRide": "Start Ride",
     "manageRide.cancelRide": "Cancel Ride",
     "manageRide.devSimulator": "Dev ride simulator",
@@ -2348,6 +2365,7 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "manageRide.requests": "Päringud",
     "manageRide.passengers": "Reisijad",
     "manageRide.status": "Staatus",
+    "manageRide.publishedStatus": "Avaldatud",
     "manageRide.rideId": "Sõidu ID",
     "manageRide.requestsWaiting": "Uued broneeringupäringud ootavad",
     "manageRide.requestsWaitingCopy":
@@ -2374,6 +2392,7 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "manageRide.driverActions": "Juhi tegevused",
     "manageRide.driverActionsCopy":
       "Alusta sõitu, kui pardaleminek algab, või tühista enne väljumist, kui plaanid muutuvad.",
+    "manageRide.startAvailableSoon": "Sõitu saab alustada 10 minutit enne väljumist.",
     "manageRide.startRide": "Alusta sõitu",
     "manageRide.cancelRide": "Tühista sõit",
     "manageRide.devSimulator": "Arenduse sõidusimulaator",

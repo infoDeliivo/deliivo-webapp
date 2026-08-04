@@ -1677,8 +1677,13 @@ function RideDetailContent() {
             ) : preview && previewBreakdown ? (
               <div className="overflow-hidden rounded-xl border border-primary-100 bg-primary-50">
                 <div className="border-b border-primary-100 px-4 py-3">
-                  <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.priceBreakdown')}</p>
-                  <p className="mt-0.5 break-words text-xs text-deliivo-gray">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.priceBreakdown')}</p>
+                    <span className="shrink-0 text-sm font-bold text-primary-500">
+                      {previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-deliivo-gray">
                     {selectedPickupOption.address} {t('search.toLabel').toLowerCase()} {selectedDropoffOption.address}
                   </p>
                 </div>
@@ -1702,7 +1707,7 @@ function RideDetailContent() {
                     <span>{t('rideDetail.totalToPay')}</span>
                     <span className="text-primary-500">{previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}</span>
                   </div>
-                  <p className="pt-1 text-xs leading-5 text-deliivo-gray">{t('rideDetail.priceBreakdownNotice')}</p>
+                  <p className="pt-1 text-[11px] leading-5 text-deliivo-gray">{t('rideDetail.priceBreakdownNotice')}</p>
                 </div>
               </div>
             ) : null}
@@ -2185,8 +2190,8 @@ function RideAddPaymentMethodForm({ onSaved }: { onSaved: (method: PaymentMethod
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <div className="rounded-lg border border-gray-200 bg-white px-3 py-3">
+    <form onSubmit={handleSubmit} className="space-y-2.5">
+      <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
         <CardElement
           options={{
             hidePostalCode: true,
@@ -2206,7 +2211,7 @@ function RideAddPaymentMethodForm({ onSaved }: { onSaved: (method: PaymentMethod
       <button
         type="submit"
         disabled={saving || !stripe}
-        className="w-full rounded-xl border border-deliivo-orange bg-white px-4 py-2.5 text-sm font-semibold text-deliivo-orange hover:bg-deliivo-orange-light disabled:opacity-50"
+        className="w-full rounded-xl bg-deliivo-orange px-4 py-2.5 text-sm font-semibold text-white hover:bg-deliivo-orange-dark disabled:opacity-50"
       >
         {saving ? t('rideDetail.savingCard') : t('rideDetail.saveCardForBooking')}
       </button>
