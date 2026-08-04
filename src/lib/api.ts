@@ -1553,7 +1553,7 @@ export const adminApi = {
     });
   },
   checkPayoutEligibility() {
-    return apiFetch<{ data: { checked: number; markedEligible: number } }>('/api/v1/admin/payouts/check-eligibility', { method: 'POST' });
+    return apiFetch<{ data: { checked: number; markedEligible: number; outboxProcessed?: number; outboxFailed?: number; outboxTotal?: number; eligibilityDelayMinutes?: number } }>('/api/v1/admin/payouts/check-eligibility', { method: 'POST' });
   },
   getEligiblePayouts() {
     return apiFetch<{ data: AdminPayoutCandidate[] }>('/api/v1/admin/payouts/eligible');

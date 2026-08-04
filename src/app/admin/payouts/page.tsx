@@ -11,7 +11,7 @@ export default function AdminPayoutsPage() {
   const [error, setError] = useState('')
 
   const [checking, setChecking] = useState(false)
-  const [eligibilityResult, setEligibilityResult] = useState<{ checked: number; markedEligible: number } | null>(null)
+  const [eligibilityResult, setEligibilityResult] = useState<{ checked: number; markedEligible: number; outboxProcessed?: number; outboxFailed?: number; outboxTotal?: number; eligibilityDelayMinutes?: number } | null>(null)
   const [candidates, setCandidates] = useState<AdminPayoutCandidate[]>([])
   const [loadingCandidates, setLoadingCandidates] = useState(true)
 
@@ -80,7 +80,7 @@ export default function AdminPayoutsPage() {
         <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Check Payout Eligibility</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Scan escrow payments past 48h dispute window and mark as eligible</p>
+            <p className="text-xs text-gray-500 mt-0.5">Scan completed reserved payments past the payout delay and mark them eligible.</p>
           </div>
           <button
             onClick={handleCheckEligibility}
@@ -92,9 +92,18 @@ export default function AdminPayoutsPage() {
           </button>
         </div>
         {eligibilityResult && (
-          <div className="mt-3 rounded-xl bg-green-50 border border-green-100 px-4 py-3 flex items-center gap-4">
+          <div className="mt-3 flex flex-wrap items-center gap-4 rounded-xl border border-green-100 bg-green-50 px-4 py-3">
             <span className="text-sm text-green-700"><strong>{eligibilityResult.checked}</strong> payments checked</span>
             <span className="text-sm text-green-700"><strong>{eligibilityResult.markedEligible}</strong> marked eligible</span>
+            {eligibilityResult.eligibilityDelayMinutes !== undefined && (
+              <span className="text-sm text-green-700"><strong>{eligibilityResult.eligibilityDelayMinutes}</strong> min delay</span>
+            )}
+            {eligibilityResult.outboxTotal !== undefined && (
+              <span className="text-sm text-green-700"><strong>{eligibilityResult.outboxProcessed ?? 0}</strong> payment events processed</span>
+            )}
+            {(eligibilityResult.outboxFailed ?? 0) > 0 && (
+              <span className="text-sm text-red-600"><strong>{eligibilityResult.outboxFailed}</strong> payment events failed</span>
+            )}
           </div>
         )}
       </div>
@@ -112,7 +121,7 @@ export default function AdminPayoutsPage() {
           </div>
         ) : candidates.length === 0 ? (
           <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
-            No eligible driver payouts yet.
+            No eligible driver payouts yet. Completed rides appear here after the payout delay when there is no open dispute.
           </div>
         ) : (
           <div className="mb-6 flex flex-col gap-3">
