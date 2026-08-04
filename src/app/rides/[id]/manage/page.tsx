@@ -1273,6 +1273,10 @@ function PassengerCard({
     DRIVER_MISSED_PICKUP: t('rides.missedPickup'),
     COMPLETED: t('rides.completed'),
   };
+  const passengerName = booking.passenger?.firstName || t('manageRide.passenger');
+  const passengerInitial = passengerName.trim().charAt(0).toUpperCase() || 'P';
+  const pickupAddress = booking.pickupLocation?.address || t('manageRide.pickupNotSet');
+  const dropoffAddress = booking.dropoffLocation?.address || t('manageRide.dropoffNotSet');
 
   useEffect(() => {
     setRatingSubmitted(Boolean(booking.hasDriverRatedPassenger));
@@ -1280,7 +1284,41 @@ function PassengerCard({
 
   return (
     <>
-    <div className="flex min-w-0 flex-col items-start gap-3 rounded-xl border border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="rounded-xl border border-gray-100 bg-white p-4">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-primary-100">
+            {booking.passenger?.avatarUrl ? (
+              <img src={booking.passenger.avatarUrl} alt={passengerName} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-base font-bold text-primary-600">
+                {passengerInitial}
+              </div>
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-deliivo-dark">{passengerName}</p>
+            <p className="mt-0.5 text-xs text-deliivo-gray">
+              {t('ride.seatsCount', { count: booking.seatsBooked, plural: booking.seatsBooked > 1 ? 's' : '' })} &middot; {t('manageRide.bookingNumber', { id: formatBookingReference(booking) })}
+            </p>
+          </div>
+        </div>
+        <span className={`w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+          booking.status === 'ONBOARD' || booking.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border border-green-200'
+          : booking.status === 'NO_SHOW' || booking.status === 'DRIVER_MISSED_PICKUP' ? 'bg-red-50 text-red-700 border border-red-200'
+          : booking.status === 'DROP_PENDING' ? 'bg-purple-50 text-purple-700 border border-purple-200'
+          : booking.status === 'DRIVER_ARRIVED' ? 'bg-amber-50 text-amber-700 border border-amber-200'
+          : 'bg-blue-50 text-blue-700 border border-blue-200'
+        }`}>
+          {statusLabel[booking.status] || booking.status}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 rounded-xl bg-gray-50 px-3 py-2.5 text-xs text-deliivo-gray sm:grid-cols-2">
+        <p className="min-w-0 break-words"><span className="font-medium text-deliivo-dark">{t('rideDetail.pickup')}:</span> {pickupAddress}</p>
+        <p className="min-w-0 break-words"><span className="font-medium text-deliivo-dark">{t('rideDetail.dropoff')}:</span> {dropoffAddress}</p>
+      </div>
+    </div>
+    <div className="hidden min-w-0 flex-col items-start gap-3 rounded-xl border border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-deliivo-dark">
           {booking.passenger?.firstName || t('manageRide.passenger')}
@@ -1463,13 +1501,17 @@ function OtpVerifySection({ booking, onVerified }: { booking: DriverRideBooking;
   }
 
   return (
-    <div className="rounded-xl border border-gray-100 p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-deliivo-dark">{t('manageRide.bookingNumber', { id: formatBookingReference(booking) })}</p>
-        <span className="text-xs px-3 py-1 rounded-full font-medium bg-deliivo-orange text-white">{t('rideDetail.pickup')}</span>
-      </div>
-
-      <div className="flex gap-2">
+    <div className="rounded-xl border border-orange-100 bg-orange-50/40 px-3 py-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 items-center gap-2 sm:w-44">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-deliivo-orange">
+            <KeyRound className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-deliivo-dark">{t('manageRide.bookingNumber', { id: formatBookingReference(booking) })}</p>
+            <p className="text-[11px] font-medium text-deliivo-orange">{t('rideDetail.pickup')}</p>
+          </div>
+        </div>
         <input
           type="text"
           inputMode="numeric"
@@ -1477,13 +1519,13 @@ function OtpVerifySection({ booking, onVerified }: { booking: DriverRideBooking;
           value={otp}
           onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
           placeholder={t('manageRide.enterOtp')}
-          className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-center text-lg font-bold tracking-widest focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
+          className="h-10 flex-1 rounded-xl border border-orange-100 bg-white px-3 text-center text-sm font-bold tracking-[0.35em] focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
         />
         <button
           type="button"
           onClick={handleVerify}
           disabled={loading || otp.length < 6}
-          className="btn-primary px-5 py-2.5 disabled:opacity-40"
+          className="inline-flex h-10 items-center justify-center rounded-xl bg-deliivo-orange px-4 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('manageRide.verify')}
         </button>
