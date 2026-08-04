@@ -827,12 +827,6 @@ const [error, setError] = useState('');
                 />
               ))}
             </div>
-            <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">Support context</p>
-              <p className="mt-1 text-sm text-deliivo-dark">
-                Share the booking reference, passenger name, pickup status, and ride ID when a manual override or dispute review is needed.
-              </p>
-            </div>
           </section>
         )}
         {confirmedBookings.length === 0 && phase !== 'completed' && (
@@ -1419,7 +1413,7 @@ function PassengerCard({
     </div>
 
     {showPickupActions && (
-      <div className="mt-3">
+      <div className="mt-3 flex justify-start">
         <OtpVerifySection booking={booking} onVerified={onPickupOtpVerified} />
       </div>
     )}
@@ -1526,9 +1520,9 @@ function OtpVerifySection({ booking, onVerified }: { booking: DriverRideBooking;
   }
 
   return (
-    <div className="rounded-lg border border-orange-100 bg-orange-50/40 px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="mr-auto flex min-w-0 items-center gap-1.5">
+    <div className="inline-flex max-w-full flex-col gap-1 rounded-lg border border-orange-100 bg-orange-50/40 px-2.5 py-2">
+      <div className="flex max-w-full flex-wrap items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
           <KeyRound className="h-3.5 w-3.5 shrink-0 text-deliivo-orange" />
           <span className="text-xs font-bold uppercase text-deliivo-dark">Pickup OTP</span>
         </div>
@@ -1539,13 +1533,13 @@ function OtpVerifySection({ booking, onVerified }: { booking: DriverRideBooking;
           value={otp}
           onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
           placeholder="6-digit"
-          className="h-8 w-28 rounded-lg border border-orange-100 bg-white px-2 text-center text-xs font-bold tracking-[0.18em] focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
+          className="h-8 w-24 rounded-lg border border-orange-100 bg-white px-2 text-center text-xs font-bold tracking-[0.16em] focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
         />
         <button
           type="button"
           onClick={handleVerify}
           disabled={loading || otp.length < 6}
-          className="inline-flex h-8 items-center justify-center rounded-lg bg-deliivo-orange px-3 text-xs font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
+          className="inline-flex h-8 items-center justify-center rounded-lg bg-deliivo-orange px-2.5 text-xs font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
         >
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t('manageRide.verify')}
         </button>
