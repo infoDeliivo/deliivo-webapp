@@ -624,6 +624,7 @@ const [error, setError] = useState('');
       </div>
 
       <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
         {/* Ride status card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
           <div className={`px-5 py-4 ${phase === 'in_progress' ? 'bg-gradient-to-r from-green-500 to-green-600' : phase === 'completed' ? 'bg-gradient-to-r from-gray-500 to-gray-600' : phase === 'cancelled' ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-deliivo-orange to-primary-600'}`}>
@@ -669,14 +670,80 @@ const [error, setError] = useState('');
           </div>
         </div>
 
-        {requestCount > 0 && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-900">{t('manageRide.requestsWaiting')}</p>
-            <p className="text-xs text-amber-800 mt-1">
-              {t('manageRide.requestsWaitingCopy', { count: requestCount, plural: requestCount > 1 ? 's' : '' })}
-            </p>
-          </div>
-        )}
+        <aside className="space-y-4">
+          {requestCount > 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-900">{t('manageRide.requestsWaiting')}</p>
+              <p className="text-xs text-amber-800 mt-1">
+                {t('manageRide.requestsWaitingCopy', { count: requestCount, plural: requestCount > 1 ? 's' : '' })}
+              </p>
+            </div>
+          )}
+
+          {phase !== 'completed' && phase !== 'cancelled' && (
+            <EmergencySosButton rideId={ride.id} role="DRIVER" className="w-full" />
+          )}
+
+          {/* Ride actions */}
+          {phase === 'in_progress' && (
+            <div className="rounded-2xl bg-white p-5 shadow-sm">
+              <div className="border-b border-gray-100 pb-3">
+                <h3 className="flex items-center gap-2 text-base font-bold text-deliivo-dark">
+                  <Navigation size={16} className="text-green-500" /> {t('manageRide.inProgressTitle')}
+                </h3>
+              </div>
+              <p className="mt-3 text-xs text-deliivo-gray">{t('manageRide.inProgressCopy')}</p>
+              <button
+                type="button"
+                onClick={handleFinishRide}
+                disabled={actionLoading === 'finish'}
+                className="btn-primary mt-4 w-full py-3 text-base gap-2 disabled:opacity-60"
+              >
+                {actionLoading === 'finish' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-5 w-5" />}
+                {t('manageRide.finishRide')}
+              </button>
+            </div>
+          )}
+
+          {phase === 'published' && (
+            <section className="rounded-2xl bg-white p-5 shadow-sm">
+              <div className="border-b border-gray-100 pb-3">
+                <h3 className="flex items-center gap-2 text-base font-bold text-deliivo-dark">
+                  <Navigation size={16} className="text-deliivo-orange" /> {t('manageRide.driverActions')}
+                </h3>
+              </div>
+              <p className="mt-3 text-xs text-deliivo-gray">
+                {t('manageRide.driverActionsCopy')}
+              </p>
+              <div className="mt-4 grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={handleStartRide}
+                  disabled={actionLoading === 'start' || !startWindowOpen}
+                  className="btn-primary w-full py-3 text-base gap-2 disabled:opacity-60"
+                >
+                  {actionLoading === 'start' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-5 w-5" />}
+                  {t('manageRide.startRide')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelRide}
+                  disabled={actionLoading === 'cancel-ride'}
+                  className="w-full rounded-xl border border-red-200 px-4 py-3 text-base font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {actionLoading === 'cancel-ride' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+                  {t('manageRide.cancelRide')}
+                </button>
+              </div>
+              {!startWindowOpen && (
+                <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Start becomes available 10 minutes before departure. Mock environments must set both `ALLOW_RIDE_SIMULATION=true` and `NEXT_PUBLIC_ALLOW_RIDE_SIMULATION=true`.
+                </p>
+              )}
+            </section>
+          )}
+        </aside>
+        </div>
 
         {/* Error banner */}
         {error && (
@@ -684,29 +751,6 @@ const [error, setError] = useState('');
             <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
             <p className="text-sm text-red-600">{error}</p>
             <button type="button" onClick={() => setError('')} className="ml-auto text-red-400 hover:text-red-600">&times;</button>
-          </div>
-        )}
-
-        {phase !== 'completed' && phase !== 'cancelled' && (
-          <EmergencySosButton rideId={ride.id} role="DRIVER" className="w-full" />
-        )}
-
-        {/* Ride actions */}
-        {phase === 'in_progress' && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
-              <Navigation size={16} className="text-green-500" /> {t('manageRide.inProgressTitle')}
-            </h3>
-            <p className="text-xs text-deliivo-gray">{t('manageRide.inProgressCopy')}</p>
-            <button
-              type="button"
-              onClick={handleFinishRide}
-              disabled={actionLoading === 'finish'}
-              className="btn-primary w-full py-3 text-base gap-2 disabled:opacity-60"
-            >
-              {actionLoading === 'finish' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-5 w-5" />}
-              {t('manageRide.finishRide')}
-            </button>
           </div>
         )}
 
@@ -797,44 +841,6 @@ const [error, setError] = useState('');
               {t('manageRide.noPassengersCopy')}
             </p>
           </div>
-        )}
-
-        {phase === 'published' && (
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <div className="mb-4 border-b border-gray-100 pb-3">
-              <h3 className="flex items-center gap-2 text-base font-bold text-deliivo-dark">
-                <Navigation size={16} className="text-deliivo-orange" /> {t('manageRide.driverActions')}
-              </h3>
-            </div>
-            <p className="text-xs text-deliivo-gray">
-              {t('manageRide.driverActionsCopy')}
-            </p>
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={handleStartRide}
-                disabled={actionLoading === 'start' || !startWindowOpen}
-                className="btn-primary w-full py-3 text-base gap-2 disabled:opacity-60"
-              >
-                {actionLoading === 'start' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-5 w-5" />}
-                {t('manageRide.startRide')}
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelRide}
-                disabled={actionLoading === 'cancel-ride'}
-                className="w-full rounded-xl border border-red-200 px-4 py-3 text-base font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60 flex items-center justify-center gap-2"
-              >
-                {actionLoading === 'cancel-ride' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-5 w-5" />}
-                {t('manageRide.cancelRide')}
-              </button>
-            </div>
-            {!startWindowOpen && (
-              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Start becomes available 10 minutes before departure. Mock environments must set both `ALLOW_RIDE_SIMULATION=true` and `NEXT_PUBLIC_ALLOW_RIDE_SIMULATION=true`.
-              </p>
-            )}
-          </section>
         )}
 
         {allowRideSimulation && confirmedBookings.length > 0 && (
