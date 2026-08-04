@@ -1070,6 +1070,11 @@ export const chatApi = {
       method: 'POST', body: JSON.stringify({ receiverId }),
     });
   },
+  openBookingConversation(bookingId: string) {
+    return apiFetch<{ data: { id: string; conversationId: string; chatAvailable: boolean; peerId: string; bookingId: string } }>('/api/v1/chat/open-booking', {
+      method: 'POST', body: JSON.stringify({ bookingId }),
+    });
+  },
   // Upload an image via the presigned flow (target=chat_image), then send it as
   // an IMAGE message with the confirmed public URL.
   async uploadAndSendImage(receiverId: string, file: File, clientMsgId: string) {

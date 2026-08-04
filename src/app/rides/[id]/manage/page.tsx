@@ -1346,7 +1346,7 @@ function PassengerCard({
       <div className="mt-3 space-y-3">
         <div className="flex flex-wrap gap-2">
         <Link
-          href={`/chat/start/${booking.passengerId}`}
+          href={`/chat/start/booking/${booking.id}`}
           className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
         >
           <MessageSquare className="h-3.5 w-3.5" />
@@ -1382,7 +1382,7 @@ function PassengerCard({
     {ridePhase === 'in_progress' && booking.status === 'ONBOARD' && (
       <div className="mt-3 flex flex-wrap gap-2">
         <Link
-          href={`/chat/start/${booking.passengerId}`}
+          href={`/chat/start/booking/${booking.id}`}
           className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
         >
           <MessageSquare className="h-3.5 w-3.5" />

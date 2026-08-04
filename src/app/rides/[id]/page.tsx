@@ -1052,7 +1052,7 @@ function RideDetailContent() {
   const disputeEligibleStatuses = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED', 'DISPUTED'];
   const openDispute = myDisputes.find((dispute) => ['OPEN', 'EVIDENCE_COLLECTED', 'NEEDS_MANUAL_REVIEW', 'WAITING_FOR_USER_RESPONSE', 'ESCALATED'].includes(dispute.status));
   const isDriverConfirmedBooking = Boolean(myBooking && !['PENDING', 'PAYMENT_PENDING', 'DRIVER_PENDING', 'PAYMENT_FAILED', 'REJECTED', 'CANCELLED'].includes(myBooking.status));
-  const canUseRideChat = Boolean(myBooking && ride.status === 'IN_PROGRESS' && ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED', 'COMPLETED'].includes(myBooking.status));
+  const canUseRideChat = Boolean(myBooking && ride.status === 'IN_PROGRESS' && ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'].includes(myBooking.status));
   const cancellationWindowClosed = isWithinConfirmedCancellationWindow(ride, myBooking);
   const bookingWindowClosed = isBookingWindowClosed(ride);
 
@@ -1618,7 +1618,7 @@ function RideDetailContent() {
 
             {canUseRideChat && (
               <Link
-                href={`/chat/start/${ride.driverId}`}
+                href={`/chat/start/booking/${myBooking.id}`}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
               >
                 <MessageSquare className="h-4 w-4" />
