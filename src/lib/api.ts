@@ -1548,7 +1548,7 @@ export const adminApi = {
   },
   // Payouts
   processPayout(driverId: string) {
-    return apiFetch<{ data: { driverId: string; status: string; amount?: number; batchId?: string } }>('/api/v1/admin/payouts/process', {
+    return apiFetch<{ data: { driverId: string; status: string; amount?: number; batchId?: string | null; reason?: string } }>('/api/v1/admin/payouts/process', {
       method: 'POST', body: JSON.stringify({ driverId }),
     });
   },

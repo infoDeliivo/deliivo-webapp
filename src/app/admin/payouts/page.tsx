@@ -7,7 +7,7 @@ import { adminApi, AdminPayoutCandidate } from '@/lib/api'
 export default function AdminPayoutsPage() {
   const [driverId, setDriverId] = useState('')
   const [processing, setProcessing] = useState(false)
-  const [result, setResult] = useState<{ status: string; amount?: number; batchId?: string } | null>(null)
+  const [result, setResult] = useState<{ status: string; amount?: number; batchId?: string | null; reason?: string } | null>(null)
   const [error, setError] = useState('')
 
   const [checking, setChecking] = useState(false)
@@ -217,6 +217,9 @@ export default function AdminPayoutsPage() {
             )}
             {result.batchId && (
               <p className="text-xs text-gray-400 mt-0.5">Batch: {result.batchId}</p>
+            )}
+            {result.reason && (
+              <p className="text-xs text-gray-600 mt-1">Reason: {result.reason}</p>
             )}
           </div>
         )}
