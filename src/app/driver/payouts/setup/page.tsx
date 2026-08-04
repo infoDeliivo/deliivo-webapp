@@ -109,6 +109,29 @@ function readFieldErrors(error: unknown): FieldErrors {
   return fieldErrors;
 }
 
+function requirementLabel(requirement: string) {
+  const labels: Record<string, string> = {
+    external_account: 'Bank account',
+    'tos_acceptance.date': 'Stripe agreement acceptance',
+    'tos_acceptance.ip': 'Stripe agreement acceptance',
+    'individual.first_name': 'Legal first name',
+    'individual.last_name': 'Legal last name',
+    'individual.email': 'Email',
+    'individual.phone': 'Phone number',
+    'individual.dob.day': 'Date of birth',
+    'individual.dob.month': 'Date of birth',
+    'individual.dob.year': 'Date of birth',
+    'individual.address.line1': 'Address',
+    'individual.address.city': 'City',
+    'individual.address.postal_code': 'Post code',
+    'individual.address.country': 'Country',
+    'individual.verification.document': 'Identity document',
+    'individual.verification.document.front': 'Identity document front',
+    'individual.verification.document.back': 'Identity document back',
+  };
+  return labels[requirement] || requirement.replace(/^individual\./, '').replace(/[._]/g, ' ');
+}
+
 export default function PayoutSetupPage() {
   return (
     <ProtectedRoute>
@@ -216,6 +239,11 @@ function PayoutSetupContent() {
   const documentPendingVerification = Boolean(
     requirements?.pendingVerification.some((entry) => entry.startsWith('individual.verification.document'))
   );
+  const dueRequirements = useMemo(
+    () => Array.from(new Set([...(requirements?.currentlyDue ?? []), ...(requirements?.pastDue ?? [])])),
+    [requirements]
+  );
+  const pendingRequirements = requirements?.pendingVerification ?? [];
 
   const hasActionableRequirements = outstanding.details || outstanding.bank || outstanding.document || outstanding.terms;
 
@@ -298,6 +326,8 @@ function PayoutSetupContent() {
 
         if (latest?.payoutsEnabled && latest.currentlyDue.length === 0) {
           showSuccess(t('payout.readyTitle'), t('payout.readyCopy'));
+        } else if (latest?.pendingVerification.some((entry) => entry.startsWith('individual.verification.document'))) {
+          showSuccess(t('payout.identityDocumentPendingTitle'), t('payout.identityDocumentPendingCopy'));
         } else {
           // Stripe can ask for more once it has seen the first answers (an ID document, say).
           showSuccess(t('payout.savedTitle'), t('payout.savedCopy'));
@@ -810,6 +840,35 @@ function PayoutSetupContent() {
             />
           </label>
           {fieldError('identityDocument')}
+        </section>
+      )}
+
+      {(dueRequirements.length > 0 || pendingRequirements.length > 0 || (!requirements.payoutsEnabled && !hasActionableRequirements)) && (
+        <section className="rounded-2xl border border-gray-200 bg-white p-4">
+          <h2 className="text-sm font-semibold text-gray-900">{t('payout.stripeStatusTitle')}</h2>
+          {dueRequirements.length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs font-semibold uppercase text-deliivo-gray">{t('payout.stillRequired')}</p>
+              <ul className="mt-1 list-disc pl-5 text-sm text-deliivo-dark">
+                {dueRequirements.map((entry) => (
+                  <li key={entry}>{requirementLabel(entry)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {pendingRequirements.length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs font-semibold uppercase text-deliivo-gray">{t('payout.pendingReview')}</p>
+              <ul className="mt-1 list-disc pl-5 text-sm text-deliivo-dark">
+                {pendingRequirements.map((entry) => (
+                  <li key={entry}>{requirementLabel(entry)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {dueRequirements.length === 0 && pendingRequirements.length === 0 && !requirements.payoutsEnabled && (
+            <p className="mt-2 text-sm text-deliivo-gray">{t('payout.waitingStripeEnablement')}</p>
+          )}
         </section>
       )}
 

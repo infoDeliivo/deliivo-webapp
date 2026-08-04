@@ -674,6 +674,10 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.termsCopy":
       "I accept the Stripe Connected Account Agreement and confirm the details above are mine.",
     "payout.stripeIssuesTitle": "Stripe needs these corrected",
+    "payout.stripeStatusTitle": "Stripe payout status",
+    "payout.stillRequired": "Still required",
+    "payout.pendingReview": "Pending review",
+    "payout.waitingStripeEnablement": "Stripe has the required details and is still enabling payouts. Refresh status later.",
     "payout.submit": "Save and continue",
     "payout.submitting": "Saving...",
     "payout.savedTitle": "Details saved",
@@ -1878,6 +1882,10 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.termsCopy":
       "Nõustun Stripe'i ühendatud konto lepinguga ja kinnitan, et ülaltoodud andmed on minu omad.",
     "payout.stripeIssuesTitle": "Stripe ootab nende parandamist",
+    "payout.stripeStatusTitle": "Stripe'i väljamakse staatus",
+    "payout.stillRequired": "Veel nõutud",
+    "payout.pendingReview": "Kontrollimisel",
+    "payout.waitingStripeEnablement": "Stripe'il on vajalikud andmed olemas ja väljamaksete lubamine on veel pooleli. Värskenda staatust hiljem.",
     "payout.submit": "Salvesta ja jätka",
     "payout.submitting": "Salvestan...",
     "payout.savedTitle": "Andmed salvestatud",
@@ -2798,6 +2806,10 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.termsCopy":
       "Я принимаю соглашение Stripe Connected Account и подтверждаю, что данные выше — мои.",
     "payout.stripeIssuesTitle": "Stripe просит это исправить",
+    "payout.stripeStatusTitle": "Статус выплат Stripe",
+    "payout.stillRequired": "Ещё требуется",
+    "payout.pendingReview": "На проверке",
+    "payout.waitingStripeEnablement": "Stripe получил нужные данные и всё ещё включает выплаты. Обновите статус позже.",
     "payout.submit": "Сохранить и продолжить",
     "payout.submitting": "Сохранение...",
     "payout.savedTitle": "Данные сохранены",
