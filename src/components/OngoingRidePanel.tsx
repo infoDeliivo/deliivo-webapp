@@ -34,7 +34,18 @@ const ACTIVE_RIDE_STATUSES = ['READY_TO_START', 'IN_PROGRESS'];
 const UPCOMING_BOOKING_STATUSES = ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED'];
 const UPCOMING_RIDE_STATUSES = ['PUBLISHED', 'READY_TO_START'];
 
-const HIDDEN_ROUTE_PREFIXES = ['/auth', '/onboarding', '/admin', '/tracking', '/rides/'];
+const HIDDEN_ROUTE_PREFIXES = ['/auth', '/onboarding', '/admin', '/tracking'];
+const LOCALE_PREFIX_PATTERN = /^\/(en|et|ru)(?=\/|$)/;
+
+function normalizePath(pathname: string) {
+  const normalized = pathname.replace(LOCALE_PREFIX_PATTERN, '') || '/';
+  return normalized.length > 1 ? normalized.replace(/\/$/, '') : normalized;
+}
+
+function isActiveRidePage(pathname: string, ride: PanelRide) {
+  const normalizedPath = normalizePath(pathname);
+  return normalizedPath === `/rides/${ride.id}` || normalizedPath === `/rides/${ride.id}/manage`;
+}
 
 function getDepartureTimeMs(date: string, time: string) {
   const [hours = '0', minutes = '0'] = time.split(':');
@@ -148,7 +159,8 @@ export default function OngoingRidePanel() {
 
   const hidden = useMemo(() => {
     if (!pathname) return true;
-    return HIDDEN_ROUTE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+    const normalizedPath = normalizePath(pathname);
+    return HIDDEN_ROUTE_PREFIXES.some((prefix) => normalizedPath.startsWith(prefix));
   }, [pathname]);
 
   const loadRide = useCallback(async () => {
@@ -198,7 +210,7 @@ export default function OngoingRidePanel() {
     };
   }, [hidden, loadRide, user]);
 
-  if (authLoading || !user || hidden || !ride) return null;
+  if (authLoading || !user || hidden || !ride || (pathname && isActiveRidePage(pathname, ride))) return null;
 
   const dateLabel = new Date(ride.departureDate).toLocaleDateString('en-US', {
     month: 'short',
