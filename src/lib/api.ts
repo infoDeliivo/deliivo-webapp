@@ -381,6 +381,21 @@ export const authApi = {
     });
   },
 
+  temporaryAdminLogin(email: string, password: string) {
+    return apiFetch<{
+      message: string;
+      data: {
+        accessToken: string;
+        refreshToken: string;
+        user: { id: string; email?: string; role: string };
+        next: 'home';
+      };
+    }>('/api/v1/auth/admin-temp-login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  },
+
   signup(method: 'email' | 'phone', identifier: string) {
     const body = method === 'email'
       ? { method, email: identifier }

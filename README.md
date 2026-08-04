@@ -29,3 +29,4 @@ For split deployments such as Railway web + Railway API:
 - `NEXT_PUBLIC_BACKEND_URL` can be set to the same public backend URL as a fallback.
 - The backend `ALLOWED_ORIGINS` must include the public webapp URL.
 - `NEXT_PUBLIC_ENABLE_EMAIL_PHONE_AUTH=true` shows email and phone OTP sign-in/sign-up controls. Leave it unset or set it to `false` to keep only Google auth visible.
+- Temporary admin fallback page: `/auth/admin-temp`. It only works when the backend temporary admin login env vars are enabled.
