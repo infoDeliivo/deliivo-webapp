@@ -16,7 +16,7 @@ type NotificationState = {
 };
 
 const STORE_LIMIT = 50;
-const REFRESH_INTERVAL_MS = 60000;
+const REFRESH_INTERVAL_MS = 15000;
 
 let state: NotificationState = {
   items: [],
@@ -104,16 +104,21 @@ async function loadNotifications(force = false) {
   setState({ loading: true, lastSyncAttemptAt: new Date().toISOString() });
   inflightLoad = (async () => {
     try {
+      const previousIds = new Set(state.items.map((item) => item.id));
+      const hadSyncedBefore = Boolean(state.lastSyncedAt);
       const [listRes, unreadRes] = await Promise.all([
         notificationsApi.list(undefined, STORE_LIMIT),
         notificationsApi.getUnreadCount(),
       ]);
+      const nextItems = listRes.data.notifications || [];
+      const fetchedIncoming = hadSyncedBefore
+        ? nextItems.find((item) => !previousIds.has(item.id) && !item.isRead) || null
+        : null;
       setState({
-        items: listRes.data.notifications || [],
+        items: nextItems,
         unreadCount: unreadRes.data.unreadCount || 0,
-        lastIncoming: state.lastIncoming && listRes.data.notifications.some((item) => item.id === state.lastIncoming?.id)
-          ? state.lastIncoming
-          : null,
+        lastIncoming: fetchedIncoming
+          || (state.lastIncoming && nextItems.some((item) => item.id === state.lastIncoming?.id) ? state.lastIncoming : null),
         loading: false,
         lastSyncedAt: new Date().toISOString(),
         lastSyncAttemptAt: new Date().toISOString(),
