@@ -260,12 +260,20 @@ export function getApiErrorMessage(error: unknown, fallback = 'Request failed') 
 // Backend contract: docs/uploads-frontend-integration.md.
 export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 export const UPLOAD_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+export const STRIPE_IDENTITY_DOCUMENT_MAX_BYTES = 8 * 1024 * 1024;
+export const STRIPE_IDENTITY_DOCUMENT_MIME = ['image/jpeg', 'image/png', 'application/pdf'];
 
 // Client-side pre-check mirroring backend confirm limits. Returns an error
 // message, or null when the file is acceptable.
 export function validateImageFile(file: File): string | null {
   if (!UPLOAD_MIME.includes(file.type)) return 'Only JPG, PNG, and WEBP images are allowed.';
   if (file.size > UPLOAD_MAX_BYTES) return 'Images must be 5 MB or smaller.';
+  return null;
+}
+
+export function validateStripeIdentityDocument(file: File): string | null {
+  if (!STRIPE_IDENTITY_DOCUMENT_MIME.includes(file.type)) return 'Only JPG, PNG, and PDF files are allowed.';
+  if (file.size > STRIPE_IDENTITY_DOCUMENT_MAX_BYTES) return 'Files must be 8 MB or smaller.';
   return null;
 }
 
@@ -1237,6 +1245,16 @@ export const paymentsApi = {
     return apiFetch<{ data: ConnectRequirements }>('/api/v1/payments/connect/bank-account', {
       method: 'POST',
       body: JSON.stringify({ token }),
+    });
+  },
+  connectUploadIdentityDocument(file: File, side: 'front' | 'back' = 'front') {
+    return apiFetch<{ data: ConnectRequirements }>(`/api/v1/payments/connect/identity-document?side=${side}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.type,
+        'x-file-name': encodeURIComponent(file.name || `identity-document-${side}`),
+      },
+      body: file,
     });
   },
   connectAcceptTerms() {

@@ -3,13 +3,13 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Check, ChevronLeft, FlaskConical, Landmark, Loader2, ShieldCheck, Wallet } from 'lucide-react';
+import { Check, ChevronLeft, FileText, FlaskConical, Landmark, Loader2, ShieldCheck, Upload, Wallet } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import LoadFailureCard from '@/components/LoadFailureCard';
 import { ConnectAccountOnboarding } from '@stripe/react-connect-js';
 import { ConnectProvider, createBankAccountToken } from '@/lib/stripe-connect';
 import { isStripeConfigured, isStripeTestMode } from '@/lib/stripe';
-import { ApiError, ConnectRequirements, getApiErrorMessage, paymentsApi } from '@/lib/api';
+import { ApiError, ConnectRequirements, getApiErrorMessage, paymentsApi, validateStripeIdentityDocument } from '@/lib/api';
 import { showError, showSuccess } from '@/lib/app-feedback';
 import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from '@/lib/i18n-context';
@@ -149,6 +149,7 @@ function PayoutSetupContent() {
   const [postalCode, setPostalCode] = useState('');
   const [accountHolderName, setAccountHolderName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
+  const [identityDocument, setIdentityDocument] = useState<File | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   // Prefill from the profile the driver already completed — the same values the backend sends to
@@ -196,14 +197,27 @@ function PayoutSetupContent() {
   // accepted, so each section is driven by what is still outstanding rather than by a fixed order.
   const outstanding = useMemo(() => {
     const due = new Set([...(requirements?.currentlyDue ?? []), ...(requirements?.pastDue ?? [])]);
+    const dueList = [...due];
     return {
-      details: [...due].some((entry) => entry.startsWith('individual')),
+      details: dueList.some((entry) => entry.startsWith('individual') && !entry.startsWith('individual.verification.document')),
       bank: due.has('external_account') || !requirements?.externalAccount,
+      document: dueList.some((entry) => entry.startsWith('individual.verification.document')),
       terms:
-        [...due].some((entry) => entry.startsWith('tos_acceptance')) ||
+        dueList.some((entry) => entry.startsWith('tos_acceptance')) ||
         !requirements?.termsAccepted,
     };
   }, [requirements]);
+
+  const identityDocumentSide: 'front' | 'back' = useMemo(() => {
+    const due = [...(requirements?.currentlyDue ?? []), ...(requirements?.pastDue ?? [])];
+    return due.some((entry) => entry.includes('individual.verification.document.back')) ? 'back' : 'front';
+  }, [requirements]);
+
+  const documentPendingVerification = Boolean(
+    requirements?.pendingVerification.some((entry) => entry.startsWith('individual.verification.document'))
+  );
+
+  const hasActionableRequirements = outstanding.details || outstanding.bank || outstanding.document || outstanding.terms;
 
   const complete = Boolean(
     requirements && requirements.payoutsEnabled && requirements.currentlyDue.length === 0
@@ -260,6 +274,22 @@ function PayoutSetupContent() {
           setAccountNumber('');
         }
 
+        if (outstanding.document) {
+          if (!identityDocument) {
+            setFieldErrors({ identityDocument: t('payout.identityDocumentRequired') });
+            return;
+          }
+          const invalid = validateStripeIdentityDocument(identityDocument);
+          if (invalid) {
+            setFieldErrors({ identityDocument: invalid });
+            return;
+          }
+          const res = await paymentsApi.connectUploadIdentityDocument(identityDocument, identityDocumentSide);
+          latest = res.data;
+          setRequirements(latest);
+          setIdentityDocument(null);
+        }
+
         if (outstanding.terms) {
           const res = await paymentsApi.connectAcceptTerms();
           latest = res.data;
@@ -288,6 +318,8 @@ function PayoutSetupContent() {
       dob,
       email,
       firstName,
+      identityDocument,
+      identityDocumentSide,
       lastName,
       line1,
       line2,
@@ -733,6 +765,61 @@ function PayoutSetupContent() {
         </section>
       )}
 
+      {outstanding.document && (
+        <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+            <FileText className="h-4 w-4 text-deliivo-orange" />
+            {t('payout.identityDocumentTitle')}
+          </h2>
+          <p className="mt-1 text-sm text-deliivo-gray">
+            {identityDocumentSide === 'back'
+              ? t('payout.identityDocumentBackCopy')
+              : t('payout.identityDocumentCopy')}
+          </p>
+
+          <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-orange-200 bg-orange-50/40 px-4 py-6 text-center hover:bg-orange-50">
+            <Upload className="h-6 w-6 text-deliivo-orange" />
+            <span className="mt-2 text-sm font-semibold text-deliivo-dark">
+              {identityDocument ? identityDocument.name : t('payout.identityDocumentChoose')}
+            </span>
+            <span className="mt-1 text-xs text-deliivo-gray">{t('payout.identityDocumentHint')}</span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,application/pdf"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0] || null;
+                if (!file) {
+                  setIdentityDocument(null);
+                  return;
+                }
+                const invalid = validateStripeIdentityDocument(file);
+                if (invalid) {
+                  setFieldErrors({ identityDocument: invalid });
+                  setIdentityDocument(null);
+                  event.target.value = '';
+                  return;
+                }
+                setFieldErrors((current) => {
+                  const next = { ...current };
+                  delete next.identityDocument;
+                  return next;
+                });
+                setIdentityDocument(file);
+              }}
+            />
+          </label>
+          {fieldError('identityDocument')}
+        </section>
+      )}
+
+      {documentPendingVerification && !outstanding.document && (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <h2 className="text-sm font-semibold text-amber-950">{t('payout.identityDocumentPendingTitle')}</h2>
+          <p className="mt-1 text-sm text-amber-900">{t('payout.identityDocumentPendingCopy')}</p>
+        </section>
+      )}
+
       {outstanding.terms && (
         <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
           <label htmlFor="acceptedTerms" className="flex items-start gap-3 text-sm text-gray-900">
@@ -749,14 +836,24 @@ function PayoutSetupContent() {
         </section>
       )}
 
-      <button
-        type="submit"
-        disabled={saving}
-        className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-deliivo-orange px-4 py-3 text-sm font-semibold text-white hover:bg-deliivo-orange-dark disabled:opacity-50"
-      >
-        {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-        {saving ? t('payout.submitting') : t('payout.submit')}
-      </button>
+      {hasActionableRequirements ? (
+        <button
+          type="submit"
+          disabled={saving}
+          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-deliivo-orange px-4 py-3 text-sm font-semibold text-white hover:bg-deliivo-orange-dark disabled:opacity-50"
+        >
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          {saving ? t('payout.submitting') : t('payout.submit')}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={loadRequirements}
+          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-white px-4 py-3 text-sm font-semibold text-deliivo-orange hover:bg-orange-50"
+        >
+          {t('payout.refreshStatus')}
+        </button>
+      )}
     </form>
   );
 }
