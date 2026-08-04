@@ -10,6 +10,7 @@ import { buildE164PhoneNumber, PHONE_COUNTRY_OPTIONS, sanitizePhoneLocalNumber }
 import { getSafeReturnTo, resolvePostLoginPath, withReturnTo } from "@/lib/auth-redirect";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { isOnboardingComplete } from "@/lib/onboarding";
+import { featureFlags } from "@/lib/features";
 
 type Step = 'form' | 'otp';
 type Method = 'email' | 'phone';
@@ -30,6 +31,7 @@ export default function SignUpPage() {
   const [returnTo, setReturnTo] = useState<string | null>(null);
 
   const identifier = method === 'email' ? email.trim() : buildE164PhoneNumber(phoneCountryCode, phone);
+  const emailPhoneAuthEnabled = featureFlags.emailPhoneAuth;
 
   useEffect(() => {
     setReturnTo(getSafeReturnTo());
@@ -127,98 +129,102 @@ export default function SignUpPage() {
                 Create your account
               </h1>
               <p className="mb-6 text-sm text-deliivo-gray">
-                Join Deliivo and start carpooling today.
+                {emailPhoneAuthEnabled ? 'Join Deliivo and start carpooling today.' : 'Use Google to create your Deliivo account.'}
               </p>
 
               {/* Method toggle */}
-              <div className="mb-6 flex rounded-full bg-gray-100 p-1">
-                <button
-                  type="button"
-                  onClick={() => { setMethod('email'); setError(''); }}
-                  className={`flex-1 rounded-full py-2 text-sm font-medium transition-all ${
-                    method === 'email' ? 'bg-white shadow-sm text-deliivo-dark' : 'text-deliivo-gray'
-                  }`}
-                >
-                  Email
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setMethod('phone'); setError(''); }}
-                  className={`flex-1 rounded-full py-2 text-sm font-medium transition-all ${
-                    method === 'phone' ? 'bg-white shadow-sm text-deliivo-dark' : 'text-deliivo-gray'
-                  }`}
-                >
-                  Phone
-                </button>
-              </div>
-
-              <form className="space-y-4" onSubmit={handleSignup}>
-                {method === 'email' ? (
-                  <div>
-                    <label htmlFor="email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-                      Email address
-                    </label>
-                    <input
-                      id="email"
-                      type="email"
-                      autoComplete="email"
-                      required
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="input-field"
-                    />
+              {emailPhoneAuthEnabled ? (
+                <>
+                  <div className="mb-6 flex rounded-full bg-gray-100 p-1">
+                    <button
+                      type="button"
+                      onClick={() => { setMethod('email'); setError(''); }}
+                      className={`flex-1 rounded-full py-2 text-sm font-medium transition-all ${
+                        method === 'email' ? 'bg-white shadow-sm text-deliivo-dark' : 'text-deliivo-gray'
+                      }`}
+                    >
+                      Email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setMethod('phone'); setError(''); }}
+                      className={`flex-1 rounded-full py-2 text-sm font-medium transition-all ${
+                        method === 'phone' ? 'bg-white shadow-sm text-deliivo-dark' : 'text-deliivo-gray'
+                      }`}
+                    >
+                      Phone
+                    </button>
                   </div>
-                ) : (
-                  <div>
-                    <label htmlFor="phone" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-                      Phone number
-                    </label>
-                    <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
-                      <select
-                        value={phoneCountryCode}
-                        onChange={(e) => setPhoneCountryCode(e.target.value)}
-                        className="input-field"
-                        aria-label="Country code"
-                      >
-                        {PHONE_COUNTRY_OPTIONS.map((option) => (
-                          <option key={option.code} value={option.code}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        id="phone"
-                        type="tel"
-                        autoComplete="tel-national"
-                        inputMode="numeric"
-                        required
-                        placeholder="51234567"
-                        value={phone}
-                        onChange={(e) => setPhone(sanitizePhoneLocalNumber(e.target.value))}
-                        className="input-field"
-                      />
-                    </div>
-                    <p className="mt-1.5 text-xs text-deliivo-gray">
-                      We store your number as {phoneCountryCode} plus your local number.
-                    </p>
+
+                  <form className="space-y-4" onSubmit={handleSignup}>
+                    {method === 'email' ? (
+                      <div>
+                        <label htmlFor="email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                          Email address
+                        </label>
+                        <input
+                          id="email"
+                          type="email"
+                          autoComplete="email"
+                          required
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="input-field"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label htmlFor="phone" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                          Phone number
+                        </label>
+                        <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+                          <select
+                            value={phoneCountryCode}
+                            onChange={(e) => setPhoneCountryCode(e.target.value)}
+                            className="input-field"
+                            aria-label="Country code"
+                          >
+                            {PHONE_COUNTRY_OPTIONS.map((option) => (
+                              <option key={option.code} value={option.code}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            id="phone"
+                            type="tel"
+                            autoComplete="tel-national"
+                            inputMode="numeric"
+                            required
+                            placeholder="51234567"
+                            value={phone}
+                            onChange={(e) => setPhone(sanitizePhoneLocalNumber(e.target.value))}
+                            className="input-field"
+                          />
+                        </div>
+                        <p className="mt-1.5 text-xs text-deliivo-gray">
+                          We store your number as {phoneCountryCode} plus your local number.
+                        </p>
+                      </div>
+                    )}
+
+                    {error && (
+                      <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+                    )}
+
+                    <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base disabled:opacity-50">
+                      {loading ? 'Creating account...' : 'Sign up'}
+                    </button>
+                  </form>
+
+                  <div className="my-6 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-gray-200" />
+                    <span className="text-xs font-medium text-deliivo-gray">OR</span>
+                    <div className="h-px flex-1 bg-gray-200" />
                   </div>
-                )}
-
-                {error && (
-                  <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
-                )}
-
-                <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base disabled:opacity-50">
-                  {loading ? 'Creating account...' : 'Sign up'}
-                </button>
-              </form>
-
-              <div className="my-6 flex items-center gap-3">
-                <div className="h-px flex-1 bg-gray-200" />
-                <span className="text-xs font-medium text-deliivo-gray">OR</span>
-                <div className="h-px flex-1 bg-gray-200" />
-              </div>
+                </>
+              ) : null}
 
               <GoogleSignInButton returnTo={returnTo} />
 

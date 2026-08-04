@@ -1315,6 +1315,7 @@ function PassengerCard({
   const dropoffAddress = booking.dropoffLocation?.address || t('manageRide.dropoffNotSet');
   const showPickupActions = ridePhase === 'in_progress' && ['WAITING_FOR_PICKUP', 'DRIVER_ARRIVED'].includes(booking.status);
   const showOnboardActions = ridePhase === 'in_progress' && booking.status === 'ONBOARD';
+  const canMessagePassenger = ridePhase === 'in_progress' && ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'].includes(booking.status);
   const showReportAction = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED'].includes(booking.status);
   const statusClass = booking.status === 'ONBOARD' || booking.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border border-green-200'
     : booking.status === 'NO_SHOW' || booking.status === 'DRIVER_MISSED_PICKUP' ? 'bg-red-50 text-red-700 border border-red-200'
@@ -1352,7 +1353,7 @@ function PassengerCard({
           </div>
         </div>
         <div className="flex flex-wrap gap-2 lg:justify-end">
-          {(showPickupActions || showOnboardActions) && (
+          {canMessagePassenger && (
             <Link
               href={withReturnTo(`/chat/start/booking/${booking.id}`, returnTo)}
               className="inline-flex h-9 items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3.5 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"

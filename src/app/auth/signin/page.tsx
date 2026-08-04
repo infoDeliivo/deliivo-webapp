@@ -11,6 +11,7 @@ import { buildE164PhoneNumber, PHONE_COUNTRY_OPTIONS, sanitizePhoneLocalNumber }
 import { getSafeReturnTo, resolvePostLoginPath, withReturnTo } from "@/lib/auth-redirect";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { isOnboardingComplete } from "@/lib/onboarding";
+import { featureFlags } from "@/lib/features";
 
 type Step = 'identifier' | 'otp';
 type Method = 'email' | 'phone';
@@ -30,6 +31,7 @@ export default function SignInPage() {
   const [devCode, setDevCode] = useState<string | null>(null);
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const normalizedIdentifier = method === 'email' ? identifier.trim() : buildE164PhoneNumber(phoneCountryCode, phone);
+  const emailPhoneAuthEnabled = featureFlags.emailPhoneAuth;
 
   function redirectAfterLogin(next: 'onboarding' | 'home') {
     const destination = returnTo || getSafeReturnTo();
@@ -133,101 +135,109 @@ export default function SignInPage() {
                 Sign in to your account
               </h1>
               <p className="mb-6 text-sm text-deliivo-gray">
-                {method === 'email'
+                {!emailPhoneAuthEnabled
+                  ? 'Use Google to continue.'
+                  : method === 'email'
                   ? 'Enter your email to receive a verification code.'
                   : 'Enter your phone number to receive an OTP.'}
               </p>
 
-              <form className="space-y-4" onSubmit={handleSubmitIdentifier}>
-                {method === 'email' ? (
-                  <div>
-                    <label htmlFor="identifier" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-                      Email address
-                    </label>
-                    <input
-                      id="identifier"
-                      type="email"
-                      autoComplete="email"
-                      required
-                      placeholder="you@example.com"
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
-                      className="input-field"
-                    />
+              {emailPhoneAuthEnabled ? (
+                <>
+                  <form className="space-y-4" onSubmit={handleSubmitIdentifier}>
+                    {method === 'email' ? (
+                      <div>
+                        <label htmlFor="identifier" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                          Email address
+                        </label>
+                        <input
+                          id="identifier"
+                          type="email"
+                          autoComplete="email"
+                          required
+                          placeholder="you@example.com"
+                          value={identifier}
+                          onChange={(e) => setIdentifier(e.target.value)}
+                          className="input-field"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label htmlFor="phone" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                          Phone number
+                        </label>
+                        <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+                          <select
+                            value={phoneCountryCode}
+                            onChange={(e) => setPhoneCountryCode(e.target.value)}
+                            className="input-field"
+                            aria-label="Country code"
+                          >
+                            {PHONE_COUNTRY_OPTIONS.map((option) => (
+                              <option key={option.code} value={option.code}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            id="phone"
+                            type="tel"
+                            autoComplete="tel-national"
+                            inputMode="numeric"
+                            required
+                            placeholder="51234567"
+                            value={phone}
+                            onChange={(e) => setPhone(sanitizePhoneLocalNumber(e.target.value))}
+                            className="input-field"
+                          />
+                        </div>
+                        <p className="mt-1.5 text-xs text-deliivo-gray">
+                          We send the OTP to {normalizedIdentifier ?? `${phoneCountryCode}...`}.
+                        </p>
+                      </div>
+                    )}
+
+                    {error && (
+                      <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+                    )}
+
+                    <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base disabled:opacity-50">
+                      {loading ? 'Sending...' : 'Continue'}
+                    </button>
+                  </form>
+
+                  <div className="my-6 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-gray-200" />
+                    <span className="text-xs font-medium text-deliivo-gray">OR</span>
+                    <div className="h-px flex-1 bg-gray-200" />
                   </div>
-                ) : (
-                  <div>
-                    <label htmlFor="phone" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-                      Phone number
-                    </label>
-                    <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
-                      <select
-                        value={phoneCountryCode}
-                        onChange={(e) => setPhoneCountryCode(e.target.value)}
-                        className="input-field"
-                        aria-label="Country code"
+
+                  <div className="space-y-3">
+                    {method === 'email' ? (
+                      <button
+                        type="button"
+                        onClick={() => { setMethod('phone'); setIdentifier(''); setPhone(''); setError(''); }}
+                        className="btn-outline w-full gap-2.5 py-3 text-sm"
                       >
-                        {PHONE_COUNTRY_OPTIONS.map((option) => (
-                          <option key={option.code} value={option.code}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        id="phone"
-                        type="tel"
-                        autoComplete="tel-national"
-                        inputMode="numeric"
-                        required
-                        placeholder="51234567"
-                        value={phone}
-                        onChange={(e) => setPhone(sanitizePhoneLocalNumber(e.target.value))}
-                        className="input-field"
-                      />
-                    </div>
-                    <p className="mt-1.5 text-xs text-deliivo-gray">
-                      We send the OTP to {normalizedIdentifier ?? `${phoneCountryCode}...`}.
-                    </p>
+                        <FaPhone className="h-4 w-4 shrink-0" />
+                        Sign in with Phone
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { setMethod('email'); setIdentifier(''); setPhone(''); setError(''); }}
+                        className="btn-outline w-full gap-2.5 py-3 text-sm"
+                      >
+                        Sign in with Email
+                      </button>
+                    )}
+
+                    <GoogleSignInButton returnTo={returnTo} />
                   </div>
-                )}
-
-                {error && (
-                  <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
-                )}
-
-                <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base disabled:opacity-50">
-                  {loading ? 'Sending...' : 'Continue'}
-                </button>
-              </form>
-
-              <div className="my-6 flex items-center gap-3">
-                <div className="h-px flex-1 bg-gray-200" />
-                <span className="text-xs font-medium text-deliivo-gray">OR</span>
-                <div className="h-px flex-1 bg-gray-200" />
-              </div>
-
-              <div className="space-y-3">
-                {method === 'email' ? (
-                  <button
-                    type="button"
-                    onClick={() => { setMethod('phone'); setIdentifier(''); setPhone(''); setError(''); }}
-                    className="btn-outline w-full gap-2.5 py-3 text-sm"
-                  >
-                    <FaPhone className="h-4 w-4 shrink-0" />
-                    Sign in with Phone
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => { setMethod('email'); setIdentifier(''); setPhone(''); setError(''); }}
-                    className="btn-outline w-full gap-2.5 py-3 text-sm"
-                  >
-                    Sign in with Email
-                  </button>
-                )}
-
+                </>
+              ) : (
                 <GoogleSignInButton returnTo={returnTo} />
-              </div>
+              )}
             </>
           ) : (
             <>
