@@ -1102,8 +1102,8 @@ function RideDetailContent() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-6">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start">
           <main className="space-y-5">
         {/* Route card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
@@ -1171,20 +1171,28 @@ function RideDetailContent() {
         </div>
 
         {/* Details */}
-        <div className="rounded-2xl bg-white shadow-sm p-5 space-y-3">
-          <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.rideInfo')}</h3>
-          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-            <div className="flex items-center gap-2"><Users size={16} className="text-deliivo-orange" /><span>{t('manageRide.availableSeats', { available: ride.availableSeats, total: ride.totalSeats })}</span></div>
-            <div className="flex items-center gap-2"><span className="text-lg font-bold text-primary-500">{ride.currency} {price.toFixed(2)}</span><span className="text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></div>
+        <div className="rounded-2xl bg-white p-5 shadow-sm">
+          <div className="border-b border-gray-100 pb-3">
+            <h3 className="text-base font-bold text-deliivo-dark">{t('rideDetail.rideInfo')}</h3>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <div className="rounded-xl bg-gray-50 px-4 py-3">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase text-deliivo-gray"><Users size={14} className="text-deliivo-orange" /> Seats</p>
+              <p className="mt-1 font-semibold text-deliivo-dark">{t('manageRide.availableSeats', { available: ride.availableSeats, total: ride.totalSeats })}</p>
+            </div>
+            <div className="rounded-xl bg-gray-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase text-deliivo-gray">Price</p>
+              <p className="mt-1"><span className="text-lg font-bold text-primary-500">{ride.currency} {price.toFixed(2)}</span><span className="ml-1 text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></p>
+            </div>
           </div>
           {ride.notes && (
-            <div className="pt-3 border-t border-gray-50">
+            <div className="mt-4 border-t border-gray-100 pt-4">
               <p className="flex items-center gap-2 text-xs font-medium text-deliivo-gray mb-1"><MessageSquare size={12} /> {t('rideDetail.driverNotes')}</p>
               <p className="text-sm text-deliivo-dark">{ride.notes}</p>
             </div>
           )}
         {(ride.femaleOnly || ride.noSmoking || ride.alcoholFreeRide || ride.noBicycles || ride.childSeatAvailable) && (
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
             {ride.femaleOnly && (
               <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-600">
                 <CheckCircle className="h-3 w-3" /> {t('ride.womenOnlyRide')}
@@ -1222,7 +1230,7 @@ function RideDetailContent() {
 
           </main>
 
-          <aside className="space-y-5">
+          <aside className="space-y-5 lg:sticky lg:top-20">
 
         {/* Booking section */}
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
@@ -1256,16 +1264,18 @@ function RideDetailContent() {
         )}
 
         {user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
+          <div className="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
             <FlowGuide
               storageKey="deliivo.booking.quick-guide.v1"
               eyebrow="Booking guide"
               title={bookingGuide.title}
               steps={bookingGuide.steps}
             />
-            <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
+            <div className="mt-5 border-b border-gray-100 pb-3">
+              <h3 className="text-base font-bold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
+            </div>
 
-            <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+            <div className="mt-4 space-y-4">
               <div className="flex flex-col gap-2">
                 <div className="min-w-0">
                   <p className="text-base font-semibold text-deliivo-dark">{t('rideDetail.yourTripOnThisRide')}</p>
@@ -1601,30 +1611,32 @@ function RideDetailContent() {
 
         {/* Rider booking panel — show OTP, actions */}
         {!isOwnRide && myBooking && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.yourBooking')}</h3>
+          <div className="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="text-base font-bold text-deliivo-dark">{t('rideDetail.yourBooking')}</h3>
               <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getBookingStatusBadgeClass(myBooking.status)}`}>
                 {getRideStatusLabel(myBooking.status, t)}
               </span>
             </div>
 
-            <EmergencySosButton
-              rideId={ride.id}
-              bookingId={myBooking.id}
-              role="RIDER"
-              className="w-full"
-            />
+            <div className="grid gap-2">
+              <EmergencySosButton
+                rideId={ride.id}
+                bookingId={myBooking.id}
+                role="RIDER"
+                className="w-full"
+              />
 
-            {canUseRideChat && (
-              <Link
-                href={`/chat/start/booking/${myBooking.id}`}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
-              >
-                <MessageSquare className="h-4 w-4" />
-                Message driver
-              </Link>
-            )}
+              {canUseRideChat && (
+                <Link
+                  href={`/chat/start/booking/${myBooking.id}`}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  Message driver
+                </Link>
+              )}
+            </div>
 
             {myBooking.status === 'DRIVER_PENDING' && myBooking.decisionDeadline && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-1">
@@ -1702,9 +1714,9 @@ function RideDetailContent() {
             )}
 
               {myBooking.segmentRide && (
-                <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-2">
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
                 <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookedSegment')}</p>
-                <div className="text-sm text-deliivo-dark space-y-1">
+                <div className="mt-3 space-y-2 text-sm text-deliivo-dark">
                   <p><span className="font-medium text-deliivo-gray">{t('rideDetail.pickup')}:</span> {bookedPickupAddress}</p>
                   {bookedPickupTime && <p><span className="font-medium text-deliivo-gray">{t('rideDetail.pickupTime')}:</span> {bookedPickupTime}</p>}
                   <p><span className="font-medium text-deliivo-gray">{t('rideDetail.dropoff')}:</span> {bookedDropoffAddress}</p>
@@ -1772,7 +1784,9 @@ function RideDetailContent() {
               </div>
             )}
 
-            <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-2 text-sm">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm">
+              <p className="mb-3 text-xs font-bold uppercase text-deliivo-gray">Fare summary</p>
+              <div className="space-y-2">
               {bookedBreakdown && (
                 <>
                   <div className="flex items-center justify-between">
@@ -1802,6 +1816,7 @@ function RideDetailContent() {
               <div className="flex items-center justify-between">
                 <span className="text-deliivo-gray">{t('rideDetail.bookingId')}</span>
                 <span className="font-medium text-deliivo-dark">{formatBookingReference(myBooking)}</span>
+              </div>
               </div>
             </div>
 

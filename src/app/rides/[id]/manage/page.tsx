@@ -623,7 +623,7 @@ const [error, setError] = useState('');
         </div>
       </div>
 
-      <div className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6">
+      <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
         {/* Ride status card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
           <div className={`px-5 py-4 ${phase === 'in_progress' ? 'bg-gradient-to-r from-green-500 to-green-600' : phase === 'completed' ? 'bg-gradient-to-r from-gray-500 to-gray-600' : phase === 'cancelled' ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-deliivo-orange to-primary-600'}`}>
@@ -728,10 +728,12 @@ const [error, setError] = useState('');
 
         {/* Pending booking requests */}
         {pendingBookings.length > 0 && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
-              <AlertCircle size={16} className="text-amber-500" /> {t('manageRide.pendingRequests', { count: pendingBookings.length })}
-            </h3>
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="mb-4 border-b border-gray-100 pb-3">
+              <h3 className="flex items-center gap-2 text-base font-bold text-deliivo-dark">
+                <AlertCircle size={16} className="text-amber-500" /> {t('manageRide.pendingRequests', { count: pendingBookings.length })}
+              </h3>
+            </div>
             <div className="space-y-3">
               {pendingBookings.map(booking => (
                 <BookingRequestCard
@@ -743,7 +745,7 @@ const [error, setError] = useState('');
                 />
               ))}
             </div>
-          </div>
+          </section>
         )}
         {pendingBookings.length === 0 && phase === 'published' && (
           <div className="rounded-2xl bg-white shadow-sm p-5">
@@ -756,11 +758,13 @@ const [error, setError] = useState('');
 
         {/* Confirmed passengers */}
         {confirmedBookings.length > 0 && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
-              <UserCheck size={16} className="text-green-500" /> {t('manageRide.passengerCount', { count: confirmedBookings.length })}
-            </h3>
-            <div className="space-y-3">
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="mb-4 border-b border-gray-100 pb-3">
+              <h3 className="flex items-center gap-2 text-base font-bold text-deliivo-dark">
+                <UserCheck size={16} className="text-green-500" /> {t('manageRide.passengerCount', { count: confirmedBookings.length })}
+              </h3>
+            </div>
+            <div className="space-y-4">
               {confirmedBookings.map(booking => (
                 <PassengerCard
                   key={booking.id}
@@ -778,13 +782,13 @@ const [error, setError] = useState('');
                 />
               ))}
             </div>
-            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+            <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-deliivo-gray">Support context</p>
               <p className="mt-1 text-sm text-deliivo-dark">
                 Share the booking reference, passenger name, pickup status, and ride ID when a manual override or dispute review is needed.
               </p>
             </div>
-          </div>
+          </section>
         )}
         {confirmedBookings.length === 0 && phase !== 'completed' && (
           <div className="rounded-2xl bg-white shadow-sm p-5">
@@ -796,14 +800,16 @@ const [error, setError] = useState('');
         )}
 
         {phase === 'published' && (
-          <div className="rounded-2xl bg-white shadow-sm p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-deliivo-dark flex items-center gap-2">
-              <Navigation size={16} className="text-deliivo-orange" /> {t('manageRide.driverActions')}
-            </h3>
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="mb-4 border-b border-gray-100 pb-3">
+              <h3 className="flex items-center gap-2 text-base font-bold text-deliivo-dark">
+                <Navigation size={16} className="text-deliivo-orange" /> {t('manageRide.driverActions')}
+              </h3>
+            </div>
             <p className="text-xs text-deliivo-gray">
               {t('manageRide.driverActionsCopy')}
             </p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button
                 type="button"
                 onClick={handleStartRide}
@@ -824,11 +830,11 @@ const [error, setError] = useState('');
               </button>
             </div>
             {!startWindowOpen && (
-              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 Start becomes available 10 minutes before departure. Mock environments must set both `ALLOW_RIDE_SIMULATION=true` and `NEXT_PUBLIC_ALLOW_RIDE_SIMULATION=true`.
               </p>
             )}
-          </div>
+          </section>
         )}
 
         {allowRideSimulation && confirmedBookings.length > 0 && (
@@ -1284,8 +1290,7 @@ function PassengerCard({
   }, [booking.hasDriverRatedPassenger]);
 
   return (
-    <>
-    <div className="rounded-xl border border-gray-100 bg-white p-4">
+    <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-primary-100">
@@ -1318,7 +1323,6 @@ function PassengerCard({
         <p className="min-w-0 break-words"><span className="font-medium text-deliivo-dark">{t('rideDetail.pickup')}:</span> {pickupAddress}</p>
         <p className="min-w-0 break-words"><span className="font-medium text-deliivo-dark">{t('rideDetail.dropoff')}:</span> {dropoffAddress}</p>
       </div>
-    </div>
     <div className="hidden min-w-0 flex-col items-start gap-3 rounded-xl border border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-deliivo-dark">
@@ -1343,7 +1347,8 @@ function PassengerCard({
     </div>
 
     {ridePhase === 'in_progress' && ['WAITING_FOR_PICKUP', 'DRIVER_ARRIVED'].includes(booking.status) && (
-      <div className="mt-3 space-y-3">
+      <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
+        <p className="text-xs font-bold uppercase text-deliivo-gray">Pickup actions</p>
         <div className="flex flex-wrap gap-2">
         <Link
           href={`/chat/start/booking/${booking.id}`}
@@ -1380,7 +1385,7 @@ function PassengerCard({
     )}
 
     {ridePhase === 'in_progress' && booking.status === 'ONBOARD' && (
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
         <Link
           href={`/chat/start/booking/${booking.id}`}
           className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
@@ -1401,7 +1406,7 @@ function PassengerCard({
     )}
 
     {['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED'].includes(booking.status) && (
-      <div className="mt-3">
+      <div className="mt-4 border-t border-gray-100 pt-4">
         <button
           type="button"
           onClick={onReportIssue}
@@ -1415,7 +1420,7 @@ function PassengerCard({
     )}
 
     {canRatePassenger && (
-      <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
+      <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
         <p className="text-sm font-semibold text-deliivo-dark">Rate rider</p>
         <p className="mt-1 text-xs text-deliivo-gray">
           Share a driver-side rating for this rider after the ride outcome is known.
@@ -1469,7 +1474,7 @@ function PassengerCard({
         )}
       </div>
     )}
-    </>
+    </div>
   );
 }
 
@@ -1516,11 +1521,11 @@ function OtpVerifySection({ booking, onVerified }: { booking: DriverRideBooking;
   }
 
   return (
-    <div className="rounded-xl border border-orange-100 bg-orange-50/40 px-3 py-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="flex min-w-0 items-center gap-2 sm:w-44">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-deliivo-orange">
-            <KeyRound className="h-4 w-4" />
+    <div className="rounded-xl border border-orange-100 bg-orange-50/40 px-3 py-2.5">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto] sm:items-center">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-deliivo-orange">
+            <KeyRound className="h-3.5 w-3.5" />
           </span>
           <div className="min-w-0">
             <p className="truncate text-xs font-semibold text-deliivo-dark">{t('manageRide.bookingNumber', { id: formatBookingReference(booking) })}</p>
@@ -1534,13 +1539,13 @@ function OtpVerifySection({ booking, onVerified }: { booking: DriverRideBooking;
           value={otp}
           onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
           placeholder={t('manageRide.enterOtp')}
-          className="h-10 flex-1 rounded-xl border border-orange-100 bg-white px-3 text-center text-sm font-bold tracking-[0.35em] focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
+          className="h-9 rounded-xl border border-orange-100 bg-white px-3 text-center text-sm font-bold tracking-[0.25em] focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
         />
         <button
           type="button"
           onClick={handleVerify}
           disabled={loading || otp.length < 6}
-          className="inline-flex h-10 items-center justify-center rounded-xl bg-deliivo-orange px-4 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
+          className="inline-flex h-9 items-center justify-center rounded-xl bg-deliivo-orange px-4 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('manageRide.verify')}
         </button>
