@@ -229,7 +229,7 @@ export default function SignUpPage() {
               <GoogleSignInButton returnTo={returnTo} />
 
               <p className="mt-6 text-center text-xs text-deliivo-gray">
-                By signing up, you agree to our{" "}
+                By continuing, you agree to Deliivo&apos;s{" "}
                 <Link href="/terms" className="underline hover:text-deliivo-orange">Terms</Link> and{" "}
                 <Link href="/privacy" className="underline hover:text-deliivo-orange">Privacy Policy</Link>.
               </p>
