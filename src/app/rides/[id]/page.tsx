@@ -1210,16 +1210,16 @@ function RideDetailContent() {
         </Link>
 
         {/* Details */}
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
-          <div className="border-b border-gray-100 pb-3">
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <div className="border-b border-gray-100 pb-2">
             <h3 className="text-base font-bold text-deliivo-dark">{t('rideDetail.rideInfo')}</h3>
           </div>
-          <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-            <div className="rounded-xl bg-gray-50 px-4 py-3">
+          <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+            <div className="rounded-xl bg-gray-50 px-4 py-2.5">
               <p className="flex items-center gap-2 text-xs font-semibold uppercase text-deliivo-gray"><Users size={14} className="text-deliivo-orange" /> Seats</p>
               <p className="mt-1 font-semibold text-deliivo-dark">{t('manageRide.availableSeats', { available: ride.availableSeats, total: ride.totalSeats })}</p>
             </div>
-            <div className="rounded-xl bg-gray-50 px-4 py-3">
+            <div className="rounded-xl bg-gray-50 px-4 py-2.5">
               <p className="text-xs font-semibold uppercase text-deliivo-gray">Price</p>
               <p className="mt-1"><span className="text-lg font-bold text-primary-500">{ride.currency} {price.toFixed(2)}</span><span className="ml-1 text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></p>
             </div>
@@ -1231,7 +1231,7 @@ function RideDetailContent() {
             </div>
           )}
         {(ride.femaleOnly || ride.noSmoking || ride.alcoholFreeRide || ride.noBicycles || ride.childSeatAvailable) && (
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
+          <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
             {ride.femaleOnly && (
               <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-600">
                 <CheckCircle className="h-3 w-3" /> {t('ride.womenOnlyRide')}
@@ -1266,6 +1266,243 @@ function RideDetailContent() {
           </div>
         )}
       </div>
+
+        {canStartBooking && (
+          <section className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-1 border-b border-gray-100 pb-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-base font-bold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
+                <p className="mt-1 text-sm text-deliivo-gray">{t('rideDetail.driverNotifiedCopy')}</p>
+              </div>
+              {previewBreakdown && (
+                <span className="text-lg font-bold text-deliivo-orange">
+                  {previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}
+                </span>
+              )}
+            </div>
+
+            <div className="grid gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <span className="block text-xs font-semibold uppercase text-deliivo-gray">{t('rideDetail.seats')}</span>
+                <div className="flex h-12 items-center justify-center gap-4 rounded-xl border border-gray-200 bg-white px-4">
+                  <button type="button" disabled={seats <= 1} onClick={() => setSeats(s => s - 1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 disabled:opacity-30">
+                    <Minus className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="min-w-10 text-center text-lg font-bold text-deliivo-dark">{seats}</span>
+                  <button type="button" disabled={seats >= Math.min(10, ride.availableSeats)} onClick={() => setSeats(s => s + 1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-deliivo-orange bg-deliivo-orange-light text-deliivo-orange disabled:opacity-30">
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <span className="block text-xs font-semibold uppercase text-deliivo-gray">{t('rideDetail.requestExpires')}</span>
+                <select
+                  value={responseExpiryOption}
+                  onChange={(e) => setResponseExpiryOption(e.target.value as typeof responseExpiryOption)}
+                  className="h-12 w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 text-sm text-deliivo-dark focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
+                >
+                  {requestExpiryOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {needsTosAcceptance && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <label className="flex items-start gap-3 text-sm text-amber-900">
+                  <input
+                    type="checkbox"
+                    checked={tosAcceptedForBooking}
+                    onChange={(e) => setTosAcceptedForBooking(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-amber-300 text-deliivo-orange focus:ring-deliivo-orange"
+                  />
+                  <span>
+                    {t('rideDetail.acceptLegalPrefix')} <Link href="/terms" className="underline">{t('legal.termsTitle')}</Link> {t('rideDetail.acceptLegalAnd')}{' '}
+                    <Link href="/privacy" className="underline">{t('privacy.title')}</Link> {t('rideDetail.acceptLegalSuffix')}
+                  </span>
+                </label>
+              </div>
+            )}
+
+            {ride.childSeatAvailable && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={travelingWithChildUnderTwo}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setTravelingWithChildUnderTwo(checked);
+                      if (!checked) setBringingOwnChildSeat(false);
+                    }}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-deliivo-orange focus:ring-deliivo-orange"
+                  />
+                  <span className="text-sm text-deliivo-dark">
+                    Travelling with a child aged 2 or younger.
+                    <span className="mt-1 block text-xs text-deliivo-gray">
+                      Riders must bring their own child seat.
+                    </span>
+                  </span>
+                </label>
+
+                {travelingWithChildUnderTwo && (
+                  <label className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={bringingOwnChildSeat}
+                      onChange={(event) => setBringingOwnChildSeat(event.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-orange-300 text-deliivo-orange focus:ring-deliivo-orange"
+                    />
+                    <span className="text-sm text-deliivo-dark">
+                      I confirm that I will bring the child seat for this trip.
+                    </span>
+                  </label>
+                )}
+              </div>
+            )}
+
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px]">
+              {isStripeConfigured() ? (
+                <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="h-4 w-4 text-deliivo-orange" />
+                      <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.paymentCard')}</p>
+                    </div>
+                    {paymentMethods.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddPaymentMethod((value) => !value)}
+                        className="text-xs font-semibold text-deliivo-orange hover:underline"
+                      >
+                        {showAddPaymentMethod ? t('rideDetail.useSavedCard') : t('rideDetail.addAnotherCard')}
+                      </button>
+                    )}
+                  </div>
+
+                  {paymentMethodsLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-deliivo-gray">
+                      <Loader2 className="h-4 w-4 animate-spin" /> {t('rideDetail.loadingCards')}
+                    </div>
+                  ) : paymentMethods.length > 0 && !showAddPaymentMethod ? (
+                    <div className="space-y-2">
+                      {paymentMethods.map((method) => (
+                        <label
+                          key={method.id}
+                          className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition-colors ${
+                            selectedPaymentMethodId === method.id
+                              ? 'border-deliivo-orange bg-deliivo-orange-light'
+                              : 'border-gray-200 hover:border-deliivo-orange/50'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="bookingPaymentMethod"
+                            checked={selectedPaymentMethodId === method.id}
+                            onChange={() => setSelectedPaymentMethodId(method.id)}
+                            className="h-4 w-4 border-gray-300 text-deliivo-orange focus:ring-deliivo-orange"
+                          />
+                          <CreditCard className="h-4 w-4 text-deliivo-gray" />
+                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-deliivo-dark">
+                            {method.brand} **** {method.last4}
+                          </span>
+                          <span className="shrink-0 text-xs text-deliivo-gray">
+                            {String(method.expMonth).padStart(2, '0')}/{method.expYear}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <RideAddPaymentMethodForm
+                      onSaved={(method) => {
+                        loadPaymentMethods(method.id);
+                      }}
+                    />
+                  )}
+
+                  <p className="text-xs text-deliivo-gray">
+                    {t('rideDetail.cardAuthorizedCopy')}
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-sm font-medium text-amber-900">{t('rideDetail.stripeNotConfigured')}</p>
+                  <p className="mt-1 text-xs text-amber-800">
+                    {t('rideDetail.stripeNotConfiguredCopy')}
+                  </p>
+                </div>
+              )}
+
+              {previewLoading ? (
+                <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-deliivo-gray"><Loader2 className="h-4 w-4 animate-spin" /> {t('rideDetail.calculating')}</div>
+              ) : preview && previewBreakdown ? (
+                <div className="overflow-hidden rounded-xl border border-primary-100 bg-primary-50">
+                  <div className="border-b border-primary-100 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.priceBreakdown')}</p>
+                      <span className="shrink-0 text-sm font-bold text-primary-500">
+                        {previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}
+                      </span>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-deliivo-gray">
+                      {selectedPickupOption.address} {t('search.toLabel').toLowerCase()} {selectedDropoffOption.address}
+                    </p>
+                  </div>
+                  <div className="space-y-2 px-4 py-3">
+                    <div className="flex justify-between gap-4 text-sm">
+                      <span className="text-deliivo-gray">
+                        {t('rideDetail.seatCalculation', {
+                          currency: previewBreakdown.currency,
+                          price: previewBreakdown.basePricePerSeat.toFixed(2),
+                          seats: previewBreakdown.seatsBooked,
+                          plural: previewBreakdown.seatsBooked === 1 ? '' : 's',
+                        })}
+                      </span>
+                      <span className="font-medium text-deliivo-dark">{previewBreakdown.currency} {previewBreakdown.subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between gap-4 text-sm">
+                      <span className="text-deliivo-gray">{t('rideDetail.serviceFee')}</span>
+                      <span className="font-medium text-deliivo-dark">{previewBreakdown.currency} {previewBreakdown.serviceFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between gap-4 border-t border-primary-200 pt-3 text-base font-bold">
+                      <span>{t('rideDetail.totalToPay')}</span>
+                      <span className="text-primary-500">{previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}</span>
+                    </div>
+                    <p className="pt-1 text-[11px] leading-5 text-deliivo-gray">{t('rideDetail.priceBreakdownNotice')}</p>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="flex flex-col justify-end gap-3 rounded-xl border border-orange-100 bg-orange-50/60 p-4">
+                {bookError && (
+                  <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-3 py-2">
+                    <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
+                    <p className="text-sm text-red-600">{bookError}</p>
+                  </div>
+                )}
+
+                {paymentMessage && (
+                  <div className="flex items-center gap-2 rounded-xl bg-green-50 border border-green-100 px-3 py-2">
+                    <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                    <p className="text-sm text-green-700">{paymentMessage}</p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleBook}
+                  disabled={booking || paymentMethodsLoading || (isStripeConfigured() && (!selectedPaymentMethodId || showAddPaymentMethod)) || (needsTosAcceptance && !tosAcceptedForBooking) || (childSeatControlsEnabled && travelingWithChildUnderTwo && !bringingOwnChildSeat)}
+                  className="btn-primary w-full py-3.5 text-sm gap-2 disabled:opacity-60"
+                >
+                  {booking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-5 w-5" />}
+                  {booking ? t('common.processing') : t('rideDetail.requestToBook', { amount: previewBreakdown ? `${previewBreakdown.currency} ${previewBreakdown.totalPrice.toFixed(2)}` : '' })}
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
         {!isOwnRide && myBooking && ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'ONBOARD', 'DROP_PENDING', 'IN_PROGRESS', 'COMPLETED'].includes(myBooking.status) && (
           <LiveSharingLinksCard
@@ -1520,239 +1757,6 @@ function RideDetailContent() {
             </div>
 
           </div>
-        )}
-
-        {canStartBooking && (
-          <section className="space-y-4 rounded-2xl bg-white p-5 shadow-sm lg:col-start-1 lg:row-start-2 lg:mx-auto lg:w-full lg:max-w-2xl">
-            <div className="border-b border-gray-100 pb-3">
-              <h3 className="text-base font-bold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
-              <p className="mt-1 text-sm text-deliivo-gray">{t('rideDetail.driverNotifiedCopy')}</p>
-            </div>
-            <div className="grid gap-4 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-              <div className="space-y-4">
-            {needsTosAcceptance && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
-                <p className="text-sm font-medium text-amber-900">{t('rideDetail.acceptLegalTitle')}</p>
-                <label className="flex items-start gap-3 text-sm text-amber-900">
-                  <input
-                    type="checkbox"
-                    checked={tosAcceptedForBooking}
-                    onChange={(e) => setTosAcceptedForBooking(e.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-amber-300 text-deliivo-orange focus:ring-deliivo-orange"
-                  />
-                  <span>
-                    {t('rideDetail.acceptLegalPrefix')} <Link href="/terms" className="underline">{t('legal.termsTitle')}</Link> {t('rideDetail.acceptLegalAnd')}{' '}
-                    <Link href="/privacy" className="underline">{t('privacy.title')}</Link> {t('rideDetail.acceptLegalSuffix')}
-                  </span>
-                </label>
-              </div>
-            )}
-
-            {/* Seat selector */}
-            <div className="space-y-2">
-              <span className="block text-sm font-medium text-deliivo-dark">{t('rideDetail.seats')}</span>
-              <div className="flex items-center justify-center gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3">
-                <button type="button" disabled={seats <= 1} onClick={() => setSeats(s => s - 1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 disabled:opacity-30">
-                  <Minus className="h-3.5 w-3.5" />
-                </button>
-                <span className="min-w-10 text-center text-lg font-bold text-deliivo-dark">{seats}</span>
-                <button type="button" disabled={seats >= Math.min(10, ride.availableSeats)} onClick={() => setSeats(s => s + 1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-deliivo-orange bg-deliivo-orange-light text-deliivo-orange disabled:opacity-30">
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <span className="block text-sm font-medium text-deliivo-dark">{t('rideDetail.requestExpires')}</span>
-              <select
-                value={responseExpiryOption}
-                onChange={(e) => setResponseExpiryOption(e.target.value as typeof responseExpiryOption)}
-                className="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-deliivo-dark focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
-              >
-                {requestExpiryOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {ride.childSeatAvailable && (
-              <>
-                <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={travelingWithChildUnderTwo}
-                    onChange={(event) => {
-                      const checked = event.target.checked;
-                      setTravelingWithChildUnderTwo(checked);
-                      if (!checked) setBringingOwnChildSeat(false);
-                    }}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-deliivo-orange focus:ring-deliivo-orange"
-                  />
-                  <span className="text-sm text-deliivo-dark">
-                    Travelling with a child aged 2 or younger.
-                    <span className="mt-1 block text-xs text-deliivo-gray">
-                      Riders must bring their own child seat. Drivers are not assumed to provide one.
-                    </span>
-                  </span>
-                </label>
-
-                {travelingWithChildUnderTwo && (
-                  <label className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={bringingOwnChildSeat}
-                      onChange={(event) => setBringingOwnChildSeat(event.target.checked)}
-                      className="mt-1 h-4 w-4 rounded border-orange-300 text-deliivo-orange focus:ring-deliivo-orange"
-                    />
-                    <span className="text-sm text-deliivo-dark">
-                      I confirm that I will bring the child seat for this trip.
-                    </span>
-                  </label>
-                )}
-              </>
-            )}
-              </div>
-
-              <div className="space-y-4">
-            {isStripeConfigured() ? (
-              <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="h-4 w-4 text-deliivo-orange" />
-                    <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.paymentCard')}</p>
-                  </div>
-                  {paymentMethods.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAddPaymentMethod((value) => !value)}
-                      className="text-xs font-semibold text-deliivo-orange hover:underline"
-                    >
-                      {showAddPaymentMethod ? t('rideDetail.useSavedCard') : t('rideDetail.addAnotherCard')}
-                    </button>
-                  )}
-                </div>
-
-                {paymentMethodsLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-deliivo-gray">
-                    <Loader2 className="h-4 w-4 animate-spin" /> {t('rideDetail.loadingCards')}
-                  </div>
-                ) : paymentMethods.length > 0 && !showAddPaymentMethod ? (
-                  <div className="space-y-2">
-                    {paymentMethods.map((method) => (
-                      <label
-                        key={method.id}
-                        className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition-colors ${
-                          selectedPaymentMethodId === method.id
-                            ? 'border-deliivo-orange bg-deliivo-orange-light'
-                            : 'border-gray-200 hover:border-deliivo-orange/50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="bookingPaymentMethod"
-                          checked={selectedPaymentMethodId === method.id}
-                          onChange={() => setSelectedPaymentMethodId(method.id)}
-                          className="h-4 w-4 border-gray-300 text-deliivo-orange focus:ring-deliivo-orange"
-                        />
-                        <CreditCard className="h-4 w-4 text-deliivo-gray" />
-                        <span className="flex-1 text-sm font-medium text-deliivo-dark">
-                          {method.brand} **** {method.last4}
-                        </span>
-                        <span className="text-xs text-deliivo-gray">
-                          {String(method.expMonth).padStart(2, '0')}/{method.expYear}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <RideAddPaymentMethodForm
-                    onSaved={(method) => {
-                      loadPaymentMethods(method.id);
-                    }}
-                  />
-                )}
-
-                <p className="text-xs text-deliivo-gray">
-                  {t('rideDetail.cardAuthorizedCopy')}
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="text-sm font-medium text-amber-900">{t('rideDetail.stripeNotConfigured')}</p>
-                <p className="mt-1 text-xs text-amber-800">
-                  {t('rideDetail.stripeNotConfiguredCopy')}
-                </p>
-              </div>
-            )}
-
-            {/* Price preview */}
-            {previewLoading ? (
-              <div className="flex items-center gap-2 text-sm text-deliivo-gray"><Loader2 className="h-4 w-4 animate-spin" /> {t('rideDetail.calculating')}</div>
-            ) : preview && previewBreakdown ? (
-              <div className="overflow-hidden rounded-xl border border-primary-100 bg-primary-50">
-                <div className="border-b border-primary-100 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.priceBreakdown')}</p>
-                    <span className="shrink-0 text-sm font-bold text-primary-500">
-                      {previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}
-                    </span>
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-deliivo-gray">
-                    {selectedPickupOption.address} {t('search.toLabel').toLowerCase()} {selectedDropoffOption.address}
-                  </p>
-                </div>
-                <div className="space-y-2 px-4 py-3">
-                  <div className="flex justify-between gap-4 text-sm">
-                    <span className="text-deliivo-gray">
-                      {t('rideDetail.seatCalculation', {
-                        currency: previewBreakdown.currency,
-                        price: previewBreakdown.basePricePerSeat.toFixed(2),
-                        seats: previewBreakdown.seatsBooked,
-                        plural: previewBreakdown.seatsBooked === 1 ? '' : 's',
-                      })}
-                    </span>
-                    <span className="font-medium text-deliivo-dark">{previewBreakdown.currency} {previewBreakdown.subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between gap-4 text-sm">
-                    <span className="text-deliivo-gray">{t('rideDetail.serviceFee')}</span>
-                    <span className="font-medium text-deliivo-dark">{previewBreakdown.currency} {previewBreakdown.serviceFee.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between gap-4 border-t border-primary-200 pt-3 text-base font-bold">
-                    <span>{t('rideDetail.totalToPay')}</span>
-                    <span className="text-primary-500">{previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}</span>
-                  </div>
-                  <p className="pt-1 text-[11px] leading-5 text-deliivo-gray">{t('rideDetail.priceBreakdownNotice')}</p>
-                </div>
-              </div>
-            ) : null}
-
-            {bookError && (
-              <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-4 py-3">
-                <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
-                <p className="text-sm text-red-600">{bookError}</p>
-              </div>
-            )}
-
-            {paymentMessage && (
-              <div className="flex items-center gap-2 rounded-xl bg-green-50 border border-green-100 px-4 py-3">
-                <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-                <p className="text-sm text-green-700">{paymentMessage}</p>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={handleBook}
-              disabled={booking || paymentMethodsLoading || (isStripeConfigured() && (!selectedPaymentMethodId || showAddPaymentMethod)) || (needsTosAcceptance && !tosAcceptedForBooking) || (childSeatControlsEnabled && travelingWithChildUnderTwo && !bringingOwnChildSeat)}
-              className="btn-primary w-full py-3.5 text-base gap-2 disabled:opacity-60"
-            >
-              {booking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-5 w-5" />}
-              {booking ? t('common.processing') : t('rideDetail.requestToBook', { amount: previewBreakdown ? `${previewBreakdown.currency} ${previewBreakdown.totalPrice.toFixed(2)}` : '' })}
-            </button>
-
-              </div>
-            </div>
-          </section>
         )}
 
         {/* Rider booking panel — show OTP, actions */}
