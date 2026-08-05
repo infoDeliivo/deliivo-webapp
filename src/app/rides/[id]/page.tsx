@@ -1063,6 +1063,7 @@ function RideDetailContent() {
   const canUseRideChat = Boolean(myBooking && ride.status === 'IN_PROGRESS' && ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'].includes(myBooking.status));
   const cancellationWindowClosed = isWithinConfirmedCancellationWindow(ride, myBooking);
   const bookingWindowClosed = isBookingWindowClosed(ride);
+  const canStartBooking = Boolean(user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed);
 
   function pointKindLabel(kind: RiderPointKind) {
     if (kind === 'origin') return t('rideDetail.mainDeparture');
@@ -1358,18 +1359,18 @@ function RideDetailContent() {
 
           </main>
 
-          <aside className="space-y-5 lg:sticky lg:top-20">
+          <aside className="space-y-5 lg:contents">
 
         {/* Booking section */}
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <h3 className="text-sm font-semibold text-amber-950">Booking closed for this departure</h3>
             <p className="mt-2 text-sm text-amber-800">Same-day rides must be booked at least 3 hours before departure.</p>
           </div>
         )}
 
         {!user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed && (
-          <div className="space-y-4">
+          <div className="space-y-4 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <FlowGuide
               storageKey="deliivo.booking.quick-guide.v1"
               eyebrow="Booking guide"
@@ -1391,8 +1392,8 @@ function RideDetailContent() {
           </div>
         )}
 
-        {user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed && (
-          <div className="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+        {canStartBooking && (
+          <div className="space-y-4 rounded-2xl bg-white p-5 shadow-sm lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <FlowGuide
               storageKey="deliivo.booking.quick-guide.v1"
               eyebrow="Booking guide"
@@ -1518,6 +1519,17 @@ function RideDetailContent() {
               </div>
             </div>
 
+          </div>
+        )}
+
+        {canStartBooking && (
+          <section className="space-y-4 rounded-2xl bg-white p-5 shadow-sm lg:col-span-2 lg:row-start-2 lg:mx-auto lg:w-full lg:max-w-4xl">
+            <div className="border-b border-gray-100 pb-3">
+              <h3 className="text-base font-bold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
+              <p className="mt-1 text-sm text-deliivo-gray">{t('rideDetail.driverNotifiedCopy')}</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+              <div className="space-y-4">
             {needsTosAcceptance && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
                 <p className="text-sm font-medium text-amber-900">{t('rideDetail.acceptLegalTitle')}</p>
@@ -1599,7 +1611,9 @@ function RideDetailContent() {
                 )}
               </>
             )}
+              </div>
 
+              <div className="space-y-4">
             {isStripeConfigured() ? (
               <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -1736,15 +1750,14 @@ function RideDetailContent() {
               {booking ? t('common.processing') : t('rideDetail.requestToBook', { amount: previewBreakdown ? `${previewBreakdown.currency} ${previewBreakdown.totalPrice.toFixed(2)}` : '' })}
             </button>
 
-            <p className="text-center text-xs text-deliivo-gray">
-              {t('rideDetail.driverNotifiedCopy')}
-            </p>
-          </div>
+              </div>
+            </div>
+          </section>
         )}
 
         {/* Rider booking panel — show OTP, actions */}
         {!isOwnRide && myBooking && (
-          <div className="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+          <div className="space-y-4 rounded-2xl bg-white p-5 shadow-sm lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <h3 className="text-base font-bold text-deliivo-dark">{t('rideDetail.yourBooking')}</h3>
               <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getBookingStatusBadgeClass(myBooking.status)}`}>
@@ -2130,7 +2143,7 @@ function RideDetailContent() {
         )}
 
         {isOwnRide && (
-          <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <div>
               <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.thisIsYourRide')}</p>
               <p className="mt-1 text-xs text-deliivo-gray">{t('rideDetail.manageOwnRideCopy')}</p>
