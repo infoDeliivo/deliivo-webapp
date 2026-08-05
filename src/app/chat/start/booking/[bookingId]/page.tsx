@@ -24,7 +24,8 @@ function StartBookingChatContent() {
     async function openConversation() {
       try {
         const res = await chatApi.openBookingConversation(bookingId);
-        if (!cancelled) router.replace(withReturnTo(`/chat/${res.data.conversationId || res.data.id}`, returnTo));
+        const chatHref = `/chat/${res.data.conversationId || res.data.id}?bookingId=${encodeURIComponent(bookingId)}`;
+        if (!cancelled) router.replace(withReturnTo(chatHref, returnTo));
       } catch (err: unknown) {
         if (!cancelled) setError(getApiErrorMessage(err, 'Chat is available only while the ride is active.'));
       }

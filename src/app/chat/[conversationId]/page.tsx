@@ -14,6 +14,7 @@ function ChatConversationContent() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const bookingId = searchParams.get('bookingId') || undefined;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
@@ -25,13 +26,13 @@ function ChatConversationContent() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const backHref = getSafeReturnTo(`?${searchParams.toString()}`) || '/chat';
 
-  useEffect(() => { if (conversationId) loadMessages(); }, [conversationId]);
+  useEffect(() => { if (conversationId) loadMessages(); }, [conversationId, bookingId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   async function loadMessages() {
     setLoading(true);
     try {
-      const res = await chatApi.getMessages(conversationId);
+      const res = await chatApi.getMessages(conversationId, undefined, 30, bookingId);
       setMessages((res.data.messages || []).reverse());
       setChatAvailable(Boolean(res.data.chatAvailable));
       setPeerId(res.data.peerId || '');
@@ -71,7 +72,7 @@ function ChatConversationContent() {
       const peer = messages.find(m => m.senderId !== user?.id);
       const receiverId = peerId || peer?.senderId || '';
       if (receiverId) {
-        const res = await chatApi.sendMessage(receiverId, msgText, clientMsgId);
+        const res = await chatApi.sendMessage(receiverId, msgText, clientMsgId, bookingId);
         // Replace optimistic with real
         setMessages(prev => prev.map(m => m.id === clientMsgId ? res.data : m));
       }
@@ -114,7 +115,7 @@ function ChatConversationContent() {
       const peer = messages.find(m => m.senderId !== user?.id);
       const receiverId = peerId || peer?.senderId || '';
       if (receiverId) {
-        const res = await chatApi.uploadAndSendImage(receiverId, file, clientMsgId);
+        const res = await chatApi.uploadAndSendImage(receiverId, file, clientMsgId, bookingId);
         setMessages(prev => prev.map(m => m.id === clientMsgId ? res.data : m));
       }
     } catch (err: unknown) {

@@ -1081,14 +1081,15 @@ export const chatApi = {
     if (cursor) params.set('cursor', cursor);
     return apiFetch<{ data: { conversations: ConversationItem[]; nextCursor: string | null } }>(`/api/v1/chat?${params}`);
   },
-  getMessages(conversationId: string, cursor?: string, limit = 30) {
+  getMessages(conversationId: string, cursor?: string, limit = 30, bookingId?: string) {
     const params = new URLSearchParams({ limit: String(limit) });
     if (cursor) params.set('cursor', cursor);
+    if (bookingId) params.set('bookingId', bookingId);
     return apiFetch<{ data: { messages: ChatMessage[]; nextCursor: string | null; chatAvailable: boolean; peerId?: string } }>(`/api/v1/chat/${conversationId}/messages?${params}`);
   },
-  sendMessage(receiverId: string, text: string, clientMsgId: string) {
+  sendMessage(receiverId: string, text: string, clientMsgId: string, bookingId?: string) {
     return apiFetch<{ data: ChatMessage }>('/api/v1/chat/send', {
-      method: 'POST', body: JSON.stringify({ receiverId, text, clientMsgId, type: 'TEXT' }),
+      method: 'POST', body: JSON.stringify({ receiverId, text, clientMsgId, bookingId, type: 'TEXT' }),
     });
   },
   openConversation(receiverId: string) {
@@ -1103,13 +1104,14 @@ export const chatApi = {
   },
   // Upload an image via the presigned flow (target=chat_image), then send it as
   // an IMAGE message with the confirmed public URL.
-  async uploadAndSendImage(receiverId: string, file: File, clientMsgId: string) {
+  async uploadAndSendImage(receiverId: string, file: File, clientMsgId: string, bookingId?: string) {
     const uploaded = await uploadViaPresign<{ url: string; key: string }>('chat_image', file);
     return apiFetch<{ data: ChatMessage }>('/api/v1/chat/send-image', {
       method: 'POST',
       body: JSON.stringify({
         receiverId,
         clientMsgId,
+        bookingId,
         imageUrl: uploaded.url,
         mimeType: file.type,
         fileSize: file.size,
