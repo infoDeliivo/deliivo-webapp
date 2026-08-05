@@ -306,12 +306,14 @@ export default function SignInPage() {
             <Link href="/privacy" className="underline hover:text-deliivo-orange">Privacy Policy</Link>.
           </p>
 
-          <p className="mt-6 text-center text-sm text-deliivo-gray">
-            Don&apos;t have an account?{" "}
-            <Link href={withReturnTo('/auth/signup', returnTo)} className="font-semibold text-deliivo-orange hover:text-deliivo-orange-dark transition-colors">
-              Sign up
-            </Link>
-          </p>
+          {emailPhoneAuthEnabled && (
+            <p className="mt-6 text-center text-sm text-deliivo-gray">
+              Don&apos;t have an account?{" "}
+              <Link href={withReturnTo('/auth/signup', returnTo)} className="font-semibold text-deliivo-orange hover:text-deliivo-orange-dark transition-colors">
+                Sign up
+              </Link>
+            </p>
+          )}
         </div>
       </div>
     </div>

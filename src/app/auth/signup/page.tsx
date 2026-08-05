@@ -295,12 +295,14 @@ export default function SignUpPage() {
             </>
           )}
 
-          <p className="mt-6 text-center text-sm text-deliivo-gray">
-            Already have an account?{" "}
-            <Link href={withReturnTo('/auth/signin', returnTo)} className="font-semibold text-deliivo-orange hover:text-deliivo-orange-dark transition-colors">
-              Sign in
-            </Link>
-          </p>
+          {emailPhoneAuthEnabled && (
+            <p className="mt-6 text-center text-sm text-deliivo-gray">
+              Already have an account?{" "}
+              <Link href={withReturnTo('/auth/signin', returnTo)} className="font-semibold text-deliivo-orange hover:text-deliivo-orange-dark transition-colors">
+                Sign in
+              </Link>
+            </p>
+          )}
         </div>
       </div>
       </div>
