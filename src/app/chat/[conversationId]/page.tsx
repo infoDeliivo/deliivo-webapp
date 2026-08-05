@@ -10,6 +10,23 @@ import { useAuth } from '@/lib/auth-context';
 import { featureFlags } from '@/lib/features';
 import { getSafeReturnTo } from '@/lib/auth-redirect';
 
+function sortMessagesByCreatedAt(items: ChatMessage[]) {
+  return [...items].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
+function mergeChatMessages(current: ChatMessage[], incoming: ChatMessage[]) {
+  const byId = new Map(current.map((message) => [message.id, message]));
+
+  incoming.forEach((message) => {
+    if (message.clientMsgId) {
+      byId.delete(message.clientMsgId);
+    }
+    byId.set(message.id, message);
+  });
+
+  return sortMessagesByCreatedAt(Array.from(byId.values()));
+}
+
 function ChatConversationContent() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const router = useRouter();
@@ -28,14 +45,29 @@ function ChatConversationContent() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const backHref = getSafeReturnTo(`?${searchParams.toString()}`) || '/chat';
 
-  useEffect(() => { if (conversationId) loadMessages(); }, [conversationId, bookingId]);
+  useEffect(() => {
+    if (!conversationId) return;
+    setMessages([]);
+    loadMessages();
+  }, [conversationId, bookingId]);
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadMessages(false);
+      }
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [conversationId, bookingId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  async function loadMessages() {
-    setLoading(true);
+  async function loadMessages(showLoader = true) {
+    if (showLoader) setLoading(true);
     try {
       const res = await chatApi.getMessages(conversationId, undefined, 30, bookingId);
-      setMessages((res.data.messages || []).reverse());
+      setMessages((current) => mergeChatMessages(current, (res.data.messages || []).reverse()));
       setPeerId(res.data.peerId || '');
       if (res.data.chatAvailable) {
         setChatAvailable(true);
@@ -61,7 +93,9 @@ function ChatConversationContent() {
         chatApi.markRead(conversationId, lastMsg.id).catch(() => {});
       }
     } catch { /* empty */ }
-    finally { setLoading(false); }
+    finally {
+      if (showLoader) setLoading(false);
+    }
   }
 
   async function handleSend(e: React.FormEvent) {
@@ -93,8 +127,8 @@ function ChatConversationContent() {
       const receiverId = peerId || peer?.senderId || '';
       if (receiverId) {
         const res = await chatApi.sendMessage(receiverId, msgText, clientMsgId, bookingId);
-        // Replace optimistic with real
-        setMessages(prev => prev.map(m => m.id === clientMsgId ? res.data : m));
+        setMessages(prev => mergeChatMessages(prev.filter(m => m.id !== clientMsgId), [res.data]));
+        loadMessages(false);
       }
     } catch (err: unknown) {
       setMessages(prev => prev.filter(m => m.id !== clientMsgId));
@@ -137,7 +171,8 @@ function ChatConversationContent() {
       const receiverId = peerId || peer?.senderId || '';
       if (receiverId) {
         const res = await chatApi.uploadAndSendImage(receiverId, file, clientMsgId, bookingId);
-        setMessages(prev => prev.map(m => m.id === clientMsgId ? res.data : m));
+        setMessages(prev => mergeChatMessages(prev.filter(m => m.id !== clientMsgId), [res.data]));
+        loadMessages(false);
       }
     } catch (err: unknown) {
       setMessages(prev => prev.filter(m => m.id !== clientMsgId));
