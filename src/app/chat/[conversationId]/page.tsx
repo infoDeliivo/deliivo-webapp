@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Send, Loader2, ImagePlus } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -12,6 +12,7 @@ import { getSafeReturnTo } from '@/lib/auth-redirect';
 
 function ChatConversationContent() {
   const { conversationId } = useParams<{ conversationId: string }>();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const bookingId = searchParams.get('bookingId') || undefined;
@@ -21,6 +22,7 @@ function ChatConversationContent() {
   const [sending, setSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState('');
+  const [sendError, setSendError] = useState('');
   const [chatAvailable, setChatAvailable] = useState(false);
   const [peerId, setPeerId] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -34,8 +36,25 @@ function ChatConversationContent() {
     try {
       const res = await chatApi.getMessages(conversationId, undefined, 30, bookingId);
       setMessages((res.data.messages || []).reverse());
-      setChatAvailable(Boolean(res.data.chatAvailable));
       setPeerId(res.data.peerId || '');
+      if (res.data.chatAvailable) {
+        setChatAvailable(true);
+      } else if (bookingId) {
+        try {
+          const openRes = await chatApi.openBookingConversation(bookingId);
+          setPeerId(openRes.data.peerId || res.data.peerId || '');
+          setChatAvailable(Boolean(openRes.data.chatAvailable));
+          if (openRes.data.conversationId && openRes.data.conversationId !== conversationId) {
+            const nextParams = new URLSearchParams(searchParams.toString());
+            nextParams.set('bookingId', bookingId);
+            router.replace(`/chat/${openRes.data.conversationId}?${nextParams.toString()}`);
+          }
+        } catch {
+          setChatAvailable(false);
+        }
+      } else {
+        setChatAvailable(false);
+      }
       // Mark as read
       const lastMsg = res.data.messages?.[0];
       if (lastMsg && lastMsg.senderId !== user?.id) {
@@ -52,6 +71,7 @@ function ChatConversationContent() {
     const clientMsgId = `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const msgText = text.trim();
     setText('');
+    setSendError('');
     setSending(true);
 
     // Optimistic update
@@ -76,8 +96,9 @@ function ChatConversationContent() {
         // Replace optimistic with real
         setMessages(prev => prev.map(m => m.id === clientMsgId ? res.data : m));
       }
-    } catch {
-      // Keep optimistic message but could mark as failed
+    } catch (err: unknown) {
+      setMessages(prev => prev.filter(m => m.id !== clientMsgId));
+      setSendError(err instanceof Error ? err.message : 'Could not send message. Please try again.');
     } finally {
       setSending(false);
     }
@@ -174,6 +195,7 @@ function ChatConversationContent() {
       {/* Input */}
       <div className="shrink-0 border-t border-gray-100 bg-white">
         {imageError && <p className="px-4 pt-2 text-xs text-red-600">{imageError}</p>}
+        {sendError && <p className="px-4 pt-2 text-xs text-red-600">{sendError}</p>}
         {!chatAvailable && (
           <p className="px-4 pt-3 text-xs font-medium text-deliivo-gray">
             This chat is read-only. Messages are available only while the ride is active.
