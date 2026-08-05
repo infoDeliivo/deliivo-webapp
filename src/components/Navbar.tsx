@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Menu, X, ChevronDown, User, LogOut, Car, Wallet } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useTranslation } from "@/lib/i18n-context";
 import { useNotificationStore } from "@/lib/notification-store";
 import BrandLogo from "@/components/BrandLogo";
+import { prefetchHref, useRoutePrefetch } from "@/lib/use-route-prefetch";
 
 export default function Navbar() {
+  const router = useRouter();
   const { user, loading, logout } = useAuth();
   const { t } = useTranslation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -37,6 +40,15 @@ export default function Navbar() {
     { label: t('nav.notifications'), href: "/profile/notifications", badge: unreadCount > 0 ? unreadCount : 0 },
   ];
   const navLinks = user ? [...rideLinks, ...authenticatedLinks] : publicLinks;
+  useRoutePrefetch([
+    ...navLinks.map((link) => link.href),
+    "/",
+    "/blog",
+    "/contact",
+    "/faq",
+    "/terms",
+    "/privacy",
+  ]);
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white shadow-sm">
@@ -52,6 +64,8 @@ export default function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
+                  onMouseEnter={() => prefetchHref(router, link.href)}
+                  onFocus={() => prefetchHref(router, link.href)}
                   className="flex items-center gap-2 text-sm font-medium text-deliivo-gray transition-colors hover:text-deliivo-orange"
                 >
               {link.label}
@@ -158,6 +172,8 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
+                onMouseEnter={() => prefetchHref(router, link.href)}
+                onFocus={() => prefetchHref(router, link.href)}
                 className="rounded-2xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm font-medium text-deliivo-dark hover:border-primary-200 hover:bg-primary-50 hover:text-deliivo-orange transition-colors"
                 onClick={() => setMobileOpen(false)}
               >

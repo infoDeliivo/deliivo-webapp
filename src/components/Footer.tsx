@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n-context";
 import { publicConfig } from "@/lib/public-config";
 import { FaFacebookF, FaInstagram, FaLinkedinIn, FaTiktok, FaXTwitter } from "react-icons/fa6";
+import { prefetchHref, useRoutePrefetch } from "@/lib/use-route-prefetch";
 
 const socialLinks = [
   { label: "X", href: publicConfig.xUrl, icon: FaXTwitter },
@@ -15,6 +17,7 @@ const socialLinks = [
 ];
 
 export default function Footer() {
+  const router = useRouter();
   const { t } = useTranslation();
   const footerColumns = [
     {
@@ -51,6 +54,7 @@ export default function Footer() {
       ],
     },
   ];
+  useRoutePrefetch(footerColumns.flatMap((column) => column.links.map((link) => link.href)));
 
   return (
     <footer style={{ backgroundColor: "#1a1a2e" }} className="text-gray-400">
@@ -81,6 +85,8 @@ export default function Footer() {
                   <li key={link.href}>
                     <Link
                       href={link.href}
+                      onMouseEnter={() => prefetchHref(router, link.href)}
+                      onFocus={() => prefetchHref(router, link.href)}
                       className="text-sm text-gray-500 transition-colors hover:text-deliivo-orange"
                     >
                       {link.label}
