@@ -1363,7 +1363,7 @@ function RideDetailContent() {
               </div>
             )}
 
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px]">
+            <div className="grid gap-3">
               {isStripeConfigured() ? (
                 <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
                   <div className="flex items-center justify-between gap-3">
@@ -1475,7 +1475,7 @@ function RideDetailContent() {
                 </div>
               ) : null}
 
-              <div className="flex flex-col justify-end gap-3 rounded-xl border border-orange-100 bg-orange-50/60 p-4">
+              <div className="grid gap-3 rounded-xl border border-orange-100 bg-orange-50/60 p-4">
                 {bookError && (
                   <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-3 py-2">
                     <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
@@ -1494,7 +1494,7 @@ function RideDetailContent() {
                   type="button"
                   onClick={handleBook}
                   disabled={booking || paymentMethodsLoading || (isStripeConfigured() && (!selectedPaymentMethodId || showAddPaymentMethod)) || (needsTosAcceptance && !tosAcceptedForBooking) || (childSeatControlsEnabled && travelingWithChildUnderTwo && !bringingOwnChildSeat)}
-                  className="btn-primary w-full py-3.5 text-sm gap-2 disabled:opacity-60"
+                  className="btn-primary w-full py-3.5 text-base gap-2 disabled:opacity-60"
                 >
                   {booking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-5 w-5" />}
                   {booking ? t('common.processing') : t('rideDetail.requestToBook', { amount: previewBreakdown ? `${previewBreakdown.currency} ${previewBreakdown.totalPrice.toFixed(2)}` : '' })}
