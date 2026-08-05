@@ -1523,7 +1523,7 @@ function RideDetailContent() {
         )}
 
         {canStartBooking && (
-          <section className="space-y-4 rounded-2xl bg-white p-5 shadow-sm lg:col-span-2 lg:row-start-2 lg:mx-auto lg:w-full lg:max-w-4xl">
+          <section className="space-y-4 rounded-2xl bg-white p-5 shadow-sm lg:col-start-1 lg:row-start-2 lg:mx-auto lg:w-full lg:max-w-2xl">
             <div className="border-b border-gray-100 pb-3">
               <h3 className="text-base font-bold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
               <p className="mt-1 text-sm text-deliivo-gray">{t('rideDetail.driverNotifiedCopy')}</p>
