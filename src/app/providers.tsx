@@ -7,12 +7,14 @@ import AppFeedbackToast from '@/components/AppFeedbackToast';
 import { I18nProvider } from '@/lib/i18n-context';
 import ConnectivityBanner from '@/components/ConnectivityBanner';
 import RecoveryOutboxSync from '@/components/RecoveryOutboxSync';
+import HashScrollHandler from '@/components/HashScrollHandler';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <I18nProvider>
       <AuthProvider>
         {children}
+        <HashScrollHandler />
         <ConnectivityBanner />
         <RecoveryOutboxSync />
         <OngoingRidePanel />

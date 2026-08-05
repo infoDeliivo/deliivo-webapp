@@ -10,9 +10,9 @@ import { useTranslation } from '@/lib/i18n-context';
 import { useAuth } from '@/lib/auth-context';
 
 const featuredRoutes = [
-  { from: 'Tallinn', to: 'Tartu', price: 12, duration: '2h 20m', drivers: 12, rating: 4.9 },
-  { from: 'Riga', to: 'Vilnius', price: 16, duration: '4h 10m', drivers: 8, rating: 4.8 },
-  { from: 'Vilnius', to: 'Kaunas', price: 7, duration: '1h 20m', drivers: 15, rating: 4.9 },
+  { from: 'Tallinn', to: 'Tartu', price: 12, duration: '2h 20m', drivers: 12 },
+  { from: 'Riga', to: 'Vilnius', price: 16, duration: '4h 10m', drivers: 8 },
+  { from: 'Vilnius', to: 'Kaunas', price: 7, duration: '1h 20m', drivers: 15 },
 ];
 
 const riderSteps = [
@@ -80,7 +80,7 @@ export default function HomepageV2() {
                     <div className="absolute inset-0 bg-gradient-to-t from-[#fbfaf8] to-transparent" />
                   </div>
                   <div className="min-w-0 p-5 pt-2">
-                    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3"><div className="min-w-0"><p className="break-words text-xl font-black text-deliivo-dark">{route.from} <span className="text-deliivo-orange">→</span> {route.to}</p><p className="mt-2 text-sm text-deliivo-gray">{t('home.routeMeta', { drivers: route.drivers, duration: route.duration })}</p><div className="mt-2 flex items-center gap-1 text-xs font-bold text-deliivo-dark"><Star className="h-3.5 w-3.5 fill-deliivo-orange text-deliivo-orange" /> {route.rating}</div></div><span className="shrink-0 rounded-2xl bg-white px-3 py-2 text-right shadow-sm"><span className="block text-[10px] font-bold uppercase tracking-wide text-deliivo-gray">{t('home.from')}</span><span className="text-lg font-black text-deliivo-orange">EUR {route.price}</span></span></div>
+                    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3"><div className="min-w-0"><p className="break-words text-xl font-black text-deliivo-dark">{route.from} <span className="text-deliivo-orange">→</span> {route.to}</p><p className="mt-2 text-sm text-deliivo-gray">{t('home.routeMeta', { drivers: route.drivers, duration: route.duration })}</p></div><span className="shrink-0 rounded-2xl bg-white px-3 py-2 text-right shadow-sm"><span className="block text-[10px] font-bold uppercase tracking-wide text-deliivo-gray">{t('home.from')}</span><span className="text-lg font-black text-deliivo-orange">EUR {route.price}</span></span></div>
                     <span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-deliivo-orange">{t('home.exploreRoute')} <ArrowRight className="h-4 w-4" /></span>
                   </div>
                 </Link>
