@@ -128,7 +128,8 @@ function ChatConversationContent() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-deliivo-cream">
+    <div className="flex h-screen bg-deliivo-cream lg:px-6 lg:py-5">
+      <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden bg-white shadow-sm lg:rounded-2xl lg:border lg:border-orange-100">
       {/* Header */}
       <header className="bg-white border-b border-orange-100 px-4 py-3 flex items-center gap-3 shrink-0">
         <Link href={backHref} className="flex items-center gap-1 text-sm text-gray-600 hover:text-deliivo-orange">
@@ -138,7 +139,7 @@ function ChatConversationContent() {
       </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div className="flex-1 overflow-y-auto bg-deliivo-cream/40 px-4 py-4 space-y-3">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-deliivo-orange" />
@@ -209,6 +210,7 @@ function ChatConversationContent() {
             <Send className="h-4 w-4" />
           </button>
         </form>
+      </div>
       </div>
     </div>
   );
