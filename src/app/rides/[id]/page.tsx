@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ShieldCheck,
   ExternalLink,
+  Info,
 } from 'lucide-react';
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import EmergencySosButton from '@/components/EmergencySosButton';
@@ -1296,7 +1297,15 @@ function RideDetailContent() {
               </div>
 
               <div className="space-y-2">
-                <span className="block text-xs font-semibold uppercase text-deliivo-gray">{t('rideDetail.requestExpires')}</span>
+                <span className="flex items-center gap-1.5 text-xs font-semibold uppercase text-deliivo-gray">
+                  {t('rideDetail.requestExpires')}
+                  <span className="group relative inline-flex">
+                    <Info className="h-3.5 w-3.5 text-deliivo-orange" aria-hidden="true" />
+                    <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-64 -translate-x-1/2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-xs font-normal normal-case leading-5 text-deliivo-dark shadow-lg group-hover:block">
+                      This is how long the driver has to accept your booking request. If they do not accept in time, the request expires automatically.
+                    </span>
+                  </span>
+                </span>
                 <select
                   value={responseExpiryOption}
                   onChange={(e) => setResponseExpiryOption(e.target.value as typeof responseExpiryOption)}
