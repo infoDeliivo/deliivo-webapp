@@ -146,10 +146,12 @@ function isBookingWindowClosed(ride: RideDetails) {
 
 function formatDurationHhMm(totalSeconds?: number | null) {
   if (!totalSeconds || totalSeconds <= 0) return null;
-  const totalMinutes = Math.round(totalSeconds / 60);
+  const totalMinutes = Math.max(1, Math.round(totalSeconds / 60));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  if (!hours) return `${minutes}m`;
+  if (!minutes) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
 }
 
 type LiveSharingLinksCardProps = {
@@ -1148,7 +1150,7 @@ function RideDetailContent() {
             <div className="flex flex-wrap gap-4 pt-3 border-t border-gray-50 text-xs text-deliivo-gray">
               <span className="flex items-center gap-1"><Calendar size={13} /> {dateLabel}</span>
               <span className="flex items-center gap-1"><Clock size={13} /> {ride.departureTime}</span>
-              {durationLabel && <span className="flex items-center gap-1"><Clock size={13} /> ~{durationLabel}</span>}
+              {durationLabel && <span className="flex items-center gap-1"><Clock size={13} /> {durationLabel}</span>}
               {distanceKm && <span className="flex items-center gap-1"><MapPin size={13} /> {distanceKm} km</span>}
             </div>
           </div>

@@ -138,6 +138,8 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
   const vehicleLabel = ride.vehicle ? [ride.vehicle.brand, ride.vehicle.model_name].filter(Boolean).join(' ') : null;
   const price = ride.segment?.segmentFare ?? ride.basePricePerSeat;
   const dateLabel = new Date(ride.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const durationLabel = formatDurationLabel(ride.routeDurationSeconds);
+  const distanceLabel = ride.routeDistanceMeters ? `${(ride.routeDistanceMeters / 1000).toFixed(1)} km` : null;
 
   return (
       <article className="card flex flex-col gap-4 transition-shadow hover:shadow-md sm:flex-row sm:items-start">
@@ -221,9 +223,14 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
             <span className="flex items-center gap-1">
               <Users size={13} /> {t('ride.seatsLeft', { count: seatsLeft, plural: seatsLeft !== 1 ? 's' : '' })}
             </span>
-            {ride.routeDurationSeconds && (
+            {durationLabel && (
               <span className="flex items-center gap-1">
-                <Clock size={13} /> {Math.round(ride.routeDurationSeconds / 60)} min
+                <Clock size={13} /> {durationLabel}
+              </span>
+            )}
+            {distanceLabel && (
+              <span className="flex items-center gap-1">
+                <MapPin size={13} /> {distanceLabel}
               </span>
             )}
           </div>
@@ -242,6 +249,16 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
 }
 
 // ─── Main Search Page ─────────────────────────────────────────────────────────
+
+function formatDurationLabel(totalSeconds?: number | null) {
+  if (!totalSeconds || totalSeconds <= 0) return null;
+  const totalMinutes = Math.max(1, Math.round(totalSeconds / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (!hours) return `${minutes}m`;
+  if (!minutes) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+}
 
 function SearchPageContent() {
   const { user, loading: authLoading } = useAuth();
