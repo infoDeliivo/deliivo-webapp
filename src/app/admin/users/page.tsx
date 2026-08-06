@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Search, ChevronDown, ChevronLeft, ChevronRight, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
+import { Search, ChevronDown, ChevronLeft, ChevronRight, CheckCircle, XCircle, Loader2, AlertCircle, Eye } from 'lucide-react'
 import { adminApi, AdminUser, Pagination } from '@/lib/api'
 
 const PAGE_SIZE = 20
@@ -157,7 +158,7 @@ export default function AdminUsersPage() {
                     return (
                       <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                         <td className="px-6 py-3">
-                          <div className="flex items-center gap-3">
+                          <Link href={`/admin/users/${u.id}`} className="flex items-center gap-3 rounded-lg outline-none transition-colors hover:text-[#F97316] focus-visible:ring-2 focus-visible:ring-[#F97316]/30">
                             <div className="w-8 h-8 rounded-full bg-[#F97316] flex items-center justify-center text-white text-xs font-bold shrink-0">
                               {initials}
                             </div>
@@ -165,7 +166,7 @@ export default function AdminUsersPage() {
                               <p className="font-medium text-gray-900">{u.firstName || 'Unnamed'}</p>
                               <p className="text-xs text-gray-400">{u.email || '-'}</p>
                             </div>
-                          </div>
+                          </Link>
                         </td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{u.phone || '-'}</td>
                         <td className="px-4 py-3">
@@ -208,6 +209,15 @@ export default function AdminUsersPage() {
                             </button>
                             {openMenu === u.id && (
                               <div className="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
+                                <button
+                                  type="button"
+                                  className="w-full text-left px-4 py-2.5 text-xs text-gray-600 hover:bg-gray-50"
+                                  onClick={() => {
+                                    window.location.href = `/admin/users/${u.id}`
+                                  }}
+                                >
+                                  <span className="inline-flex items-center gap-1.5"><Eye className="h-3 w-3" /> View details</span>
+                                </button>
                                 <button
                                   type="button"
                                   className="w-full text-left px-4 py-2.5 text-xs text-yellow-600 hover:bg-yellow-50 disabled:opacity-50"

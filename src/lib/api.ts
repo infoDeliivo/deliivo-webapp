@@ -1462,6 +1462,9 @@ export const adminApi = {
     if (params?.role) query.set('role', params.role);
     return apiFetch<{ data: { users: AdminUser[]; pagination: Pagination } }>(`/api/v1/admin/users?${query}`);
   },
+  getUserDetails(id: string) {
+    return apiFetch<{ data: AdminUserDetails }>(`/api/v1/admin/users/${encodeURIComponent(id)}`);
+  },
   getRides(params?: { page?: number; limit?: number; status?: string; search?: string; searchBy?: string }) {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
@@ -1805,6 +1808,88 @@ export interface AdminUser {
   createdAt: string;
 }
 
+export interface AdminUserDetails {
+  user: AdminUser & {
+    lastName: string | null;
+    salutation: string | null;
+    gender: string | null;
+    dob: string | null;
+    emailVerified: boolean;
+    phoneVerified: boolean;
+    avatarUrl: string | null;
+    stripeAccountId: string | null;
+    stripeOnboardingComplete: boolean;
+    stripeAccountName: string | null;
+    stripeNameMatch: boolean | null;
+    stripeDobMatch: boolean | null;
+    tosAcceptedAt: string | null;
+    tosVersion: string | null;
+    privacyAcceptedAt: string | null;
+    privacyVersion: string | null;
+    updatedAt: string;
+    travelPreference?: { chattiness: string | null; pets: string | null } | null;
+    ratingStats?: { totalRatings: number; totalStars: number; averageRating: number } | null;
+  };
+  vehicles: AdminVehicle[];
+  dlVerifications: Array<{
+    id: string;
+    status: string;
+    veriffSessionId: string;
+    verifiedName: string | null;
+    verifiedDob: string | null;
+    verifiedGender: string | null;
+    nameMatch: boolean | null;
+    dobMatch: boolean | null;
+    genderMatch: boolean | null;
+    previewKey: string | null;
+    declineReason: string | null;
+    reviewedById: string | null;
+    reviewedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  paymentMethods: Array<{
+    id: string;
+    brand: string | null;
+    last4: string | null;
+    expMonth: number | null;
+    expYear: number | null;
+    isDefault: boolean;
+    status: string;
+    createdAt: string;
+  }>;
+  summary: {
+    publishedRideCount: number;
+    completedPublishedRideCount: number;
+    bookingCount: number;
+    completedBookingCount: number;
+    openDisputes: number;
+    reportsMade: number;
+    reportsReceived: number;
+    blocksMade: number;
+    blocksReceived: number;
+    payments: {
+      totalPaid: number;
+      platformFeesPaid: number;
+      paymentCount: number;
+      totalRefunded: number;
+      refundCount: number;
+    };
+    earnings: {
+      totalEarned: number;
+      grossRideRevenue: number;
+      platformFeesFromRides: number;
+      earningPaymentCount: number;
+      payoutEligible: number;
+      payoutEligibleCount: number;
+      paidOut: number;
+      payoutCount: number;
+    };
+  };
+  publishedRides: AdminUserPublishedRide[];
+  bookedRides: AdminUserBooking[];
+}
+
 // A vehicle as it appears in the admin review queue. Private KYC documents arrive as
 // `previewKey` with `image: null` and must be exchanged for a signed URL via
 // vehicleApi.getDocumentReadUrl — admins are permitted cross-owner reads, and each one
@@ -1910,6 +1995,53 @@ export interface AdminRide {
     passenger?: { id: string; firstName: string | null; email?: string | null; phone?: string | null };
   }>;
   disputes: Array<{ id: string; status: string; reason: string }>;
+}
+
+export interface AdminUserPublishedRide extends Omit<AdminRide, 'driver'> {
+  routeDistanceMeters?: number | null;
+  vehicle?: {
+    id: string;
+    brand: string | null;
+    model_num: string | null;
+    model_name: string | null;
+    type: VehicleType | null;
+    color: string | null;
+    year: number | null;
+    imageUrl: string | null;
+    isVerified: boolean;
+    verificationStatus: VehicleVerificationStatus;
+  } | null;
+}
+
+export interface AdminUserBooking {
+  id: string;
+  rideId: string;
+  passengerId: string;
+  status: string;
+  seatsBooked: number;
+  totalPrice: number;
+  paymentAmount?: number | null;
+  paymentCurrency?: string | null;
+  paymentCapturedAt?: string | null;
+  refundedAt?: string | null;
+  refundAmount?: number | null;
+  completedAt?: string | null;
+  cancelledAt?: string | null;
+  createdAt: string;
+  pickupAddress?: string | null;
+  dropoffAddress?: string | null;
+  payment?: { id: string; status: string; amountTotal: number; fareAmount: number; platformFeeAmount: number; currency: string; payoutEligibleAt?: string | null } | null;
+  disputes: Array<{ id: string; status: string; reason: string; createdAt: string }>;
+  ride?: {
+    id: string;
+    status: string;
+    originAddress: string;
+    destinationAddress: string;
+    departureDate: string;
+    departureTime: string;
+    currency: string;
+    driver?: { id: string; firstName: string | null; lastName: string | null; email: string | null; phone: string | null; avatarUrl: string | null };
+  } | null;
 }
 
 export interface AdminLedgerEntry {
