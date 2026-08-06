@@ -1022,6 +1022,9 @@ function RideDetailContent() {
   const price = ride.segment?.segmentFare ?? ride.basePricePerSeat;
   const previewBreakdown = preview?.priceBreakdown;
   const bookedBreakdown = myBooking?.priceBreakdown;
+  const previewSeatFareLabel = previewBreakdown
+    ? `${previewBreakdown.currency} ${previewBreakdown.basePricePerSeat.toFixed(2)}${t('rideDetail.perSeatShort')}`
+    : '';
   const riderPointOptions = buildRiderPointOptions(ride);
   const riderPointByValue = new Map(riderPointOptions.map((option) => [option.value, option] as const));
   const selectedPickupOption = riderPointByValue.get(selectedPickupValue) ?? riderPointOptions[0];
@@ -1279,7 +1282,7 @@ function RideDetailContent() {
               </div>
               {previewBreakdown && (
                 <span className="text-lg font-bold text-deliivo-orange">
-                  {previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}
+                  {previewSeatFareLabel}
                 </span>
               )}
             </div>
@@ -1508,7 +1511,7 @@ function RideDetailContent() {
                   className="btn-primary w-full py-3.5 text-base gap-2 disabled:opacity-60"
                 >
                   {booking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-5 w-5" />}
-                  {booking ? t('common.processing') : t('rideDetail.requestToBook', { amount: previewBreakdown ? `${previewBreakdown.currency} ${previewBreakdown.totalPrice.toFixed(2)}` : '' })}
+                  {booking ? t('common.processing') : t('rideDetail.requestToBook', { amount: previewSeatFareLabel })}
                 </button>
               </div>
             </div>
@@ -1761,7 +1764,7 @@ function RideDetailContent() {
                 </p>
                 {previewBreakdown && (
                   <span className="ml-auto shrink-0 text-sm font-bold text-deliivo-orange">
-                    {previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}
+                    {previewSeatFareLabel}
                   </span>
                 )}
               </div>
