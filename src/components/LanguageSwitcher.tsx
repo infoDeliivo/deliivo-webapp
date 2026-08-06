@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Check, ChevronDown, Languages } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { localeToUrlCode, stripLocalePrefix, SUPPORTED_LOCALES, type SupportedLocale } from '@/lib/i18n';
 import { useTranslation } from '@/lib/i18n-context';
 
@@ -17,11 +17,6 @@ export default function LanguageSwitcher({ compact = false }: LanguageSwitcherPr
   const containerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const selectedLanguage = SUPPORTED_LOCALES.find((option) => option.code === locale) || SUPPORTED_LOCALES[0];
-  const languageNames: Record<SupportedLocale, string> = {
-    en: 'English',
-    et: 'Eesti',
-    ru: 'Русский',
-  };
 
   useEffect(() => {
     function closeOnOutsideClick(event: MouseEvent) {
@@ -57,8 +52,8 @@ export default function LanguageSwitcher({ compact = false }: LanguageSwitcherPr
         className={`inline-flex items-center justify-between gap-2 rounded-full border border-gray-200 bg-white text-sm font-semibold text-deliivo-dark shadow-sm transition hover:border-orange-200 hover:bg-orange-50/50 focus:outline-none focus:ring-2 focus:ring-deliivo-orange/25 ${compact ? 'min-w-[116px] px-3 py-2' : 'w-full px-4 py-3'}`}
       >
         <span className="flex min-w-0 items-center gap-2">
-          <Languages size={16} className="shrink-0 text-deliivo-orange" aria-hidden="true" />
-          <span className="truncate">{languageNames[selectedLanguage.code]}</span>
+          <span className="text-lg leading-none" aria-hidden="true">{selectedLanguage.flag}</span>
+          <span className="truncate">{selectedLanguage.label}</span>
         </span>
         <ChevronDown size={15} className={`shrink-0 text-deliivo-gray transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
       </button>
@@ -76,8 +71,8 @@ export default function LanguageSwitcher({ compact = false }: LanguageSwitcherPr
                 onClick={() => handleChange(option.code)}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${selected ? 'bg-orange-50 text-deliivo-orange' : 'text-deliivo-dark hover:bg-gray-50'}`}
               >
-                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-black ${selected ? 'bg-deliivo-orange text-white' : 'bg-gray-100 text-deliivo-gray'}`}>{option.shortLabel}</span>
-                <span className="flex-1 text-sm font-semibold">{languageNames[option.code]}</span>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-xl leading-none shadow-inner" aria-hidden="true">{option.flag}</span>
+                <span className="flex-1 text-sm font-semibold">{option.label}</span>
                 {selected && <Check size={16} aria-hidden="true" />}
               </button>
             );
