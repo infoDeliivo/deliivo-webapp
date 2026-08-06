@@ -388,7 +388,7 @@ function RideDetailContent() {
       void refreshRideData();
     };
 
-    const intervalId = window.setInterval(refresh, 20000);
+    const intervalId = window.setInterval(refresh, 300000);
     const refreshOnFocus = () => {
       if (document.visibilityState === 'visible') refresh();
     };
