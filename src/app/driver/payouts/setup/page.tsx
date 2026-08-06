@@ -194,6 +194,7 @@ function PayoutSetupContent() {
   const [needsCountrySelection, setNeedsCountrySelection] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState(FALLBACK_COUNTRY);
   const [creatingAccount, setCreatingAccount] = useState(false);
+  const [resettingAccount, setResettingAccount] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [deletingBank, setDeletingBank] = useState(false);
@@ -322,6 +323,14 @@ function PayoutSetupContent() {
   // An account Stripe collects requirements for cannot be filled in through this form; those
   // drivers finish in Stripe's own onboarding instead.
   const stripeManaged = requirements?.requirementCollection === 'stripe';
+  const canResetCountry = Boolean(
+    requirements
+    && !stripeManaged
+    && !requirements.chargesEnabled
+    && !requirements.payoutsEnabled
+    && !requirements.externalAccount
+    && !requirements.termsAccepted
+  );
 
   const handleStartSetup = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
@@ -485,6 +494,34 @@ function PayoutSetupContent() {
       setDeletingBank(false);
     }
   }, [deletingBank, requirements?.externalAccount?.id, t]);
+
+  const handleResetAccount = useCallback(async () => {
+    if (resettingAccount || !canResetCountry) return;
+    if (!window.confirm(t('payout.changeCountryConfirm'))) return;
+
+    setResettingAccount(true);
+    try {
+      await paymentsApi.connectResetAccount();
+      setRequirements(null);
+      setNeedsCountrySelection(true);
+      setSelectedCountry(payoutCountry);
+      setEditingDetails(false);
+      setEditingBank(false);
+      setFieldErrors({});
+      setLine1('');
+      setLine2('');
+      setCity('');
+      setPostalCode('');
+      setAccountNumber('');
+      setIdentityDocument(null);
+      setAcceptedTerms(false);
+      showSuccess(t('payout.countryResetTitle'), t('payout.countryResetCopy'));
+    } catch (err: unknown) {
+      showError(t('payout.countryResetFailed'), getApiErrorMessage(err, t('payout.countryResetFailed')));
+    } finally {
+      setResettingAccount(false);
+    }
+  }, [canResetCountry, payoutCountry, resettingAccount, t]);
 
   const chrome = (body: React.ReactNode) => (
     <div className="min-h-screen bg-deliivo-cream">
@@ -683,10 +720,23 @@ function PayoutSetupContent() {
   return chrome(
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-        <p className="text-sm text-amber-900">
-          <span className="font-semibold">{t('payout.countryNoticeTitle')}</span>{' '}
-          {t('payout.countryNoticeCopy', { country: payoutCountry })}
-        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <p className="text-sm text-amber-900">
+            <span className="font-semibold">{t('payout.countryNoticeTitle')}</span>{' '}
+            {t('payout.countryNoticeCopy', { country: payoutCountry })}
+          </p>
+          {canResetCountry && (
+            <button
+              type="button"
+              onClick={handleResetAccount}
+              disabled={resettingAccount}
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {resettingAccount && <Loader2 className="h-4 w-4 animate-spin" />}
+              {resettingAccount ? t('payout.changeCountryResetting') : t('payout.changeCountry')}
+            </button>
+          )}
+        </div>
       </section>
 
       {isStripeTestMode() && (

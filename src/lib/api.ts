@@ -1275,6 +1275,11 @@ export const paymentsApi = {
       method: 'DELETE',
     });
   },
+  connectResetAccount() {
+    return apiFetch<{ data: { connected: false } }>('/api/v1/payments/connect/account', {
+      method: 'DELETE',
+    });
+  },
   connectUploadIdentityDocument(file: File, side: 'front' | 'back' = 'front') {
     return apiFetch<{ data: ConnectRequirements }>(`/api/v1/payments/connect/identity-document?side=${side}`, {
       method: 'POST',
