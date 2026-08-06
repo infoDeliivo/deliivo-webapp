@@ -1,7 +1,7 @@
 export const SUPPORTED_LOCALES = [
-  { code: 'en', urlCode: 'en', label: 'English', shortLabel: 'EN', flag: '🇬🇧' },
-  { code: 'et', urlCode: 'ee', label: 'Eesti', shortLabel: 'EE', flag: '🇪🇪' },
-  { code: 'ru', urlCode: 'ru', label: 'Русский', shortLabel: 'RU', flag: '🇷🇺' },
+  { code: 'en', urlCode: 'en', label: 'English', shortLabel: 'EN' },
+  { code: 'et', urlCode: 'ee', label: 'Eesti', shortLabel: 'EE' },
+  { code: 'ru', urlCode: 'ru', label: 'Русский', shortLabel: 'RU' },
 ] as const;
 
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number]['code'];
