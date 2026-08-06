@@ -263,6 +263,7 @@ function SearchPageContent() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [showingAvailable, setShowingAvailable] = useState(true);
   const [error, setError] = useState('');
 
   // Filters
@@ -274,6 +275,7 @@ function SearchPageContent() {
   // Recent searches
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const hydratedQueryRef = useRef(false);
+  const resultModeRef = useRef<'available' | 'search'>('available');
 
   // Ride alert
   const [alertCreating, setAlertCreating] = useState(false);
@@ -286,6 +288,36 @@ function SearchPageContent() {
     setFemaleOnly(false);
     setResults((current) => current.filter((ride) => !ride.femaleOnly));
   }, [authLoading, canUseWomenOnly]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (searchParams.get('from') || searchParams.get('to')) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    setShowingAvailable(true);
+    resultModeRef.current = 'available';
+    searchRidesApi.available(1, 10)
+      .then((res) => {
+        if (cancelled || resultModeRef.current !== 'available') return;
+        const rides = res.data.rides || [];
+        const visibleRides = canUseWomenOnly ? rides : rides.filter((ride) => !ride.femaleOnly);
+        setResults(visibleRides);
+        setTotal(res.data.pagination?.total || visibleRides.length);
+      })
+      .catch((err: unknown) => {
+        if (cancelled || resultModeRef.current !== 'available') return;
+        setError(err instanceof Error ? err.message : t('search.availableFailed'));
+        setResults([]);
+        setTotal(0);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [authLoading, canUseWomenOnly, searchParams, t]);
 
   useEffect(() => {
     if (authLoading || !user) {
@@ -339,6 +371,8 @@ function SearchPageContent() {
         setLoading(true);
         setError('');
         setSearched(true);
+        setShowingAvailable(false);
+        resultModeRef.current = 'search';
         try {
           const params: SearchRidesParams = {
             originLat: resolvedFrom.lat,
@@ -400,6 +434,8 @@ function SearchPageContent() {
     setLoading(true);
     setError('');
     setSearched(true);
+    setShowingAvailable(false);
+    resultModeRef.current = 'search';
 
     try {
       const params: SearchRidesParams = {
@@ -540,21 +576,29 @@ function SearchPageContent() {
           )}
 
           {/* Results */}
-          {searched && (
+          {(searched || showingAvailable) && (
             <div>
               <div className="mb-5 flex items-center justify-between">
                 <div>
                   <h1 className="text-xl font-bold text-deliivo-dark">
-                    {origin?.address?.split(',')[0]} to {destination?.address?.split(',')[0]}
+                    {searched
+                      ? `${origin?.address?.split(',')[0]} to ${destination?.address?.split(',')[0]}`
+                      : t('search.availableTitle')}
                   </h1>
                   <p className="mt-0.5 text-sm text-deliivo-gray">
-                    {loading ? t('common.searching') : t('search.resultsFound', { total: visibleTotal, plural: visibleTotal !== 1 ? 's' : '' })}
+                    {loading
+                      ? t('common.searching')
+                      : searched
+                        ? t('search.resultsFound', { total: visibleTotal, plural: visibleTotal !== 1 ? 's' : '' })
+                        : t('search.availableCopy', { total: visibleTotal, plural: visibleTotal !== 1 ? 's' : '' })}
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-deliivo-gray">
-                    {date && <span className="rounded-full bg-white px-3 py-1 shadow-sm">{new Date(`${date}T00:00:00`).toLocaleDateString()}</span>}
-                    <span className="rounded-full bg-white px-3 py-1 shadow-sm">{seats} {seats === 1 ? t('search.seat') : t('search.seatsPlural')}</span>
-                    {departurePeriod && <span className="rounded-full bg-white px-3 py-1 shadow-sm">{t(`search.${departurePeriod}`)}</span>}
-                  </div>
+                  {searched && (
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-deliivo-gray">
+                      {date && <span className="rounded-full bg-white px-3 py-1 shadow-sm">{new Date(`${date}T00:00:00`).toLocaleDateString()}</span>}
+                      <span className="rounded-full bg-white px-3 py-1 shadow-sm">{seats} {seats === 1 ? t('search.seat') : t('search.seatsPlural')}</span>
+                      {departurePeriod && <span className="rounded-full bg-white px-3 py-1 shadow-sm">{t(`search.${departurePeriod}`)}</span>}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -608,7 +652,7 @@ function SearchPageContent() {
           )}
 
           {/* Pre-search state */}
-          {!searched && (
+          {!searched && !showingAvailable && (
             <div className="space-y-6">
               <div className="flex flex-col items-center justify-center rounded-2xl bg-white py-20 px-6 text-center shadow-sm">
                 <Search size={48} className="text-gray-200 mb-4" />

@@ -887,6 +887,13 @@ export const searchRidesApi = {
     return apiFetch<{ data: SearchRidesResponse }>(`/api/v1/search-rides/advanced?${query}`);
   },
 
+  available(page = 1, limit = 10) {
+    const query = new URLSearchParams();
+    query.set('page', String(page));
+    query.set('limit', String(limit));
+    return apiFetch<{ data: SearchRidesResponse }>(`/api/v1/search-rides/available?${query}`);
+  },
+
   getDetails(id: string, segmentId?: string) {
     const query = segmentId ? `?segmentId=${segmentId}` : '';
     return apiFetch<{ data: RideDetails }>(`/api/v1/search-rides/${id}${query}`);

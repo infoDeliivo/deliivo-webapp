@@ -935,6 +935,9 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "search.title": "Search for rides",
     "search.emptyCopy":
       "Enter your origin, destination, and travel date to find available rides.",
+    "search.availableTitle": "Available rides",
+    "search.availableCopy": "{total} upcoming ride{plural} available now. Search above to filter by route, date, seats, and price.",
+    "search.availableFailed": "Could not load available rides",
     "search.requiredError": "Please select origin and destination",
     "search.failed": "Search failed",
     "search.resultsFound": "{total} ride{plural} found",
@@ -2170,6 +2173,9 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "search.title": "Otsi sõite",
     "search.emptyCopy":
       "Sisesta lähtekoht, sihtkoht ja reisikuupäev, et leida saadaolevaid sõite.",
+    "search.availableTitle": "Saadaolevad sõidud",
+    "search.availableCopy": "Praegu on saadaval {total} tulevast sõitu. Kasuta ülal otsingut, et filtreerida marsruudi, kuupäeva, kohtade ja hinna järgi.",
+    "search.availableFailed": "Saadaolevaid sõite ei saanud laadida",
     "search.requiredError": "Palun vali lähtekoht ja sihtkoht",
     "search.failed": "Otsing ebaõnnestus",
     "search.resultsFound": "Leitud {total} sõit{plural}",
@@ -3113,6 +3119,9 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "search.title": "Поиск поездок",
     "search.emptyCopy":
       "Введите пункт отправления, пункт назначения и дату, чтобы найти доступные поездки.",
+    "search.availableTitle": "Доступные поездки",
+    "search.availableCopy": "Сейчас доступно {total} предстоящих поездок. Используйте поиск выше, чтобы отфильтровать по маршруту, дате, местам и цене.",
+    "search.availableFailed": "Не удалось загрузить доступные поездки",
     "search.requiredError": "Выберите пункт отправления и пункт назначения",
     "search.failed": "Поиск не удался",
     "search.resultsFound": "Найдено {total} поезд{plural}",
