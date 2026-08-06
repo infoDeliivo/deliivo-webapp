@@ -16,15 +16,50 @@ import { useTranslation } from '@/lib/i18n-context';
 
 const DEFAULT_RETURN_TO = '/profile/earnings';
 
-// Payouts are single-country, matching the backend's STRIPE_CONNECT_COUNTRY. Both values are sent
-// to Stripe when tokenising the bank account, so they have to agree with the connected account's
-// own country — a mismatch is rejected outright.
 // Fallbacks only, used before the requirements response has arrived. The connected account's
 // real country and currency come from that response: Stripe fixes them when the account is
-// created and rejects an address or bank account from anywhere else, so hardcoding them breaks
-// every driver whose account was opened in another country.
+// created and rejects an address or bank account from anywhere else.
 const FALLBACK_COUNTRY = 'EE';
 const FALLBACK_CURRENCY = 'eur';
+
+const PAYOUT_COUNTRIES = [
+  { code: 'AT', label: 'Austria', phoneExample: '+43 660 1234567', ibanExample: 'AT61 1904 3002 3457 3201', cityExample: 'Vienna', postalExample: '1010' },
+  { code: 'BE', label: 'Belgium', phoneExample: '+32 470 12 34 56', ibanExample: 'BE68 5390 0754 7034', cityExample: 'Brussels', postalExample: '1000' },
+  { code: 'BG', label: 'Bulgaria', phoneExample: '+359 88 812 3456', ibanExample: 'BG80 BNBG 9661 1020 3456 78', cityExample: 'Sofia', postalExample: '1000' },
+  { code: 'HR', label: 'Croatia', phoneExample: '+385 91 123 4567', ibanExample: 'HR12 1001 0051 8630 0016 0', cityExample: 'Zagreb', postalExample: '10000' },
+  { code: 'CY', label: 'Cyprus', phoneExample: '+357 96 123456', ibanExample: 'CY17 0020 0128 0000 0012 0052 7600', cityExample: 'Nicosia', postalExample: '1010' },
+  { code: 'CZ', label: 'Czech Republic', phoneExample: '+420 601 123 456', ibanExample: 'CZ65 0800 0000 1920 0014 5399', cityExample: 'Prague', postalExample: '11000' },
+  { code: 'DK', label: 'Denmark', phoneExample: '+45 20 12 34 56', ibanExample: 'DK50 0040 0440 1162 43', cityExample: 'Copenhagen', postalExample: '1050' },
+  { code: 'EE', label: 'Estonia', phoneExample: '+372 5551 2345', ibanExample: 'EE38 2200 2210 2014 5685', cityExample: 'Tallinn', postalExample: '10123' },
+  { code: 'FI', label: 'Finland', phoneExample: '+358 40 123 4567', ibanExample: 'FI21 1234 5600 0007 85', cityExample: 'Helsinki', postalExample: '00100' },
+  { code: 'FR', label: 'France', phoneExample: '+33 6 12 34 56 78', ibanExample: 'FR14 2004 1010 0505 0001 3M02 606', cityExample: 'Paris', postalExample: '75001' },
+  { code: 'DE', label: 'Germany', phoneExample: '+49 1512 3456789', ibanExample: 'DE89 3704 0044 0532 0130 00', cityExample: 'Berlin', postalExample: '10115' },
+  { code: 'GI', label: 'Gibraltar', phoneExample: '+350 54012345', ibanExample: 'GI75 NWBK 0000 0000 7099 453', cityExample: 'Gibraltar', postalExample: 'GX11 1AA' },
+  { code: 'GR', label: 'Greece', phoneExample: '+30 691 234 5678', ibanExample: 'GR16 0110 1250 0000 0001 2300 695', cityExample: 'Athens', postalExample: '10557' },
+  { code: 'HU', label: 'Hungary', phoneExample: '+36 20 123 4567', ibanExample: 'HU42 1177 3016 1111 1018 0000 0000', cityExample: 'Budapest', postalExample: '1051' },
+  { code: 'IE', label: 'Ireland', phoneExample: '+353 85 123 4567', ibanExample: 'IE29 AIBK 9311 5212 3456 78', cityExample: 'Dublin', postalExample: 'D01' },
+  { code: 'IT', label: 'Italy', phoneExample: '+39 312 345 6789', ibanExample: 'IT60 X054 2811 1010 0000 0123 456', cityExample: 'Rome', postalExample: '00100' },
+  { code: 'LV', label: 'Latvia', phoneExample: '+371 26 123 456', ibanExample: 'LV80 BANK 0000 4351 9500 1', cityExample: 'Riga', postalExample: 'LV-1050' },
+  { code: 'LI', label: 'Liechtenstein', phoneExample: '+423 661 234 567', ibanExample: 'LI21 0881 0000 2324 013A A', cityExample: 'Vaduz', postalExample: '9490' },
+  { code: 'LT', label: 'Lithuania', phoneExample: '+370 612 34567', ibanExample: 'LT12 1000 0111 0100 1000', cityExample: 'Vilnius', postalExample: '01100' },
+  { code: 'LU', label: 'Luxembourg', phoneExample: '+352 621 123 456', ibanExample: 'LU28 0019 4006 4475 0000', cityExample: 'Luxembourg', postalExample: 'L-1111' },
+  { code: 'MT', label: 'Malta', phoneExample: '+356 9912 3456', ibanExample: 'MT84 MALT 0110 0001 2345 MTLC AST0 01S', cityExample: 'Valletta', postalExample: 'VLT 1111' },
+  { code: 'NL', label: 'Netherlands', phoneExample: '+31 6 12345678', ibanExample: 'NL91 ABNA 0417 1643 00', cityExample: 'Amsterdam', postalExample: '1011' },
+  { code: 'NO', label: 'Norway', phoneExample: '+47 412 34 567', ibanExample: 'NO93 8601 1117 947', cityExample: 'Oslo', postalExample: '0150' },
+  { code: 'PL', label: 'Poland', phoneExample: '+48 512 345 678', ibanExample: 'PL61 1090 1014 0000 0712 1981 2874', cityExample: 'Warsaw', postalExample: '00-001' },
+  { code: 'PT', label: 'Portugal', phoneExample: '+351 912 345 678', ibanExample: 'PT50 0002 0123 1234 5678 9015 4', cityExample: 'Lisbon', postalExample: '1100-001' },
+  { code: 'RO', label: 'Romania', phoneExample: '+40 712 345 678', ibanExample: 'RO49 AAAA 1B31 0075 9384 0000', cityExample: 'Bucharest', postalExample: '010011' },
+  { code: 'SK', label: 'Slovakia', phoneExample: '+421 901 123 456', ibanExample: 'SK31 1200 0000 1987 4263 7541', cityExample: 'Bratislava', postalExample: '811 01' },
+  { code: 'SI', label: 'Slovenia', phoneExample: '+386 40 123 456', ibanExample: 'SI56 1910 0000 0123 438', cityExample: 'Ljubljana', postalExample: '1000' },
+  { code: 'ES', label: 'Spain', phoneExample: '+34 612 345 678', ibanExample: 'ES91 2100 0418 4502 0005 1332', cityExample: 'Madrid', postalExample: '28001' },
+  { code: 'SE', label: 'Sweden', phoneExample: '+46 70 123 45 67', ibanExample: 'SE45 5000 0000 0583 9825 7466', cityExample: 'Stockholm', postalExample: '111 20' },
+  { code: 'CH', label: 'Switzerland', phoneExample: '+41 76 123 45 67', ibanExample: 'CH93 0076 2011 6238 5295 7', cityExample: 'Zurich', postalExample: '8001' },
+  { code: 'GB', label: 'United Kingdom', phoneExample: '+44 7700 900123', ibanExample: 'GB29 NWBK 6016 1331 9268 19', cityExample: 'London', postalExample: 'SW1A 1AA' },
+] as const;
+
+function countryMeta(country: string) {
+  return PAYOUT_COUNTRIES.find((option) => option.code === country) || PAYOUT_COUNTRIES.find((option) => option.code === FALLBACK_COUNTRY)!;
+}
 
 /**
  * Stripe's documented test values (https://docs.stripe.com/connect/testing). They are the only
@@ -156,6 +191,9 @@ function PayoutSetupContent() {
   const returnTo = safeReturnTo(searchParams.get('returnTo'));
 
   const [requirements, setRequirements] = useState<ConnectRequirements | null>(null);
+  const [needsCountrySelection, setNeedsCountrySelection] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState(FALLBACK_COUNTRY);
+  const [creatingAccount, setCreatingAccount] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [deletingBank, setDeletingBank] = useState(false);
@@ -200,10 +238,12 @@ function PayoutSetupContent() {
 
   // Nothing is set before the first await: a synchronous setState here would run inside the mount
   // effect below and cascade an extra render.
-  const loadRequirements = useCallback(async () => {
+  const loadRequirements = useCallback(async (country?: string) => {
     try {
-      const res = await paymentsApi.connectRequirements();
+      const res = await paymentsApi.connectRequirements(country);
       setRequirements(res.data);
+      setSelectedCountry(res.data.country?.toUpperCase() || country || FALLBACK_COUNTRY);
+      setNeedsCountrySelection(false);
       setLoadError('');
     } catch (err: unknown) {
       const message = getApiErrorMessage(err, t('profile.payoutSetupFailed'));
@@ -212,12 +252,30 @@ function PayoutSetupContent() {
     }
   }, [t]);
 
+  const loadInitialPayoutSetup = useCallback(async (isCancelled: () => boolean = () => false) => {
+    try {
+      const status = await paymentsApi.connectStatus();
+      if (isCancelled()) return;
+      if (status.data.connected) {
+        await loadRequirements();
+      } else {
+        setNeedsCountrySelection(true);
+        setLoadError('');
+      }
+    } catch (err: unknown) {
+      if (isCancelled()) return;
+      const message = getApiErrorMessage(err, t('profile.payoutSetupFailed'));
+      setLoadError(message);
+      showError(t('profile.payoutSetupError'), message);
+    }
+  }, [loadRequirements, t]);
+
   useEffect(() => {
     if (!isStripeConfigured()) return;
-    void (async () => {
-      await loadRequirements();
-    })();
-  }, [loadRequirements]);
+    let cancelled = false;
+    void loadInitialPayoutSetup(() => cancelled);
+    return () => { cancelled = true; };
+  }, [loadInitialPayoutSetup]);
 
   // A driver returning to a half-finished setup should not be asked again for what Stripe already
   // accepted, so each section is driven by what is still outstanding rather than by a fixed order.
@@ -258,10 +316,20 @@ function PayoutSetupContent() {
 
   const payoutCountry = requirements?.country?.toUpperCase() || FALLBACK_COUNTRY;
   const payoutCurrency = requirements?.defaultCurrency || FALLBACK_CURRENCY;
+  const payoutCountryMeta = countryMeta(payoutCountry);
+  const selectedCountryMeta = countryMeta(selectedCountry);
 
   // An account Stripe collects requirements for cannot be filled in through this form; those
   // drivers finish in Stripe's own onboarding instead.
   const stripeManaged = requirements?.requirementCollection === 'stripe';
+
+  const handleStartSetup = useCallback(async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (creatingAccount) return;
+    setCreatingAccount(true);
+    await loadRequirements(selectedCountry);
+    setCreatingAccount(false);
+  }, [creatingAccount, loadRequirements, selectedCountry]);
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
@@ -376,16 +444,16 @@ function PayoutSetupContent() {
     setFirstName(STRIPE_TEST_VALUES.firstName);
     setLastName(STRIPE_TEST_VALUES.lastName);
     setEmail(STRIPE_TEST_VALUES.email);
-    setPhone(STRIPE_TEST_VALUES.phone);
+    setPhone(payoutCountryMeta.phoneExample);
     setDob(STRIPE_TEST_VALUES.dob);
     setLine1(STRIPE_TEST_VALUES.line1);
     setLine2(STRIPE_TEST_VALUES.line2);
-    setCity(STRIPE_TEST_VALUES.city);
-    setPostalCode(STRIPE_TEST_VALUES.postalCode);
+    setCity(payoutCountryMeta.cityExample);
+    setPostalCode(payoutCountryMeta.postalExample);
     setAccountHolderName(STRIPE_TEST_VALUES.accountHolderName);
-    setAccountNumber(STRIPE_TEST_VALUES.accountNumber);
+    setAccountNumber(payoutCountryMeta.ibanExample);
     setAcceptedTerms(true);
-  }, []);
+  }, [payoutCountryMeta]);
 
   const handleExit = useCallback(async () => {
     setExiting(true);
@@ -447,12 +515,71 @@ function PayoutSetupContent() {
     );
   }
 
+  if (needsCountrySelection && !requirements) {
+    return chrome(
+      <form onSubmit={handleStartSetup} className="flex flex-col gap-5">
+        {loadError && (
+          <section className="rounded-2xl border border-red-200 bg-red-50 p-4">
+            <p className="text-sm text-red-700">{loadError}</p>
+          </section>
+        )}
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-deliivo-orange">
+              <Landmark className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">{t('payout.countrySelectTitle')}</h2>
+              <p className="mt-1 text-sm leading-6 text-deliivo-gray">{t('payout.countrySelectCopy')}</p>
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <label
+              htmlFor="payoutCountry"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray"
+            >
+              {t('payout.country')}
+            </label>
+            <select
+              id="payoutCountry"
+              value={selectedCountry}
+              onChange={(event) => setSelectedCountry(event.target.value)}
+              className="input-field"
+            >
+              {PAYOUT_COUNTRIES.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label} ({option.code})
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs text-deliivo-gray">
+              {t('payout.countrySelectHint', {
+                country: selectedCountryMeta.label,
+                iban: selectedCountryMeta.ibanExample,
+              })}
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            disabled={creatingAccount}
+            className="mt-5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-deliivo-orange px-4 py-3 text-sm font-semibold text-white hover:bg-deliivo-orange-dark disabled:opacity-50 sm:w-auto"
+          >
+            {creatingAccount && <Loader2 className="h-4 w-4 animate-spin" />}
+            {creatingAccount ? t('payout.countryCreating') : t('payout.countryContinue')}
+          </button>
+        </section>
+      </form>
+    );
+  }
+
   if (loadError) {
     return chrome(
       <LoadFailureCard
         title={t('profile.payoutSetupTitle')}
         message={loadError}
-        onRetry={loadRequirements}
+        onRetry={() => loadInitialPayoutSetup()}
       />
     );
   }
@@ -667,12 +794,12 @@ function PayoutSetupContent() {
                 id="phone"
                 type="tel"
                 inputMode="tel"
-                placeholder="+372 5551 2345"
+                placeholder={payoutCountryMeta.phoneExample}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="input-field"
               />
-              <p className="mt-1 text-xs text-deliivo-gray">{t('payout.phoneHint')}</p>
+              <p className="mt-1 text-xs text-deliivo-gray">{t('payout.phoneHint', { phone: payoutCountryMeta.phoneExample })}</p>
               {fieldError('phone')}
             </div>
 
@@ -779,7 +906,7 @@ function PayoutSetupContent() {
               <input
                 id="country"
                 type="text"
-                value={payoutCountry}
+                value={`${payoutCountryMeta.label} (${payoutCountry})`}
                 readOnly
                 disabled
                 className="input-field bg-gray-50 text-deliivo-gray"
@@ -831,7 +958,7 @@ function PayoutSetupContent() {
                 required
                 autoComplete="off"
                 spellCheck={false}
-                placeholder="EE38 2200 2210 2014 5685"
+                placeholder={payoutCountryMeta.ibanExample}
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value.toUpperCase())}
                 className="input-field font-mono tracking-wide"
@@ -988,7 +1115,7 @@ function PayoutSetupContent() {
       ) : (
         <button
           type="button"
-          onClick={loadRequirements}
+          onClick={() => loadRequirements()}
           className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-white px-4 py-3 text-sm font-semibold text-deliivo-orange hover:bg-orange-50"
         >
           {t('payout.refreshStatus')}

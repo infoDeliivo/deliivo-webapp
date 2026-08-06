@@ -1250,8 +1250,11 @@ export const paymentsApi = {
   // The platform collects every requirement in its own form; these four calls are the whole
   // driver-facing flow. Each returns the refreshed requirements, so the UI always renders from
   // the response it just received rather than a separate status call.
-  connectRequirements() {
-    return apiFetch<{ data: ConnectRequirements }>('/api/v1/payments/connect/requirements');
+  connectRequirements(country?: string) {
+    const query = new URLSearchParams();
+    if (country) query.set('country', country);
+    const suffix = query.toString() ? `?${query}` : '';
+    return apiFetch<{ data: ConnectRequirements }>(`/api/v1/payments/connect/requirements${suffix}`);
   },
   connectSaveDetails(payload: ConnectDetailsPayload) {
     return apiFetch<{ data: ConnectRequirements }>('/api/v1/payments/connect/details', {

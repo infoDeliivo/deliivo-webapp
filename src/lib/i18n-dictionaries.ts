@@ -648,7 +648,13 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.testFill": "Use test account",
     "payout.countryNoticeTitle": "Important:",
     "payout.countryNoticeCopy":
-      "Payouts can only be sent to bank accounts registered in {country}. Your address and IBAN must both be from {country}.",
+      "This Stripe payout account is registered in {country}. Use your address for that country and an IBAN Stripe supports for this payout currency.",
+    "payout.countrySelectTitle": "Choose your payout country",
+    "payout.countrySelectCopy":
+      "Stripe fixes the country when your payout account is created. Choose the country where your payout profile should be registered.",
+    "payout.countrySelectHint": "For {country}, you will enter an IBAN such as {iban}.",
+    "payout.countryContinue": "Continue to payout setup",
+    "payout.countryCreating": "Creating payout account...",
     "payout.personalTitle": "Confirm your personal details",
     "payout.personalCopy":
       "These are checked against your ID, so they must match your legal documents exactly.",
@@ -656,7 +662,7 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.lastName": "Your full legal last name",
     "payout.email": "Email",
     "payout.phone": "Phone number",
-    "payout.phoneHint": "International format, e.g. +372 5551 2345. Leave empty to skip.",
+    "payout.phoneHint": "International format, e.g. {phone}. Leave empty to skip.",
     "payout.dob": "Date of birth",
     "payout.addressTitle": "Enter your address",
     "payout.addressLine1": "Address",
@@ -1871,7 +1877,13 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.testFill": "Kasuta testkontot",
     "payout.countryNoticeTitle": "Oluline:",
     "payout.countryNoticeCopy":
-      "Väljamakseid saab teha ainult riigis {country} registreeritud pangakontodele. Nii aadress kui IBAN peavad olema sealt.",
+      "See Stripe'i väljamaksekonto on registreeritud riigis {country}. Kasuta selle riigi aadressi ja IBAN-i, mida Stripe selle väljamaksevaluuta jaoks toetab.",
+    "payout.countrySelectTitle": "Vali väljamakse riik",
+    "payout.countrySelectCopy":
+      "Stripe määrab riigi siis, kui väljamaksekonto luuakse. Vali riik, kus sinu väljamakse profiil peaks olema registreeritud.",
+    "payout.countrySelectHint": "Riigi {country} puhul sisestad IBAN-i, näiteks {iban}.",
+    "payout.countryContinue": "Jätka väljamakse seadistust",
+    "payout.countryCreating": "Loon väljamaksekontot...",
     "payout.personalTitle": "Kinnita oma isikuandmed",
     "payout.personalCopy":
       "Neid kontrollitakse sinu isikut tõendava dokumendiga, seega peavad need täpselt kattuma.",
@@ -1879,7 +1891,7 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.lastName": "Ametlik perekonnanimi",
     "payout.email": "E-post",
     "payout.phone": "Telefoninumber",
-    "payout.phoneHint": "Rahvusvahelises vormingus, nt +372 5551 2345. Jäta tühjaks, et vahele jätta.",
+    "payout.phoneHint": "Rahvusvahelises vormingus, nt {phone}. Jäta tühjaks, et vahele jätta.",
     "payout.dob": "Sünnikuupäev",
     "payout.addressTitle": "Sisesta oma aadress",
     "payout.addressLine1": "Aadress",
@@ -2805,7 +2817,13 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.testFill": "Тестовый счёт",
     "payout.countryNoticeTitle": "Важно:",
     "payout.countryNoticeCopy":
-      "Выплаты возможны только на банковские счета, открытые в {country}. Адрес и IBAN должны быть оттуда же.",
+      "Этот счёт Stripe для выплат зарегистрирован в стране {country}. Укажите адрес для этой страны и IBAN, который Stripe поддерживает для валюты выплат.",
+    "payout.countrySelectTitle": "Выберите страну выплат",
+    "payout.countrySelectCopy":
+      "Stripe фиксирует страну при создании счёта для выплат. Выберите страну, где должен быть зарегистрирован ваш профиль выплат.",
+    "payout.countrySelectHint": "Для {country} вы укажете IBAN, например {iban}.",
+    "payout.countryContinue": "Продолжить настройку выплат",
+    "payout.countryCreating": "Создаём счёт для выплат...",
     "payout.personalTitle": "Подтвердите личные данные",
     "payout.personalCopy":
       "Они сверяются с вашим документом, поэтому должны точно совпадать.",
@@ -2813,7 +2831,7 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "payout.lastName": "Фамилия по документу",
     "payout.email": "Эл. почта",
     "payout.phone": "Номер телефона",
-    "payout.phoneHint": "В международном формате, например +372 5551 2345.",
+    "payout.phoneHint": "В международном формате, например {phone}.",
     "payout.dob": "Дата рождения",
     "payout.addressTitle": "Укажите адрес",
     "payout.addressLine1": "Адрес",

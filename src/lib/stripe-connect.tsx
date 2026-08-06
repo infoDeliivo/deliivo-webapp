@@ -64,7 +64,7 @@ export function ConnectProvider({ children }: { children: ReactNode }) {
  * Stripe — it never reaches Deliivo's server, which accepts only the resulting `btok_` token.
  *
  * `routingNumber` is US-only; SEPA countries carry everything in the IBAN, so it is omitted for
- * the single-country (EE) flow this form serves.
+ * supported European IBAN payout accounts.
  */
 export async function createBankAccountToken(input: {
   country: string;
