@@ -1813,6 +1813,8 @@ export interface AdminDlRecord {
 export interface AdminUser {
   id: string;
   firstName: string | null;
+  salutation: string | null;
+  gender: string | null;
   email: string | null;
   phone: string | null;
   role: string;

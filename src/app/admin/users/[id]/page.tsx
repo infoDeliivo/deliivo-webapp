@@ -63,6 +63,27 @@ function routeName(origin?: string | null, destination?: string | null) {
   return `${(origin || 'Origin').split(',')[0]} to ${(destination || 'Destination').split(',')[0]}`;
 }
 
+const salutationLabels: Record<string, string> = {
+  MR: 'Mr.',
+  MS: 'Ms.',
+  MRS: 'Mrs.',
+  MX: 'Mx.',
+  OTHER: 'Other',
+};
+
+const genderLabels: Record<string, string> = {
+  MALE: 'Male',
+  FEMALE: 'Female',
+  NON_BINARY: 'Non-binary',
+  OTHER: 'Other',
+  PREFER_NOT_TO_SAY: 'Prefer not to say',
+};
+
+function formatProfileEnum(value?: string | null, labels: Record<string, string> = {}) {
+  if (!value) return '-';
+  return labels[value] || value.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 async function copyText(value: string, label: string) {
   try {
     await navigator.clipboard?.writeText(value);
@@ -214,8 +235,8 @@ export default function AdminUserDetailsPage() {
               items={[
                 ['First name', user.firstName || '-'],
                 ['Last name', user.lastName || '-'],
-                ['Salutation', user.salutation || '-'],
-                ['Gender', user.gender || '-'],
+                ['Salutation', formatProfileEnum(user.salutation, salutationLabels)],
+                ['Gender', formatProfileEnum(user.gender, genderLabels)],
                 ['DOB', formatDate(user.dob)],
                 ['Onboarding', user.onboardingStatus],
                 ['Email verified', user.emailVerified ? 'Yes' : 'No'],
