@@ -1526,6 +1526,18 @@ export const adminApi = {
   refundBooking(id: string) {
     return apiFetch<{ data: { bookingId: string; refunded: boolean } }>(`/api/v1/admin/bookings/${id}/refund`, { method: 'POST' });
   },
+  forceCompleteBooking(id: string, reason: string) {
+    return apiFetch<{ data: { bookingId: string; rideId: string; bookingStatus: string; rideCompleted: boolean; paymentMarkedEligible: boolean } }>(
+      `/api/v1/admin/bookings/${id}/force-complete`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    );
+  },
+  openBookingDispute(id: string, reason: string, description?: string) {
+    return apiFetch<{ data: { dispute: AdminDispute; created: boolean } }>(
+      `/api/v1/admin/bookings/${id}/open-dispute`,
+      { method: 'POST', body: JSON.stringify({ reason, ...(description ? { description } : {}) }) },
+    );
+  },
   // Disputes
   getDisputes(params?: { status?: string; page?: number; limit?: number }) {
     const query = new URLSearchParams();
@@ -1875,6 +1887,9 @@ export interface AdminRide {
   availableSeats: number;
   basePricePerSeat: number;
   currency: string;
+  routeDurationSeconds?: number | null;
+  actualStartTime?: string | null;
+  actualEndTime?: string | null;
   createdAt: string;
   driver?: { id: string; firstName: string | null; email?: string | null; phone?: string | null };
   bookings: Array<{
@@ -1884,7 +1899,14 @@ export interface AdminRide {
     seatsBooked: number;
     totalPrice: number;
     paymentAmount?: number | null;
+    paymentCapturedAt?: string | null;
+    completedAt?: string | null;
+    cancelledAt?: string | null;
+    onboardedAt?: string | null;
+    dropoffConfirmedAt?: string | null;
+    riderDropoffConfirmedAt?: string | null;
     refundedAt?: string | null;
+    payment?: { id: string; status: string; amountTotal: number; fareAmount: number; currency: string; payoutEligibleAt?: string | null } | null;
     passenger?: { id: string; firstName: string | null; email?: string | null; phone?: string | null };
   }>;
   disputes: Array<{ id: string; status: string; reason: string }>;

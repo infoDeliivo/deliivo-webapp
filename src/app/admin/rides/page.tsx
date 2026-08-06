@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertCircle, Car, ChevronLeft, ChevronRight, Clipboard, ExternalLink, Loader2, RefreshCw, Search } from 'lucide-react';
+import { AlertCircle, Car, CheckCircle2, ChevronLeft, ChevronRight, Clipboard, ExternalLink, Flag, Loader2, RefreshCw, Search } from 'lucide-react';
 import { adminApi, AdminRide, Pagination, getApiErrorMessage } from '@/lib/api';
 import { showError, showSuccess } from '@/lib/app-feedback';
 import LoadFailureCard from '@/components/LoadFailureCard';
@@ -22,6 +22,9 @@ const SEARCH_BY_OPTIONS = [
   { value: 'riderEmail', label: 'Rider email' },
   { value: 'riderPhone', label: 'Rider phone' },
 ] as const;
+
+const FORCE_COMPLETABLE_RIDE_STATUSES = new Set(['IN_PROGRESS', 'COMPLETION_PENDING']);
+const FORCE_COMPLETABLE_BOOKING_STATUSES = new Set(['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'ONBOARD', 'DROP_PENDING', 'IN_PROGRESS']);
 
 function shortId(id: string) {
   return id.slice(0, 8);
@@ -47,6 +50,7 @@ export default function AdminRidesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refundBookingId, setRefundBookingId] = useState<string | null>(null);
+  const [supportActionId, setSupportActionId] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -107,6 +111,48 @@ export default function AdminRidesPage() {
       showError('Refund failed', message);
     } finally {
       setRefundBookingId(null);
+    }
+  }
+
+  async function forceCompleteBooking(bookingId: string) {
+    const reason = window.prompt('Support reason for force-completing this booking');
+    if (!reason?.trim()) return;
+    setSupportActionId(bookingId);
+    setError('');
+    try {
+      const res = await adminApi.forceCompleteBooking(bookingId, reason.trim());
+      await loadRides();
+      showSuccess(
+        'Booking completed',
+        res.data.paymentMarkedEligible ? 'Escrow was marked payout eligible.' : 'Booking was completed.',
+      );
+    } catch (err: unknown) {
+      const message = getApiErrorMessage(err, 'Force complete failed');
+      setError(message);
+      showError('Force complete failed', message);
+    } finally {
+      setSupportActionId(null);
+    }
+  }
+
+  async function openMoneyDispute(bookingId: string) {
+    const reason = window.prompt('Support reason for opening a money dispute');
+    if (!reason?.trim()) return;
+    setSupportActionId(bookingId);
+    setError('');
+    try {
+      const res = await adminApi.openBookingDispute(bookingId, reason.trim());
+      await loadRides();
+      showSuccess(
+        res.data.created ? 'Dispute opened' : 'Open dispute exists',
+        `Dispute ${shortId(res.data.dispute.id)} is ready for review.`,
+      );
+    } catch (err: unknown) {
+      const message = getApiErrorMessage(err, 'Open dispute failed');
+      setError(message);
+      showError('Open dispute failed', message);
+    } finally {
+      setSupportActionId(null);
     }
   }
 
@@ -240,7 +286,12 @@ export default function AdminRidesPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {ride.bookings.map((booking) => (
+                          {ride.bookings.map((booking) => {
+                            const canSupportResolve = FORCE_COMPLETABLE_RIDE_STATUSES.has(ride.status)
+                              && FORCE_COMPLETABLE_BOOKING_STATUSES.has(booking.status);
+                            const hasHeldFunds = booking.payment?.status === 'HELD_IN_ESCROW' || Boolean(booking.paymentCapturedAt);
+
+                            return (
                             <tr key={booking.id} className="border-t border-gray-100">
                               <td className="px-3 py-2 text-gray-500">
                                 <CopyableId id={booking.id} label="Booking ID" />
@@ -257,25 +308,58 @@ export default function AdminRidesPage() {
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-3 py-2 text-gray-600">{booking.status.replace(/_/g, ' ')}</td>
+                              <td className="px-3 py-2 text-gray-600">
+                                <div className="space-y-0.5">
+                                  <p>{booking.status.replace(/_/g, ' ')}</p>
+                                  {booking.payment?.status && <p className="text-[11px] text-gray-400">{booking.payment.status.replace(/_/g, ' ')}</p>}
+                                </div>
+                              </td>
                               <td className="px-3 py-2 text-gray-600">{booking.seatsBooked}</td>
                               <td className="px-3 py-2 text-gray-600">{ride.currency} {(booking.paymentAmount || booking.totalPrice || 0).toFixed(2)}</td>
                               <td className="px-3 py-2 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (window.confirm(`Force refund booking ${shortId(booking.id)}? This is a support override and should only be used after checking payment/dispute context.`)) {
-                                      refundBooking(booking.id);
-                                    }
-                                  }}
-                                  disabled={!!booking.refundedAt || refundBookingId === booking.id}
-                                  className="rounded-lg border border-red-200 px-2.5 py-1 font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
-                                >
-                                  {booking.refundedAt ? 'Refunded' : refundBookingId === booking.id ? 'Refunding' : 'Refund'}
-                                </button>
+                                <div className="flex flex-wrap justify-end gap-1.5">
+                                  {canSupportResolve && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        title="Force-complete booking"
+                                        onClick={() => forceCompleteBooking(booking.id)}
+                                        disabled={supportActionId === booking.id}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-green-200 px-2.5 py-1 font-semibold text-green-700 hover:bg-green-50 disabled:opacity-40"
+                                      >
+                                        {supportActionId === booking.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                                        Complete
+                                      </button>
+                                      {hasHeldFunds && (
+                                        <button
+                                          type="button"
+                                          title="Open money dispute"
+                                          onClick={() => openMoneyDispute(booking.id)}
+                                          disabled={supportActionId === booking.id}
+                                          className="inline-flex items-center gap-1 rounded-lg border border-amber-200 px-2.5 py-1 font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-40"
+                                        >
+                                          <Flag className="h-3 w-3" />
+                                          Dispute
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (window.confirm(`Force refund booking ${shortId(booking.id)}? This is a support override and should only be used after checking payment/dispute context.`)) {
+                                        refundBooking(booking.id);
+                                      }
+                                    }}
+                                    disabled={!!booking.refundedAt || refundBookingId === booking.id}
+                                    className="rounded-lg border border-red-200 px-2.5 py-1 font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
+                                  >
+                                    {booking.refundedAt ? 'Refunded' : refundBookingId === booking.id ? 'Refunding' : 'Refund'}
+                                  </button>
+                                </div>
                               </td>
                             </tr>
-                          ))}
+                          )})}
                         </tbody>
                       </table>
                     </div>
