@@ -226,8 +226,8 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
           </div>
         </div>
 
-        <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:w-[18rem] lg:flex-none">
-          <div className="relative min-w-0 w-full">
+        <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-[minmax(10.5rem,1.15fr)_minmax(8.5rem,0.85fr)] lg:w-[21rem] lg:flex-none">
+          <div className="relative min-w-0 w-full min-[420px]:min-w-[10.5rem]">
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
               {t('search.dateLabel')}
             </label>
@@ -236,11 +236,11 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
               value={date}
               onChange={(e) => setDate(e.target.value)}
               min={today}
-              className="input-field h-14 min-w-0 text-base"
+              className="input-field date-input-field h-14 min-w-0 text-base"
             />
           </div>
 
-          <div className="relative min-w-0 w-full">
+          <div className="relative min-w-0 w-full min-[420px]:min-w-[8.5rem]">
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
               {t('search.seatsLabel')}
             </label>
@@ -264,7 +264,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
         </div>
 
         {variant === 'hero' && (
-          <button type="submit" className="btn-primary h-14 w-full shrink-0 px-7 text-base lg:mb-0 lg:w-auto">
+          <button type="submit" className="btn-primary h-14 w-full shrink-0 whitespace-nowrap px-7 text-base lg:mb-0 lg:min-w-[12rem] lg:w-auto">
             {t('search.submit')}
           </button>
         )}
@@ -299,7 +299,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
 
         {/* Search button */}
         {variant === 'default' && (
-          <button type="submit" className="btn-primary w-full px-10 py-3.5 text-base sm:w-auto">
+          <button type="submit" className="btn-primary w-full whitespace-nowrap px-10 py-3.5 text-base sm:min-w-[12rem] sm:w-auto">
             {t('search.submit')}
           </button>
         )}

@@ -523,12 +523,12 @@ function SearchPageContent() {
                 />
               </div>
 
-              <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:w-[18rem] lg:flex-none">
-                <div className="relative min-w-0 w-full">
+              <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-[minmax(10.5rem,1.15fr)_minmax(8.5rem,0.85fr)] lg:w-[21rem] lg:flex-none">
+                <div className="relative min-w-0 w-full min-[420px]:min-w-[10.5rem]">
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('search.dateLabel')}</label>
-                  <input type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} className="input-field h-11 min-w-0" />
+                  <input type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} className="input-field date-input-field h-11 min-w-0" />
                 </div>
-                <div className="relative min-w-0 w-full">
+                <div className="relative min-w-0 w-full min-[420px]:min-w-[8.5rem]">
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('search.seatsLabel')}</label>
                   <Users className="pointer-events-none absolute bottom-3 left-3 text-deliivo-orange" size={16} />
                   <select value={seats} onChange={(e) => setSeats(Number(e.target.value))} className="input-field h-11 min-w-0 pl-9 text-sm">
@@ -553,7 +553,7 @@ function SearchPageContent() {
                   <SlidersHorizontal size={14} /> {t('common.filters')}
                 </button>
               </div>
-              <button type="submit" disabled={loading} className="btn-primary w-full px-10 py-3 text-base sm:w-auto disabled:opacity-60">
+              <button type="submit" disabled={loading} className="btn-primary w-full whitespace-nowrap px-10 py-3 text-base sm:min-w-[11rem] sm:w-auto disabled:opacity-60">
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 {t('search.submit')}
               </button>

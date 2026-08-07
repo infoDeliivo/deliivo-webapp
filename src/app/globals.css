@@ -54,16 +54,16 @@
     background-size: 1rem;
   }
 
-  input[type="date"].input-field {
+  .date-input-field {
     @apply w-full min-w-0 max-w-full appearance-none pr-12;
   }
 
-  input[type="date"].input-field::-webkit-date-and-time-value {
+  .date-input-field::-webkit-date-and-time-value {
     min-width: 0;
     text-align: left;
   }
 
-  input[type="date"].input-field::-webkit-calendar-picker-indicator {
+  .date-input-field::-webkit-calendar-picker-indicator {
     margin-left: 0.5rem;
   }
 }
