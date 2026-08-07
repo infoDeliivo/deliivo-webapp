@@ -141,7 +141,7 @@ function isBookingWindowClosed(ride: RideDetails) {
     && date.getUTCMonth() === now.getUTCMonth()
     && date.getUTCDate() === now.getUTCDate();
   return departureAt <= now.getTime()
-    || (sameUtcDay && departureAt - now.getTime() < 3 * 60 * 60 * 1000);
+    || (sameUtcDay && departureAt - now.getTime() < 1 * 60 * 60 * 1000);
 }
 
 function formatDurationHhMm(totalSeconds?: number | null) {
@@ -865,7 +865,7 @@ function RideDetailContent() {
   async function handleBook() {
     if (!ride) return;
     if (isBookingWindowClosed(ride)) {
-      setBookError('Same-day rides must be booked at least 3 hours before departure.');
+      setBookError('Same-day rides must be booked at least 1 hour before departure.');
       return;
     }
     if (isStripeConfigured() && paymentMethods.length === 0) {
@@ -1616,7 +1616,7 @@ function RideDetailContent() {
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <h3 className="text-sm font-semibold text-amber-950">Booking closed for this departure</h3>
-            <p className="mt-2 text-sm text-amber-800">Same-day rides must be booked at least 3 hours before departure.</p>
+            <p className="mt-2 text-sm text-amber-800">Same-day rides must be booked at least 1 hour before departure.</p>
           </div>
         )}
 
