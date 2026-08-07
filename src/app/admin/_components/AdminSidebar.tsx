@@ -52,10 +52,12 @@ export default function AdminSidebar({
       style={{ background: '#1A1A2E' }}
     >
       <div className="flex items-center gap-3 border-b border-white/10 px-6 py-5">
-        <BrandLogo size={37} className="h-9 w-auto object-contain" />
         <div className="min-w-0">
-          <p className="text-lg font-black tracking-tight text-white">Deliivo</p>
-          <span className="text-xs font-medium uppercase tracking-widest text-white/40">
+          <BrandLogo
+            size={37}
+            className="h-9 w-auto object-contain brightness-0 invert"
+          />
+          <span className="mt-1 block text-xs font-medium uppercase tracking-widest text-white/40">
             Admin
           </span>
         </div>
