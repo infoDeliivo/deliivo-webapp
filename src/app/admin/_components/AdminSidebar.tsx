@@ -46,11 +46,11 @@ export default function AdminSidebar({
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${
-        isOpen ? 'translate-x-0' : '-translate-x-full'
+      className={`fixed inset-y-0 left-0 z-40 shrink-0 overflow-hidden transition-[transform,width] duration-200 lg:relative lg:inset-auto lg:z-auto lg:translate-x-0 ${
+        isOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0'
       }`}
-      style={{ background: '#1A1A2E' }}
     >
+      <div className="flex h-full w-64 flex-col" style={{ background: '#1A1A2E' }}>
       <div className="flex items-center gap-3 border-b border-white/10 px-6 py-5">
         <div className="min-w-0">
           <BrandLogo
@@ -95,6 +95,7 @@ export default function AdminSidebar({
 
       <div className="border-t border-white/10 px-6 py-4">
         <p className="text-xs text-white/30">Deliivo v1.0 - Admin Panel</p>
+      </div>
       </div>
     </aside>
   )
