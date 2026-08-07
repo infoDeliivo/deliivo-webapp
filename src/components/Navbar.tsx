@@ -166,60 +166,84 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-gray-100 bg-white px-4 pb-4 pt-3">
-          <nav className="grid grid-cols-2 gap-2">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onMouseEnter={() => prefetchHref(router, link.href)}
-                onFocus={() => prefetchHref(router, link.href)}
-                className="rounded-2xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm font-medium text-deliivo-dark hover:border-primary-200 hover:bg-primary-50 hover:text-deliivo-orange transition-colors"
+        <div className="fixed inset-0 z-50 md:hidden">
+          <button
+            type="button"
+            aria-label={t('nav.toggleMenu')}
+            className="absolute inset-0 bg-[#1a1a2e]/30 backdrop-blur-[2px]"
+            onClick={() => setMobileOpen(false)}
+          />
+          <div className="absolute right-0 top-0 flex h-full w-full max-w-[22rem] flex-col border-l border-orange-100 bg-white px-4 pb-5 pt-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+              <BrandLogo size={30} className="h-7 w-auto object-contain" />
+              <button
+                type="button"
+                className="rounded-lg p-2 text-deliivo-gray transition-colors hover:bg-gray-100"
                 onClick={() => setMobileOpen(false)}
+                aria-label={t('nav.toggleMenu')}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate">{link.label}</span>
-                  {link.badge ? <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-deliivo-orange px-1.5 py-0.5 text-[10px] font-semibold text-white">{link.badge}</span> : null}
-                </div>
-              </Link>
-            ))}
-          </nav>
-          <div className="mt-3 grid gap-2">
-            <LanguageSwitcher />
-            {user ? (
-              <>
+                <X size={20} />
+              </button>
+            </div>
+
+            <nav className="mt-4 grid gap-2">
+              {navLinks.map((link) => (
                 <Link
-                  href="/profile"
-                  className="btn-outline w-full text-center"
+                  key={link.href}
+                  href={link.href}
+                  onMouseEnter={() => prefetchHref(router, link.href)}
+                  onFocus={() => prefetchHref(router, link.href)}
+                  className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-medium text-deliivo-dark transition-colors hover:border-primary-200 hover:bg-primary-50 hover:text-deliivo-orange"
                   onClick={() => setMobileOpen(false)}
                 >
-                  {t('nav.myProfile')}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate">{link.label}</span>
+                    {link.badge ? <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-deliivo-orange px-1.5 py-0.5 text-[10px] font-semibold text-white">{link.badge}</span> : null}
+                  </div>
                 </Link>
-                <button
-                  className="btn-outline w-full text-center text-red-500 border-red-200"
-                  onClick={() => { setMobileOpen(false); logout(); }}
-                >
-                  {t('nav.signOut')}
-                </button>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/auth/signin"
-                  className="btn-outline w-full text-center"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  {t('nav.signIn')}
-                </Link>
-                <Link
-                  href="/auth/signup"
-                  className="btn-primary w-full text-center"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  {t('nav.signUp')}
-                </Link>
-              </>
-            )}
+              ))}
+            </nav>
+
+            <div className="mt-4">
+              <LanguageSwitcher />
+            </div>
+
+            <div className="mt-auto grid gap-2 pt-6">
+              {user ? (
+                <>
+                  <Link
+                    href="/profile"
+                    className="btn-outline w-full text-center"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    {t('nav.myProfile')}
+                  </Link>
+                  <button
+                    className="btn-outline w-full border-red-200 text-center text-red-500"
+                    onClick={() => { setMobileOpen(false); logout(); }}
+                  >
+                    {t('nav.signOut')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/auth/signin"
+                    className="btn-outline w-full text-center"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    {t('nav.signIn')}
+                  </Link>
+                  <Link
+                    href="/auth/signup"
+                    className="btn-primary w-full text-center"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    {t('nav.signUp')}
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

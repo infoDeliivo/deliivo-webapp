@@ -47,20 +47,20 @@ export default function HomepageV2() {
         <section className="relative isolate overflow-hidden border-b border-orange-100/70 bg-[#fffaf5]">
           <Image src="/baltic-hero-v2.png" alt="A car travelling toward a Baltic old-town skyline" fill priority sizes="100vw" className="-z-20 object-cover object-[66%_center] opacity-55 sm:opacity-70 lg:opacity-100" />
           <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#fffaf5] via-[#fffaf5]/95 to-[#fffaf5]/10 lg:via-[#fffaf5]/76" />
-          <div className="mx-auto max-w-7xl px-4 pb-8 pt-8 sm:px-6 sm:pb-10 sm:pt-10 lg:px-8 lg:pt-12">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <span className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/90 px-4 py-2 text-sm font-semibold text-deliivo-orange shadow-sm backdrop-blur"><MapPin className="h-4 w-4" />{t('home.region')}</span>
+          <div className="mx-auto max-w-7xl px-4 pb-6 pt-6 sm:px-6 sm:pb-10 sm:pt-10 lg:px-8 lg:pt-12">
+            <div className="mb-3 flex flex-col gap-2.5 sm:mb-4 sm:flex-row sm:items-start sm:justify-between">
+              <span className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/90 px-3.5 py-2 text-[13px] font-semibold text-deliivo-orange shadow-sm backdrop-blur sm:px-4 sm:text-sm"><MapPin className="h-4 w-4" />{t('home.region')}</span>
               {user && (
-                <p className="inline-flex self-start rounded-lg border border-orange-200 bg-white/90 px-3 py-2 text-sm font-bold text-deliivo-dark shadow-sm backdrop-blur sm:self-auto">
+                <p className="inline-flex self-start rounded-lg border border-orange-200 bg-white/90 px-3 py-1.5 text-[13px] font-semibold text-deliivo-dark shadow-sm backdrop-blur sm:self-auto sm:text-sm">
                   Welcome back, {user.firstName || 'rider'}.
                 </p>
               )}
             </div>
             <div className="min-w-0 max-w-3xl overflow-hidden">
-              <h1 className="max-w-3xl break-words text-[2.15rem] font-black leading-[1.04] tracking-[-0.04em] text-deliivo-dark sm:text-5xl lg:text-6xl">{t('home.heroTitle')}</h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-deliivo-gray sm:text-lg">{t('home.heroCopy')}</p>
+              <h1 className="max-w-3xl break-words text-[1.9rem] font-black leading-[1.02] tracking-[-0.04em] text-deliivo-dark sm:text-5xl lg:text-6xl">{t('home.heroTitle')}</h1>
+              <p className="mt-3 max-w-2xl text-[15px] leading-7 text-deliivo-gray sm:mt-4 sm:text-lg">{t('home.heroCopy')}</p>
             </div>
-            <div className="mt-6 min-w-0 max-w-6xl">
+            <div className="mt-5 min-w-0 max-w-6xl sm:mt-6">
               <SearchForm variant="hero" />
               <div className="mt-3 grid gap-2 rounded-2xl border border-white/80 bg-white/85 p-3 text-xs font-semibold text-deliivo-gray shadow-sm backdrop-blur sm:grid-cols-4 sm:text-sm">
                 <span className="flex items-center gap-2"><Search className="h-4 w-4 text-deliivo-orange" />{t('home.searchFree')}</span>
