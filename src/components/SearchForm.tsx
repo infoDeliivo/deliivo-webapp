@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MapPin, Calendar, ArrowLeftRight, Users, Loader2 } from 'lucide-react';
+import { MapPin, ArrowLeftRight, Users, Loader2 } from 'lucide-react';
 import { mapsApi, PlacePrediction } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from '@/lib/i18n-context';
@@ -165,7 +165,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
                   onMouseDown={() => handleSelectPlace(prediction, 'from')}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-primary-50"
                 >
-                  <MapPin className="h-4 w-4 shrink-0 text-deliivo-gray" />
+                  <MapPin className="h-4 w-4 shrink-0 text-deliivo-orange" />
                   <span className="truncate text-deliivo-dark">{prediction.description}</span>
                 </button>
               ))}
@@ -189,7 +189,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
             {t('search.toLabel')}
           </label>
           <MapPin
-            className="absolute left-3 top-[calc(50%+10px)] -translate-y-1/2 text-deliivo-gray"
+            className="absolute left-3 top-[calc(50%+10px)] -translate-y-1/2 text-deliivo-orange"
             size={18}
           />
           <input
@@ -219,7 +219,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
                   onMouseDown={() => handleSelectPlace(prediction, 'to')}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-primary-50"
                 >
-                  <MapPin className="h-4 w-4 shrink-0 text-deliivo-gray" />
+                  <MapPin className="h-4 w-4 shrink-0 text-deliivo-orange" />
                   <span className="truncate text-deliivo-dark">{prediction.description}</span>
                 </button>
               ))}
@@ -232,16 +232,12 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
             {t('search.dateLabel')}
           </label>
-          <Calendar
-            className="pointer-events-none absolute left-3 top-[calc(50%+10px)] -translate-y-1/2 text-deliivo-gray"
-            size={18}
-          />
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             min={today}
-            className="input-field h-14 min-w-0 pl-10 text-base"
+            className="input-field h-14 min-w-0 text-base"
           />
         </div>
 
@@ -250,7 +246,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
             {t('search.seatsLabel')}
           </label>
           <Users
-            className="pointer-events-none absolute left-3 top-[calc(50%+10px)] -translate-y-1/2 text-deliivo-gray"
+            className="pointer-events-none absolute left-3 top-[calc(50%+10px)] -translate-y-1/2 text-deliivo-orange"
             size={18}
           />
           <select

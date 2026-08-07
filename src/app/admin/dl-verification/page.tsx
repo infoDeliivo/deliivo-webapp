@@ -158,7 +158,7 @@ export default function AdminDlVerificationPage() {
             }}
             className={`rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
               status === tab
-                ? 'border-[#F97316] bg-[#F97316] text-white'
+                ? 'border-[#F97316] bg-orange-50 text-[#F97316]'
                 : 'border-gray-200 bg-white text-gray-600 hover:border-[#F97316] hover:text-[#F97316]'
             }`}
           >

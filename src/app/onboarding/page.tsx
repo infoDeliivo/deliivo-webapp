@@ -124,7 +124,7 @@ function OnboardingForm() {
     <div className="min-h-screen bg-deliivo-cream px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto grid w-full max-w-5xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
         <section className="hidden rounded-[2rem] bg-gradient-to-br from-[#fff4ea] via-white to-[#fde7d3] p-8 shadow-sm ring-1 ring-black/5 lg:block">
-          <BrandLogo size={44} className="h-auto w-auto" />
+          <BrandLogo size={35} className="h-auto w-auto" />
           <h1 className="mt-8 text-3xl font-bold tracking-tight text-deliivo-dark sm:text-4xl">{t('onboarding.title')}</h1>
           <p className="mt-3 max-w-md text-sm leading-6 text-deliivo-gray sm:text-base">{t('onboarding.subtitle')}</p>
           <div className="mt-8 space-y-3 text-sm text-deliivo-gray">
@@ -141,7 +141,7 @@ function OnboardingForm() {
 
         <div className="w-full">
           <div className="mb-6 text-center lg:hidden">
-            <BrandLogo size={38} className="mx-auto h-auto w-auto" />
+            <BrandLogo size={30} className="mx-auto h-auto w-auto" />
             <h1 className="mt-4 text-2xl font-bold text-deliivo-dark">{t('onboarding.title')}</h1>
             <p className="mt-1 text-sm text-deliivo-gray">{t('onboarding.subtitle')}</p>
           </div>

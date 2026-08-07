@@ -115,7 +115,7 @@ export default function SignUpPage() {
         <div className="p-6 sm:p-8 lg:p-10">
         {/* Logo */}
         <div className="mb-8 flex items-center justify-center lg:justify-start">
-          <BrandLogo size={52} className="h-12 w-auto object-contain" />
+          <BrandLogo size={42} className="h-10 w-auto object-contain" />
         </div>
 
         <div className="mb-7 aspect-[2.4/1] overflow-hidden rounded-2xl bg-orange-100 shadow-sm lg:hidden">

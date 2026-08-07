@@ -146,10 +146,10 @@ export default function BlogPage() {
                   key={category}
                   type="button"
                   onClick={() => setSelectedCategory(category)}
-                  className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
+                  className={`rounded-full border px-4 py-2 text-xs font-semibold transition-colors ${
                     selectedCategory === category
-                      ? 'bg-deliivo-orange text-white'
-                      : 'border border-gray-200 bg-white text-deliivo-gray hover:border-deliivo-orange hover:text-deliivo-orange'
+                      ? 'border-deliivo-orange bg-orange-50 text-deliivo-orange'
+                      : 'border-gray-200 bg-white text-deliivo-gray hover:border-deliivo-orange hover:text-deliivo-orange'
                   }`}
                 >
                   {category === 'All' ? t('blog.allArticles') : getCategoryLabel(t, category)}

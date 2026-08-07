@@ -202,7 +202,7 @@ export default function AdminRevenuePage() {
             onClick={() => { setStatusFilter(s); setIssuePage(1) }}
             className={`px-4 py-2 text-xs font-medium rounded-xl border transition-colors capitalize ${
               statusFilter === s
-                ? 'bg-[#F97316] text-white border-[#F97316]'
+                ? 'border-[#F97316] bg-orange-50 text-[#F97316]'
                 : 'bg-white text-gray-600 border-gray-200 hover:border-[#F97316] hover:text-[#F97316]'
             }`}
           >

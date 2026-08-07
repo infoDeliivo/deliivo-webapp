@@ -167,6 +167,10 @@ function requirementLabel(requirement: string) {
   return labels[requirement] || requirement.replace(/^individual\./, '').replace(/[._]/g, ' ');
 }
 
+function uniqueRequirementLabels(requirements: string[]) {
+  return Array.from(new Set(requirements.map(requirementLabel)));
+}
+
 export default function PayoutSetupPage() {
   return (
     <ProtectedRoute>
@@ -306,6 +310,8 @@ function PayoutSetupContent() {
     [requirements]
   );
   const pendingRequirements = requirements?.pendingVerification ?? [];
+  const dueRequirementLabels = useMemo(() => uniqueRequirementLabels(dueRequirements), [dueRequirements]);
+  const pendingRequirementLabels = useMemo(() => uniqueRequirementLabels(pendingRequirements), [pendingRequirements]);
 
   const showDetailsForm = outstanding.details || editingDetails;
   const showBankForm = outstanding.bank || editingBank;
@@ -1101,30 +1107,30 @@ function PayoutSetupContent() {
         </section>
       )}
 
-      {(dueRequirements.length > 0 || pendingRequirements.length > 0 || (!requirements.payoutsEnabled && !hasActionableRequirements)) && (
+      {(dueRequirementLabels.length > 0 || pendingRequirementLabels.length > 0 || (!requirements.payoutsEnabled && !hasActionableRequirements)) && (
         <section className="rounded-2xl border border-gray-200 bg-white p-4">
           <h2 className="text-sm font-semibold text-gray-900">{t('payout.stripeStatusTitle')}</h2>
-          {dueRequirements.length > 0 && (
+          {dueRequirementLabels.length > 0 && (
             <div className="mt-2">
               <p className="text-xs font-semibold uppercase text-deliivo-gray">{t('payout.stillRequired')}</p>
               <ul className="mt-1 list-disc pl-5 text-sm text-deliivo-dark">
-                {dueRequirements.map((entry) => (
-                  <li key={entry}>{requirementLabel(entry)}</li>
+                {dueRequirementLabels.map((label) => (
+                  <li key={label}>{label}</li>
                 ))}
               </ul>
             </div>
           )}
-          {pendingRequirements.length > 0 && (
+          {pendingRequirementLabels.length > 0 && (
             <div className="mt-2">
               <p className="text-xs font-semibold uppercase text-deliivo-gray">{t('payout.pendingReview')}</p>
               <ul className="mt-1 list-disc pl-5 text-sm text-deliivo-dark">
-                {pendingRequirements.map((entry) => (
-                  <li key={entry}>{requirementLabel(entry)}</li>
+                {pendingRequirementLabels.map((label) => (
+                  <li key={label}>{label}</li>
                 ))}
               </ul>
             </div>
           )}
-          {dueRequirements.length === 0 && pendingRequirements.length === 0 && !requirements.payoutsEnabled && (
+          {dueRequirementLabels.length === 0 && pendingRequirementLabels.length === 0 && !requirements.payoutsEnabled && (
             <p className="mt-2 text-sm text-deliivo-gray">{t('payout.waitingStripeEnablement')}</p>
           )}
         </section>

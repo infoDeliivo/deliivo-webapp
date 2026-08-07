@@ -203,14 +203,14 @@ function EarningsContent() {
             <button
               type="button"
               onClick={() => setActiveTab('pending')}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold ${activeTab === 'pending' ? 'bg-deliivo-orange text-white' : 'bg-gray-50 text-deliivo-gray'}`}
+              className={`rounded-xl border px-4 py-2 text-sm font-semibold ${activeTab === 'pending' ? 'border-deliivo-orange bg-orange-50 text-deliivo-orange' : 'border-gray-100 bg-gray-50 text-deliivo-gray'}`}
             >
               {t('profile.pendingTab', { count: pendingItems.length })}
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('paid')}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold ${activeTab === 'paid' ? 'bg-deliivo-orange text-white' : 'bg-gray-50 text-deliivo-gray'}`}
+              className={`rounded-xl border px-4 py-2 text-sm font-semibold ${activeTab === 'paid' ? 'border-deliivo-orange bg-orange-50 text-deliivo-orange' : 'border-gray-100 bg-gray-50 text-deliivo-gray'}`}
             >
               {t('profile.paidTab', { count: paidItems.length })}
             </button>

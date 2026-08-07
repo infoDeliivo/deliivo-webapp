@@ -40,7 +40,7 @@ export default function TemporaryAdminLoginPage() {
         </Link>
 
         <div className="mt-6 flex items-center gap-3">
-          <BrandLogo size={44} className="h-10 w-auto object-contain" />
+          <BrandLogo size={35} className="h-8 w-auto object-contain" />
           <div>
             <h1 className="text-xl font-bold text-deliivo-dark">Temporary admin login</h1>
             <p className="text-sm text-deliivo-gray">Restricted fallback access</p>

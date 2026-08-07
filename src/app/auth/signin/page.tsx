@@ -120,7 +120,7 @@ export default function SignInPage() {
         <div className="p-6 sm:p-8 lg:p-10">
         {/* Logo */}
         <div className="mb-8 flex items-center justify-center lg:justify-start">
-          <BrandLogo size={52} className="h-12 w-auto object-contain" />
+          <BrandLogo size={42} className="h-10 w-auto object-contain" />
         </div>
 
         <div>

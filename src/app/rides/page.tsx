@@ -455,12 +455,12 @@ function RidesContent() {
           <h1 className="text-2xl font-bold text-deliivo-dark">{t('rides.myRides')}</h1>
         </div>
 
-        <div className="grid grid-cols-2 rounded-2xl bg-white p-1.5 shadow-sm">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-1.5 shadow-sm">
           <button
             type="button"
             onClick={() => setTab('booked')}
-            className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all ${
-              tab === 'booked' ? 'bg-deliivo-orange text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-all ${
+              tab === 'booked' ? 'border-deliivo-orange bg-orange-50 text-deliivo-orange' : 'border-transparent text-gray-500 hover:border-orange-200 hover:text-gray-700'
             }`}
           >
             {t('rides.booked')}
@@ -468,8 +468,8 @@ function RidesContent() {
           <button
             type="button"
             onClick={() => setTab('published')}
-            className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all ${
-              tab === 'published' ? 'bg-deliivo-orange text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-all ${
+              tab === 'published' ? 'border-deliivo-orange bg-orange-50 text-deliivo-orange' : 'border-transparent text-gray-500 hover:border-orange-200 hover:text-gray-700'
             }`}
           >
             {t('rides.published')}
@@ -486,10 +486,10 @@ function RidesContent() {
                   setBookingView(filter.id);
                   setBookedPage(1);
                 }}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
                   bookingView === filter.id
-                    ? 'bg-deliivo-orange text-white'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    ? 'border-deliivo-orange bg-orange-50 text-deliivo-orange'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
                 }`}
               >
                 {t(filter.labelKey)}
@@ -508,10 +508,10 @@ function RidesContent() {
                   setPublishedView(filter.id);
                   setPublishedPage(1);
                 }}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
                   publishedView === filter.id
-                    ? 'bg-deliivo-orange text-white'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    ? 'border-deliivo-orange bg-orange-50 text-deliivo-orange'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
                 }`}
               >
                 {t(filter.labelKey)}

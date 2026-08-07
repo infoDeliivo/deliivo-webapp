@@ -43,6 +43,18 @@
   }
 
   .input-field {
-    @apply block w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-deliivo-dark placeholder-deliivo-gray shadow-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 sm:text-sm;
+    @apply block w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-deliivo-dark placeholder:text-deliivo-dark shadow-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 sm:text-sm;
+  }
+
+  select.input-field {
+    @apply appearance-none pr-12;
+    background-image: url("data:image/svg+xml,%3csvg width='16' height='16' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='m6 9 6 6 6-6' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3e%3c/svg%3e");
+    background-position: right 1rem center;
+    background-repeat: no-repeat;
+    background-size: 1rem;
+  }
+
+  input[type="date"].input-field {
+    @apply pr-12;
   }
 }

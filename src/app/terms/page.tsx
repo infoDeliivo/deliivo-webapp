@@ -257,8 +257,8 @@ export default function TermsPage() {
       <Navbar />
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10 sm:px-6 sm:py-14">
         <div className="mb-8">
-          <p className="text-sm font-semibold uppercase text-deliivo-orange">Terms & Services</p>
-          <h1 className="mt-2 text-3xl font-bold text-deliivo-dark">Deliivo Platform Terms of Service</h1>
+          <p className="text-sm font-semibold uppercase text-deliivo-orange">Terms & Conditions</p>
+          <h1 className="mt-2 text-3xl font-bold text-deliivo-dark">Deliivo Platform Terms and Conditions</h1>
           <p className="mt-3 text-sm text-deliivo-gray">
             Jurisdiction focus: Estonia, Latvia, Lithuania, EU/EEA, GDPR
           </p>

@@ -49,10 +49,14 @@ export default function HomepageV2() {
           <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#fffaf5] via-[#fffaf5]/95 to-[#fffaf5]/10 lg:via-[#fffaf5]/76" />
           <div className="mx-auto max-w-7xl px-4 pb-8 pt-8 sm:px-6 sm:pb-10 sm:pt-10 lg:px-8 lg:pt-12">
             <div className="min-w-0 max-w-3xl overflow-hidden">
+              {user && (
+                <p className="mb-4 inline-block max-w-full break-words rounded-xl border border-orange-200 bg-white/90 px-4 py-2.5 text-xl font-black text-deliivo-dark shadow-sm backdrop-blur sm:text-2xl">
+                  Welcome back, {user.firstName || 'rider'}.
+                </p>
+              )}
               <span className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/90 px-4 py-2 text-sm font-semibold text-deliivo-orange shadow-sm backdrop-blur"><MapPin className="h-4 w-4" />{t('home.region')}</span>
               <h1 className="mt-4 max-w-3xl break-words text-[2.15rem] font-black leading-[1.04] tracking-[-0.04em] text-deliivo-dark sm:text-5xl lg:text-6xl">{t('home.heroTitle')}</h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-deliivo-gray sm:text-lg">{t('home.heroCopy')}</p>
-              {user && <p className="mt-4 text-sm font-bold text-deliivo-dark">Welcome back, {user.firstName || 'rider'}.</p>}
             </div>
             <div className="mt-6 min-w-0 max-w-6xl">
               <SearchForm variant="hero" />
