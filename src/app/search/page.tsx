@@ -101,7 +101,7 @@ function PlaceInput({
   }
 
   return (
-    <div className="relative flex-1">
+    <div className="relative min-w-0 w-full flex-1">
       <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{label}</label>
       <div className="pointer-events-none absolute bottom-0 left-3 flex h-11 items-center">{icon}</div>
       <input
@@ -118,7 +118,7 @@ function PlaceInput({
         <div className="absolute z-20 mt-1 w-full rounded-xl border border-gray-100 bg-white shadow-lg max-h-60 overflow-y-auto">
           {predictions.map((p) => (
             <button key={p.placeId} type="button" onMouseDown={() => selectPlace(p)} className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-primary-50 transition-colors">
-              <MapPin className="h-4 w-4 shrink-0 text-deliivo-gray" />
+              <MapPin className="h-4 w-4 shrink-0 text-deliivo-orange" />
               <span className="truncate text-deliivo-dark">{p.description}</span>
             </button>
           ))}
@@ -489,53 +489,57 @@ function SearchPageContent() {
   }
 
   return (
-    <div className="flex flex-col min-h-full bg-deliivo-cream">
+    <div className="flex min-h-full flex-col overflow-x-hidden bg-deliivo-cream">
       <Navbar />
 
-      <main className="flex-1 px-4 py-8 sm:px-6">
+      <main className="flex-1 px-3 py-6 sm:px-6 sm:py-8">
         <div className="mx-auto max-w-5xl">
           <Link href="/" className="mb-5 inline-flex items-center gap-1.5 text-sm text-deliivo-gray hover:text-deliivo-dark transition-colors">
             <ArrowLeft size={15} /> {t('common.backHome')}
           </Link>
 
           {/* Search form */}
-          <form onSubmit={handleSearch} className="w-full rounded-2xl bg-white p-6 shadow-xl mb-8">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <PlaceInput
-                value={origin}
-                onChange={setOrigin}
-                placeholder={t('search.fromPlaceholder')}
-                label={t('search.fromLabel')}
-                icon={<MapPin size={18} className="text-primary-500" />}
-              />
-              <button type="button" onClick={swap} aria-label={t('search.swap')} className="mx-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-primary-500 hover:bg-primary-50 sm:mx-0">
-                <ArrowLeftRight size={16} />
-              </button>
-              <PlaceInput
-                value={destination}
-                onChange={setDestination}
-                placeholder={t('search.toPlaceholder')}
-                label={t('search.toLabel')}
-                icon={<MapPin size={18} className="text-deliivo-gray" />}
-                bias={origin && origin.lat !== 0 && origin.lng !== 0 ? { lat: origin.lat, lng: origin.lng } : undefined}
-                scope="europe"
-              />
-              <div className="relative flex-1">
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('search.dateLabel')}</label>
-                <Calendar className="pointer-events-none absolute bottom-3 left-3 text-deliivo-gray" size={18} />
-                <input type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} className="input-field h-11 pl-9" />
+          <form onSubmit={handleSearch} className="mb-8 w-full overflow-hidden rounded-2xl bg-white p-4 shadow-xl sm:p-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+              <div className="flex min-w-0 flex-col gap-3 lg:flex-1 lg:flex-row lg:items-end">
+                <PlaceInput
+                  value={origin}
+                  onChange={setOrigin}
+                  placeholder={t('search.fromPlaceholder')}
+                  label={t('search.fromLabel')}
+                  icon={<MapPin size={18} className="text-primary-500" />}
+                />
+                <button type="button" onClick={swap} aria-label={t('search.swap')} className="mx-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-primary-500 hover:bg-primary-50 lg:mx-0 lg:mb-1">
+                  <ArrowLeftRight size={16} />
+                </button>
+                <PlaceInput
+                  value={destination}
+                  onChange={setDestination}
+                  placeholder={t('search.toPlaceholder')}
+                  label={t('search.toLabel')}
+                  icon={<MapPin size={18} className="text-deliivo-orange" />}
+                  bias={origin && origin.lat !== 0 && origin.lng !== 0 ? { lat: origin.lat, lng: origin.lng } : undefined}
+                  scope="europe"
+                />
               </div>
-            </div>
 
-            <div className="mt-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
-                {/* Seats */}
-                <div className="flex items-center gap-2">
-                  <Users size={16} className="text-deliivo-gray" />
-                  <select value={seats} onChange={(e) => setSeats(Number(e.target.value))} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
+              <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:w-[18rem] lg:flex-none">
+                <div className="relative min-w-0 w-full">
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('search.dateLabel')}</label>
+                  <input type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} className="input-field h-11 min-w-0" />
+                </div>
+                <div className="relative min-w-0 w-full">
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('search.seatsLabel')}</label>
+                  <Users className="pointer-events-none absolute bottom-3 left-3 text-deliivo-orange" size={16} />
+                  <select value={seats} onChange={(e) => setSeats(Number(e.target.value))} className="input-field h-11 min-w-0 pl-9 text-sm">
                     {Array.from({ length: 10 }, (_, index) => index + 1).map(n => <option key={n} value={n}>{n} {n > 1 ? t('search.seatsPlural') : t('search.seat')}</option>)}
                   </select>
                 </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                 {canUseWomenOnly && (
                   <label className="flex cursor-pointer items-center gap-2 select-none">
                     <button type="button" role="switch" aria-checked={femaleOnly} onClick={() => setFemaleOnly(v => !v)}
@@ -545,8 +549,7 @@ function SearchPageContent() {
                     <span className="text-sm font-medium text-deliivo-dark">{t('search.womenOnly')}</span>
                   </label>
                 )}
-                {/* Filters toggle */}
-                <button type="button" onClick={() => setShowFilters(v => !v)} className="flex items-center gap-1 text-sm text-deliivo-gray hover:text-deliivo-orange">
+                <button type="button" onClick={() => setShowFilters(v => !v)} className="inline-flex items-center gap-1 text-sm text-deliivo-gray hover:text-deliivo-orange">
                   <SlidersHorizontal size={14} /> {t('common.filters')}
                 </button>
               </div>
@@ -558,22 +561,22 @@ function SearchPageContent() {
 
             {/* Expanded filters */}
             {showFilters && (
-              <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap gap-4 items-center">
-                <div className="flex items-center gap-2">
+              <div className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <label className="text-xs font-medium text-deliivo-gray">{t('search.maxPrice')}:</label>
-                  <input type="number" min={0} value={maxPrice} onChange={(e) => setMaxPrice(e.target.value ? Number(e.target.value) : '')} placeholder={t('common.any')} className="w-20 text-sm border border-gray-200 rounded-lg px-2 py-1.5" />
+                  <input type="number" min={0} value={maxPrice} onChange={(e) => setMaxPrice(e.target.value ? Number(e.target.value) : '')} placeholder={t('common.any')} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm sm:w-24" />
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <label className="text-xs font-medium text-deliivo-gray">{t('search.sortBy')}:</label>
-                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'departure' | 'price' | 'distance')} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
+                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'departure' | 'price' | 'distance')} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm sm:w-auto">
                     <option value="departure">{t('search.sortDeparture')}</option>
                     <option value="price">{t('search.sortPrice')}</option>
                     <option value="distance">{t('search.sortDistance')}</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <label className="text-xs font-medium text-deliivo-gray">{t('search.timeOfDay')}:</label>
-                  <select value={departurePeriod} onChange={(e) => setDeparturePeriod(e.target.value as typeof departurePeriod)} className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm">
+                  <select value={departurePeriod} onChange={(e) => setDeparturePeriod(e.target.value as typeof departurePeriod)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm sm:w-auto">
                     <option value="">{t('common.any')}</option>
                     <option value="morning">{t('search.morning')}</option>
                     <option value="afternoon">{t('search.afternoon')}</option>

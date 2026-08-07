@@ -121,149 +121,150 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
   return (
     <form
       onSubmit={handleSubmit}
-      className={`w-full min-w-0 max-w-full rounded-3xl border border-primary-100 bg-white shadow-xl ${variant === 'hero' ? 'p-4 sm:p-5' : 'p-7 sm:p-8'}`}
+      className={`w-full min-w-0 max-w-full overflow-hidden rounded-3xl border border-primary-100 bg-white shadow-xl ${variant === 'hero' ? 'p-3.5 sm:p-5' : 'p-5 sm:p-8'}`}
     >
       <div className={variant === 'hero' ? 'sr-only' : 'mb-5'}>
         <p className="text-sm font-semibold text-deliivo-dark">{t('search.formTitle')}</p>
         <p className="mt-1 text-xs text-deliivo-gray">{t('search.formCopy')}</p>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        {/* Leaving from */}
-        <div className="relative min-w-0 w-full flex-1">
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-            {t('search.fromLabel')}
-          </label>
-          <MapPin
-            className="absolute left-3 top-[calc(50%+10px)] -translate-y-1/2 text-primary-500"
-            size={18}
-          />
-          <input
-            type="text"
-            placeholder={t('search.fromPlaceholder')}
-            value={from}
-            onChange={(e) => {
-              setFrom(e.target.value);
-              setFromLocation(null);
-              searchPlaces(e.target.value, 'from');
-            }}
-            onFocus={() => fromPredictions.length > 0 && setFromOpen(true)}
-            onBlur={() => setTimeout(() => setFromOpen(false), 150)}
-            className="input-field h-14 min-w-0 pl-10 text-base"
-          />
-          {fromLoading && (
-            <div className="absolute inset-y-0 right-3 flex items-center">
-              <Loader2 className="h-4 w-4 animate-spin text-deliivo-gray" />
-            </div>
-          )}
-          {fromOpen && fromPredictions.length > 0 && (
-            <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-gray-100 bg-white shadow-lg">
-              {fromPredictions.map((prediction) => (
-                <button
-                  key={prediction.placeId}
-                  type="button"
-                  onMouseDown={() => handleSelectPlace(prediction, 'from')}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-primary-50"
-                >
-                  <MapPin className="h-4 w-4 shrink-0 text-deliivo-orange" />
-                  <span className="truncate text-deliivo-dark">{prediction.description}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+        <div className="flex min-w-0 flex-col gap-3 lg:flex-1 lg:flex-row lg:items-end">
+          <div className="relative min-w-0 w-full flex-1">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+              {t('search.fromLabel')}
+            </label>
+            <MapPin
+              className="absolute left-3 top-[calc(50%+10px)] -translate-y-1/2 text-primary-500"
+              size={18}
+            />
+            <input
+              type="text"
+              placeholder={t('search.fromPlaceholder')}
+              value={from}
+              onChange={(e) => {
+                setFrom(e.target.value);
+                setFromLocation(null);
+                searchPlaces(e.target.value, 'from');
+              }}
+              onFocus={() => fromPredictions.length > 0 && setFromOpen(true)}
+              onBlur={() => setTimeout(() => setFromOpen(false), 150)}
+              className="input-field h-14 min-w-0 pl-10 text-base"
+            />
+            {fromLoading && (
+              <div className="absolute inset-y-0 right-3 flex items-center">
+                <Loader2 className="h-4 w-4 animate-spin text-deliivo-gray" />
+              </div>
+            )}
+            {fromOpen && fromPredictions.length > 0 && (
+              <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-gray-100 bg-white shadow-lg">
+                {fromPredictions.map((prediction) => (
+                  <button
+                    key={prediction.placeId}
+                    type="button"
+                    onMouseDown={() => handleSelectPlace(prediction, 'from')}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-primary-50"
+                  >
+                    <MapPin className="h-4 w-4 shrink-0 text-deliivo-orange" />
+                    <span className="truncate text-deliivo-dark">{prediction.description}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-        {/* Swap button */}
-        <button
-          type="button"
-          onClick={swap}
-          aria-label={t('search.swap')}
-        className="mx-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-primary-500 transition-colors hover:bg-primary-50 sm:mx-0"
-        >
-          <ArrowLeftRight size={16} />
-        </button>
-
-        {/* Going to */}
-        <div className="relative min-w-0 w-full flex-1">
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-            {t('search.toLabel')}
-          </label>
-          <MapPin
-            className="absolute left-3 top-[calc(50%+10px)] -translate-y-1/2 text-deliivo-orange"
-            size={18}
-          />
-          <input
-            type="text"
-            placeholder={t('search.toPlaceholder')}
-            value={to}
-            onChange={(e) => {
-              setTo(e.target.value);
-              setToLocation(null);
-              searchPlaces(e.target.value, 'to');
-            }}
-            onFocus={() => toPredictions.length > 0 && setToOpen(true)}
-            onBlur={() => setTimeout(() => setToOpen(false), 150)}
-            className="input-field h-14 min-w-0 pl-10 text-base"
-          />
-          {toLoading && (
-            <div className="absolute inset-y-0 right-3 flex items-center">
-              <Loader2 className="h-4 w-4 animate-spin text-deliivo-gray" />
-            </div>
-          )}
-          {toOpen && toPredictions.length > 0 && (
-            <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-gray-100 bg-white shadow-lg">
-              {toPredictions.map((prediction) => (
-                <button
-                  key={prediction.placeId}
-                  type="button"
-                  onMouseDown={() => handleSelectPlace(prediction, 'to')}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-primary-50"
-                >
-                  <MapPin className="h-4 w-4 shrink-0 text-deliivo-orange" />
-                  <span className="truncate text-deliivo-dark">{prediction.description}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Date */}
-        <div className="relative min-w-0 w-full flex-1">
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-            {t('search.dateLabel')}
-          </label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            min={today}
-            className="input-field h-14 min-w-0 text-base"
-          />
-        </div>
-
-        <div className="relative min-w-0 w-full sm:w-32">
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
-            {t('search.seatsLabel')}
-          </label>
-          <Users
-            className="pointer-events-none absolute left-3 top-[calc(50%+10px)] -translate-y-1/2 text-deliivo-orange"
-            size={18}
-          />
-          <select
-            value={seats}
-            onChange={(e) => setSeats(Number(e.target.value))}
-            className="input-field h-14 min-w-0 pl-10 text-base"
-            aria-label={t('search.seats')}
+          <button
+            type="button"
+            onClick={swap}
+            aria-label={t('search.swap')}
+            className="mx-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-primary-500 transition-colors hover:bg-primary-50 lg:mx-0 lg:mb-2"
           >
-            {Array.from({ length: 10 }, (_, index) => index + 1).map((count) => (
-              <option key={count} value={count}>
-                {count} {count > 1 ? t('search.seatsPlural') : t('search.seat')}
-              </option>
-            ))}
-          </select>
+            <ArrowLeftRight size={16} />
+          </button>
+
+          <div className="relative min-w-0 w-full flex-1">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+              {t('search.toLabel')}
+            </label>
+            <MapPin
+              className="absolute left-3 top-[calc(50%+10px)] -translate-y-1/2 text-deliivo-orange"
+              size={18}
+            />
+            <input
+              type="text"
+              placeholder={t('search.toPlaceholder')}
+              value={to}
+              onChange={(e) => {
+                setTo(e.target.value);
+                setToLocation(null);
+                searchPlaces(e.target.value, 'to');
+              }}
+              onFocus={() => toPredictions.length > 0 && setToOpen(true)}
+              onBlur={() => setTimeout(() => setToOpen(false), 150)}
+              className="input-field h-14 min-w-0 pl-10 text-base"
+            />
+            {toLoading && (
+              <div className="absolute inset-y-0 right-3 flex items-center">
+                <Loader2 className="h-4 w-4 animate-spin text-deliivo-gray" />
+              </div>
+            )}
+            {toOpen && toPredictions.length > 0 && (
+              <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-gray-100 bg-white shadow-lg">
+                {toPredictions.map((prediction) => (
+                  <button
+                    key={prediction.placeId}
+                    type="button"
+                    onMouseDown={() => handleSelectPlace(prediction, 'to')}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-primary-50"
+                  >
+                    <MapPin className="h-4 w-4 shrink-0 text-deliivo-orange" />
+                    <span className="truncate text-deliivo-dark">{prediction.description}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+
+        <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:w-[18rem] lg:flex-none">
+          <div className="relative min-w-0 w-full">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+              {t('search.dateLabel')}
+            </label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              min={today}
+              className="input-field h-14 min-w-0 text-base"
+            />
+          </div>
+
+          <div className="relative min-w-0 w-full">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+              {t('search.seatsLabel')}
+            </label>
+            <Users
+              className="pointer-events-none absolute left-3 top-[calc(50%+10px)] -translate-y-1/2 text-deliivo-orange"
+              size={18}
+            />
+            <select
+              value={seats}
+              onChange={(e) => setSeats(Number(e.target.value))}
+              className="input-field h-14 min-w-0 pl-10 text-base"
+              aria-label={t('search.seats')}
+            >
+              {Array.from({ length: 10 }, (_, index) => index + 1).map((count) => (
+                <option key={count} value={count}>
+                  {count} {count > 1 ? t('search.seatsPlural') : t('search.seat')}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         {variant === 'hero' && (
-          <button type="submit" className="btn-primary mt-auto h-14 w-full shrink-0 px-7 text-base sm:w-auto">
+          <button type="submit" className="btn-primary h-14 w-full shrink-0 px-7 text-base lg:mb-0 lg:w-auto">
             {t('search.submit')}
           </button>
         )}
