@@ -1538,12 +1538,12 @@ function RideDetailContent() {
         )}
 
         {isDriverConfirmedBooking && (
-          <details className="group rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-deliivo-dark marker:hidden">
+          <details className="group accordion">
+            <summary className="accordion-summary">
               <span>Support and recovery</span>
-              <ChevronDown className="h-4 w-4 text-deliivo-orange transition-transform group-open:rotate-180" />
+              <ChevronDown className="accordion-icon" />
             </summary>
-            <div className="grid gap-4 border-t border-gray-100 p-4">
+            <div className="accordion-body">
               <SupportOverrideCard
                 title="Booking help and manual fallback"
                 copy="If payment, OTP, pickup arrival, or cancellation gets stuck, contact support with the booking and ride IDs. Support can review the canonical state and apply an admin override when justified."

@@ -25,6 +25,29 @@
   --font-sans: var(--font-inter);
 }
 
+@layer base {
+  /* Tailwind v4 preflight no longer sets cursor: pointer on interactive elements. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  label[for],
+  select,
+  input[type="checkbox"],
+  input[type="radio"] {
+    cursor: pointer;
+  }
+
+  input[type="file"]::file-selector-button {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  input:disabled {
+    cursor: not-allowed;
+  }
+}
+
 @layer components {
   .btn-primary {
     @apply inline-flex items-center justify-center rounded-full bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 disabled:opacity-50 disabled:cursor-not-allowed sm:px-6;
@@ -40,6 +63,28 @@
 
   .card {
     @apply rounded-2xl bg-white p-4 shadow-sm sm:p-6;
+  }
+
+  /* Accordion: apply .accordion to a <details class="group">, .accordion-icon
+     needs that group for the open-state chevron rotation. */
+  .accordion {
+    @apply rounded-2xl border border-gray-200 bg-white shadow-sm;
+  }
+
+  .accordion-summary {
+    @apply flex list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-deliivo-dark marker:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500;
+  }
+
+  .accordion-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .accordion-icon {
+    @apply h-4 w-4 shrink-0 text-deliivo-orange transition-transform group-open:rotate-180;
+  }
+
+  .accordion-body {
+    @apply grid gap-4 border-t border-gray-100 p-4;
   }
 
   .input-field {
