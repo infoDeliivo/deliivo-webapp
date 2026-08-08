@@ -5,12 +5,7 @@ import Link from 'next/link';
 import { Cookie, X } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n-context';
 import { localeToUrlCode } from '@/lib/i18n';
-import {
-  applyConsent,
-  CONSENT_REOPEN_EVENT,
-  readConsent,
-  saveConsent,
-} from '@/lib/consent';
+import { CONSENT_REOPEN_EVENT, readConsent, saveConsent } from '@/lib/consent';
 
 export default function ConsentBanner() {
   const { t, locale } = useTranslation();
@@ -20,14 +15,10 @@ export default function ConsentBanner() {
   const [marketing, setMarketing] = useState(true);
 
   useEffect(() => {
-    // The inline default in layout.tsx denied everything on this load, so a
-    // stored grant has to be replayed or a returning visitor is silently
-    // downgraded to denied on every navigation.
-    const stored = readConsent();
-    if (stored) {
-      applyConsent(stored);
-      return;
-    }
+    // The stored choice is already replayed by the inline script in layout.tsx,
+    // before the container loads. Nothing to re-apply here - only decide whether
+    // the visitor still has to be asked.
+    if (readConsent()) return;
     setVisible(true);
   }, []);
 
