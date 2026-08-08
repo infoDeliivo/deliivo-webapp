@@ -8,6 +8,7 @@ import { I18nProvider } from '@/lib/i18n-context';
 import ConnectivityBanner from '@/components/ConnectivityBanner';
 import RecoveryOutboxSync from '@/components/RecoveryOutboxSync';
 import HashScrollHandler from '@/components/HashScrollHandler';
+import CrispChat from '@/components/CrispChat';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -20,6 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <OngoingRidePanel />
         <AppFeedbackToast />
         <NotificationToast />
+        <CrispChat />
       </AuthProvider>
     </I18nProvider>
   );

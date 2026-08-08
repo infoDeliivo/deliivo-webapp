@@ -4,6 +4,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { publicConfig } from '@/lib/public-config';
 import { useTranslation } from '@/lib/i18n-context';
+import { pushEvent } from '@/lib/analytics';
 
 const contacts = [
   {
@@ -43,7 +44,11 @@ export default function ContactPage() {
             <section key={item.label} className="rounded-lg bg-white p-5 shadow-sm">
               <h2 className="text-base font-semibold text-deliivo-dark">{t(item.label)}</h2>
               <p className="mt-2 min-h-16 text-sm leading-6 text-deliivo-gray">{t(item.body)}</p>
-              <a className="mt-4 inline-flex text-sm font-semibold text-deliivo-orange hover:underline" href={`mailto:${item.email}`}>
+              <a
+                className="mt-4 inline-flex text-sm font-semibold text-deliivo-orange hover:underline"
+                href={`mailto:${item.email}`}
+                onClick={() => pushEvent('contact_click', { contact_type: item.label })}
+              >
                 {item.email}
               </a>
             </section>

@@ -6,6 +6,7 @@ import { MapPin, ArrowLeftRight, Users, Loader2 } from 'lucide-react';
 import { mapsApi, PlacePrediction } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from '@/lib/i18n-context';
+import { pushEvent } from '@/lib/analytics';
 
 export default function SearchForm({ variant = 'default' }: { variant?: 'default' | 'hero' }) {
   const router = useRouter();
@@ -115,6 +116,14 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
     if (date) params.set('date', date);
     params.set('seats', String(seats));
     if (femaleOnly) params.set('femaleOnly', '1');
+    pushEvent('search', {
+      origin: from,
+      destination: to,
+      departure_date: date,
+      seats,
+      female_only: femaleOnly,
+      search_source: 'hero',
+    });
     router.push('/search?' + params.toString());
   }
 

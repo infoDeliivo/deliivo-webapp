@@ -317,6 +317,7 @@ const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
     'publish.distanceEstimate': 'Vahemaa hinnang',
     'publish.pricingAdjustmentApplied': 'Lõplik soovitus sisaldab seadistatud miinimumhinda või ümardamisreeglit.',
     'publish.guidanceRange': 'Soovituslik vahemik ühe koha kohta',
+    'publish.highPriceGuidance': 'Võid selle hinna jätta, kuid soovituslikus vahemikus hind võib meelitada rohkem reisijaid.',
     'publish.fallbackPricing': 'Kasutatakse vaikimisi Baltikumi hinnastust, sest aktiivne admini hinnareegel ei olnud saadaval.',
     'publish.yourFarePerRider': 'Sinu hind ühe reisija kohta',
     'publish.riderServiceFeeEstimate': 'Hinnanguline reisija teenustasu',
@@ -531,6 +532,7 @@ const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
     'publish.distanceEstimate': 'Оценка расстояния',
     'publish.pricingAdjustmentApplied': 'Итоговая рекомендация включает настроенную минимальную цену или правило округления.',
     'publish.guidanceRange': 'Рекомендуемый диапазон за место',
+    'publish.highPriceGuidance': 'Вы можете оставить эту цену, но цена в рекомендуемом диапазоне может привлечь больше пассажиров.',
     'publish.fallbackPricing': 'Используется стандартное балтийское ценообразование, потому что активное правило цены от администратора недоступно.',
     'publish.yourFarePerRider': 'Ваша цена за пассажира',
     'publish.riderServiceFeeEstimate': 'Ориентировочная сервисная комиссия пассажира',
@@ -1083,6 +1085,8 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "publish.pricingAdjustmentApplied":
       "The final recommendation includes the configured minimum-price or rounding rule.",
     "publish.guidanceRange": "Suggested range per seat",
+    "publish.highPriceGuidance":
+      "You can keep this price, but pricing within the suggested range may attract more riders.",
     "publish.fallbackPricing":
       "Using the default Baltic pricing because an active admin pricing rule was unavailable.",
     "publish.yourFarePerRider": "Your fare per rider",

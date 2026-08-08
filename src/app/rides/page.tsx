@@ -21,6 +21,7 @@ import { bookingsApi, publishRideApi, Booking, PublishedRide, Pagination, getApi
 import { getSocket, onSocketEvent, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
 import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from '@/lib/i18n-context';
+import { pushEcommerceEvent } from '@/lib/analytics';
 
 type Tab = 'booked' | 'published';
 type BookingView = 'all' | 'active' | 'pending' | 'completed' | 'cancelled';
@@ -172,6 +173,11 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
     setActing(true);
     try {
       await bookingsApi.withdraw(booking.id, reason.trim() || undefined);
+      pushEcommerceEvent('refund', {
+        transaction_id: booking.bookingReference || booking.id,
+        value: booking.totalPrice,
+        currency: booking.priceBreakdown?.currency,
+      }, { reason: 'withdraw' });
       onAction();
     } catch {
       // ignore
@@ -186,6 +192,11 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
     setActing(true);
     try {
       await bookingsApi.cancel(booking.id);
+      pushEcommerceEvent('refund', {
+        transaction_id: booking.bookingReference || booking.id,
+        value: booking.totalPrice,
+        currency: booking.priceBreakdown?.currency,
+      }, { reason: 'cancel' });
       onAction();
     } catch {
       // ignore

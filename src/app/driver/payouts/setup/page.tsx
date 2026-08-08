@@ -13,6 +13,7 @@ import { ApiError, ConnectRequirements, getApiErrorMessage, paymentsApi, STRIPE_
 import { showError, showSuccess } from '@/lib/app-feedback';
 import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from '@/lib/i18n-context';
+import { pushEvent } from '@/lib/analytics';
 
 const DEFAULT_RETURN_TO = '/profile/earnings';
 
@@ -342,6 +343,7 @@ function PayoutSetupContent() {
     event.preventDefault();
     if (creatingAccount) return;
     setCreatingAccount(true);
+    pushEvent('payout_setup_start', { country: selectedCountry });
     await loadRequirements(selectedCountry);
     setCreatingAccount(false);
   }, [creatingAccount, loadRequirements, selectedCountry]);
@@ -353,6 +355,12 @@ function PayoutSetupContent() {
 
       setSaving(true);
       setFieldErrors({});
+      pushEvent('payout_setup_submit', {
+        steps_outstanding: Object.entries(outstanding)
+          .filter(([, due]) => due)
+          .map(([step]) => step)
+          .join(','),
+      });
 
       try {
         let latest = requirements;
@@ -403,6 +411,7 @@ function PayoutSetupContent() {
             return;
           }
           const res = await paymentsApi.connectUploadIdentityDocument(identityDocument, identityDocumentSide);
+          pushEvent('payout_document_uploaded', { side: identityDocumentSide });
           latest = res.data;
           setRequirements(latest);
           setIdentityDocument(null);
@@ -415,8 +424,13 @@ function PayoutSetupContent() {
         }
 
         if (latest?.payoutsEnabled && latest.currentlyDue.length === 0) {
+          pushEvent('payout_setup_complete', {
+            country: latest.country?.toUpperCase(),
+            currency: latest.defaultCurrency,
+          });
           showSuccess(t('payout.readyTitle'), t('payout.readyCopy'));
         } else if (latest?.pendingVerification.some((entry) => entry.startsWith('individual.verification.document'))) {
+          pushEvent('payout_setup_pending');
           showSuccess(t('payout.identityDocumentPendingTitle'), t('payout.identityDocumentPendingCopy'));
         } else {
           // Stripe can ask for more once it has seen the first answers (an ID document, say).

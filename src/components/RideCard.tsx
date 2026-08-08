@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Star, Users, Car } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n-context';
+import { pushEcommerceEvent } from '@/lib/analytics';
 
 export interface Ride {
   id: string;
@@ -149,6 +150,11 @@ export default function RideCard({ ride }: RideCardProps) {
         <Link
           href={`/rides/${ride.id}`}
           className="btn-primary py-2 px-5 text-sm"
+          onClick={() =>
+            pushEcommerceEvent('select_item', {
+              items: [{ item_id: ride.id, price: ride.pricePerSeat, quantity: 1 }],
+            })
+          }
         >
           {t('ride.book')}
         </Link>
