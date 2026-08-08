@@ -10,6 +10,7 @@ export const publicConfig = {
   linkedinUrl: process.env.NEXT_PUBLIC_LINKEDIN_URL || 'https://www.linkedin.com/company/deliivo',
   siteUrl: (process.env.NEXT_PUBLIC_SITE_URL || 'https://deliivo-webapp.vercel.app').replace(/\/$/, ''),
   gaMeasurementId: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || 'G-MSG1B1Y353',
+  crispWebsiteId: process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID || '',
   // Veriff publishable key. The browser SDK creates the licence session with it, so
   // licence verification cannot start at all when this is empty.
   veriffApiKey: process.env.NEXT_PUBLIC_VERIFF_API_KEY || '',
