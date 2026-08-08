@@ -987,12 +987,12 @@ const [error, setError] = useState('');
             </div>
           )}
 
-          <details className="group rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-deliivo-dark marker:hidden">
+          <details className="group accordion">
+            <summary className="accordion-summary">
               <span>Support and recovery</span>
-              <ChevronDown className="h-4 w-4 text-deliivo-orange transition-transform group-open:rotate-180" />
+              <ChevronDown className="accordion-icon" />
             </summary>
-            <div className="grid gap-4 border-t border-gray-100 p-4">
+            <div className="accordion-body">
               <SupportOverrideCard
                 title="Driver support and override path"
                 copy="Use this when OTP verification, no-show marking, cancellation, or passenger state does not move as expected. Support should work from the ride ID and booking references below and use admin tools only after checking payment and dispute context."
