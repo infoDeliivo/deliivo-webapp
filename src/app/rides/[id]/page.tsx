@@ -1409,21 +1409,19 @@ function RideDetailContent() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 rounded-xl bg-orange-50/70 px-4 py-3 sm:flex-row sm:items-start">
-                <div className="flex shrink-0 items-center gap-1.5" aria-hidden="true">
+              <div className="rounded-xl bg-orange-50/70 px-4 py-3">
+                <div className="flex items-center gap-1.5" aria-hidden="true">
                   <span className="h-2.5 w-2.5 rounded-full border-2 border-deliivo-orange bg-white" />
                   <span className="h-0.5 w-8 bg-orange-200" />
                   <span className="h-2.5 w-2.5 rounded-full bg-deliivo-orange" />
                 </div>
-                <p className="min-w-0 flex-1 text-sm font-medium text-deliivo-dark">
-                  <span className="block break-words">{selectedPickupOption.address}</span>
-                  <span className="block break-words text-deliivo-gray">to {selectedDropoffOption.address}</span>
-                </p>
-                {previewBreakdown && (
-                  <span className="self-end text-sm font-bold text-deliivo-orange sm:ml-auto sm:self-start">
-                    {previewSeatFareLabel}
-                  </span>
-                )}
+                <div className="mt-3 space-y-2">
+                  <p className="break-words text-sm font-medium text-deliivo-dark">{selectedPickupOption.address}</p>
+                  <p className="break-words text-sm text-deliivo-gray">to {selectedDropoffOption.address}</p>
+                  {previewBreakdown && (
+                    <p className="pt-1 text-sm font-bold text-deliivo-orange">{previewSeatFareLabel}</p>
+                  )}
+                </div>
               </div>
             </div>
           </section>
@@ -1908,21 +1906,19 @@ function RideDetailContent() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 rounded-xl bg-orange-50/70 px-4 py-3 sm:flex-row sm:items-start">
-                <div className="flex shrink-0 items-center gap-1.5" aria-hidden="true">
+              <div className="rounded-xl bg-orange-50/70 px-4 py-3">
+                <div className="flex items-center gap-1.5" aria-hidden="true">
                   <span className="h-2.5 w-2.5 rounded-full border-2 border-deliivo-orange bg-white" />
                   <span className="h-0.5 w-8 bg-orange-200" />
                   <span className="h-2.5 w-2.5 rounded-full bg-deliivo-orange" />
                 </div>
-                <p className="min-w-0 flex-1 text-sm font-medium text-deliivo-dark">
-                  <span className="block break-words">{selectedPickupOption.address}</span>
-                  <span className="block break-words text-deliivo-gray">to {selectedDropoffOption.address}</span>
-                </p>
-                {previewBreakdown && (
-                  <span className="self-end text-sm font-bold text-deliivo-orange sm:ml-auto sm:self-start">
-                    {previewSeatFareLabel}
-                  </span>
-                )}
+                <div className="mt-3 space-y-2">
+                  <p className="break-words text-sm font-medium text-deliivo-dark">{selectedPickupOption.address}</p>
+                  <p className="break-words text-sm text-deliivo-gray">to {selectedDropoffOption.address}</p>
+                  {previewBreakdown && (
+                    <p className="pt-1 text-sm font-bold text-deliivo-orange">{previewSeatFareLabel}</p>
+                  )}
+                </div>
               </div>
             </div>
 
