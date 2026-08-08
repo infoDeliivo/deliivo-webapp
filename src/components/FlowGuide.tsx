@@ -72,13 +72,13 @@ export default function FlowGuide({ storageKey, eyebrow, title, steps, className
         </button>
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
         {steps.map((step, index) => (
-          <div key={`${step.title}-${index}`} className="rounded-2xl border border-orange-100 bg-white/85 p-3">
+          <div key={`${step.title}-${index}`} className="rounded-2xl border border-orange-100 bg-white/85 p-3 min-w-0">
             <div className="flex items-start gap-2">
               <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-deliivo-orange" />
-              <div>
-                <p className="text-sm font-semibold text-deliivo-dark">{step.title}</p>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-5 text-deliivo-dark">{step.title}</p>
                 <p className="mt-1 text-xs leading-5 text-deliivo-gray">{step.copy}</p>
               </div>
             </div>

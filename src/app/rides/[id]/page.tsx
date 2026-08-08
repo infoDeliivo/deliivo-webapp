@@ -1019,8 +1019,9 @@ function RideDetailContent() {
   const dateLabel = new Date(ride.departureDate).toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const durationLabel = formatDurationHhMm(ride.routeDurationSeconds);
   const distanceKm = ride.routeDistanceMeters ? (ride.routeDistanceMeters / 1000).toFixed(1) : null;
-  const price = ride.segment?.segmentFare ?? ride.basePricePerSeat;
   const previewBreakdown = preview?.priceBreakdown;
+  const displaySeatPrice = previewBreakdown?.basePricePerSeat ?? ride.segment?.segmentFare ?? ride.basePricePerSeat;
+  const displaySeatCurrency = previewBreakdown?.currency ?? ride.currency;
   const bookedBreakdown = myBooking?.priceBreakdown;
   const previewSeatFareLabel = previewBreakdown
     ? `${previewBreakdown.currency} ${previewBreakdown.basePricePerSeat.toFixed(2)}${t('rideDetail.perSeatShort')}`
@@ -1119,7 +1120,7 @@ function RideDetailContent() {
 
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start">
-          <main className="space-y-5">
+          <main className="order-2 space-y-5 lg:order-none">
         {/* Route card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
           <div className="bg-gradient-to-r from-deliivo-orange to-primary-600 px-5 py-4">
@@ -1227,7 +1228,7 @@ function RideDetailContent() {
             </div>
             <div className="rounded-xl bg-gray-50 px-4 py-2.5">
               <p className="text-xs font-semibold uppercase text-deliivo-gray">Price</p>
-              <p className="mt-1"><span className="text-lg font-bold text-primary-500">{ride.currency} {price.toFixed(2)}</span><span className="ml-1 text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></p>
+              <p className="mt-1"><span className="text-lg font-bold text-primary-500">{displaySeatCurrency} {displaySeatPrice.toFixed(2)}</span><span className="ml-1 text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></p>
             </div>
           </div>
           {ride.notes && (
@@ -1610,7 +1611,7 @@ function RideDetailContent() {
 
           </main>
 
-          <aside className="space-y-5 lg:contents">
+          <aside className="order-1 space-y-5 lg:order-none lg:contents">
 
         {/* Booking section */}
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
