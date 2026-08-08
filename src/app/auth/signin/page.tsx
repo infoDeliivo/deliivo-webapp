@@ -12,6 +12,7 @@ import { getSafeReturnTo, resolvePostLoginPath, withReturnTo } from "@/lib/auth-
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { isOnboardingComplete } from "@/lib/onboarding";
 import { featureFlags } from "@/lib/features";
+import { pushEvent } from '@/lib/analytics';
 
 type Step = 'identifier' | 'otp';
 type Method = 'email' | 'phone';
@@ -80,6 +81,7 @@ export default function SignInPage() {
     try {
       const res = await authApi.verifyOtp(normalizedIdentifier, otp, 'login', method);
       await login(res.data.accessToken, res.data.refreshToken);
+      pushEvent('login', { method });
       redirectAfterLogin(res.data.next);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Verification failed';
@@ -98,6 +100,7 @@ export default function SignInPage() {
     try {
       const res = await authApi.resendOtp(normalizedIdentifier, 'login', method);
       if (res.data?.code) setDevCode(res.data.code);
+      pushEvent('otp_resend', { method, context: 'login' });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to resend';
       setError(msg);

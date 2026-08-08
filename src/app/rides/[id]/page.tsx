@@ -37,6 +37,7 @@ import { useTranslation } from '@/lib/i18n-context';
 import { withReturnTo } from '@/lib/auth-redirect';
 import { getBookingStatusBadgeClass, getRideStatusLabel } from '@/lib/ride-status';
 import { enqueueRecoveryAction, isRecoverableServerFailure } from '@/lib/recovery-outbox';
+import { pushEvent, pushEcommerceEvent, EcommerceItem } from '@/lib/analytics';
 
 const TOS_VERSION = '1.0';
 const PRIVACY_VERSION = '1.0';
@@ -252,6 +253,21 @@ function areTrackingLinksEqual(previous: TrackingLink[], next: TrackingLink[]) {
   });
 }
 
+// Ads needs a stable order id to deduplicate payment retries and to key later
+// conversion adjustments; bookingReference is optional, so fall back to the id.
+function bookingTransactionId(booking: Booking): string {
+  return booking.bookingReference || booking.id;
+}
+
+function bookingItems(booking: Booking, ride: RideDetails | null): EcommerceItem[] {
+  return [{
+    item_id: booking.rideId,
+    item_name: ride ? `${ride.originAddress} -> ${ride.destinationAddress}` : undefined,
+    price: booking.priceBreakdown?.basePricePerSeat,
+    quantity: booking.seatsBooked,
+  }];
+}
+
 function RideDetailContent() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -269,6 +285,9 @@ function RideDetailContent() {
   const [seats, setSeats] = useState(1);
   const [preview, setPreview] = useState<PricePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const lastQuotedTotalRef = useRef<number | null>(null);
+  const viewedRideRef = useRef<string | null>(null);
+  const purchasedBookingRef = useRef<string | null>(null);
   const [booking, setBooking] = useState(false);
   const [bookError, setBookError] = useState('');
   const [paymentMessage, setPaymentMessage] = useState('');
@@ -572,6 +591,7 @@ function RideDetailContent() {
         return areTrackingLinksEqual(previous, nextLinks) ? previous : nextLinks;
       });
       const url = trackingUrlFor(res.data);
+      pushEvent('share', { method: 'tracking_link', content_type: 'booking' });
       await navigator.clipboard?.writeText(url);
       setTrackingMessage(t('rideDetail.liveLinkCopied'));
       showSuccess(t('rideDetail.liveLinkReady'), t('rideDetail.liveLinkCopiedCopy'));
@@ -602,6 +622,7 @@ function RideDetailContent() {
     setBookError('');
     try {
       await rideOpsApi.riderConfirmDropoff(myBooking.id);
+      pushEvent('ride_completed', { booking_id: myBooking.id });
       setDropoffMessage(t('rideDetail.dropoffConfirmedCopy'));
       await loadMyBooking();
       await loadRide();
@@ -704,6 +725,7 @@ function RideDetailContent() {
     setRatingLoading(true);
     try {
       const res = await ratingsApi.submitRating(myBooking.id, ratingStars, ratingText || undefined);
+      pushEvent('submit_rating', { stars: ratingStars, has_text: Boolean(ratingText) });
       setRatingSubmitted(true);
       setMyBooking((prev) => prev && prev.id === myBooking.id
         ? { ...prev, ratingByViewer: res.data }
@@ -733,6 +755,7 @@ function RideDetailContent() {
         reason: reasonOverride || disputeReason,
         description: descriptionOverride?.trim() || disputeDescription.trim() || undefined,
       });
+      pushEvent('create_dispute', { reason: reasonOverride || disputeReason });
       setDisputeMessage(t('rideDetail.reportSubmittedCopy'));
       setDisputeDescription('');
       await loadMyDisputes(myBooking.id);
@@ -792,6 +815,19 @@ function RideDetailContent() {
     try {
       const res = await searchRidesApi.getDetails(id, segmentId);
       setRide(res.data);
+      if (viewedRideRef.current !== res.data.id) {
+        viewedRideRef.current = res.data.id;
+        pushEcommerceEvent('view_item', {
+          currency: res.data.currency,
+          value: res.data.segment?.segmentFare ?? res.data.basePricePerSeat,
+          items: [{
+            item_id: res.data.id,
+            item_name: `${res.data.originAddress} -> ${res.data.destinationAddress}`,
+            price: res.data.segment?.segmentFare ?? res.data.basePricePerSeat,
+            quantity: 1,
+          }],
+        });
+      }
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, t('rideDetail.failedLoadRide')));
     } finally {
@@ -814,6 +850,19 @@ function RideDetailContent() {
         dropoffWaypointId,
       });
       setPreview(res.data);
+      const breakdown = res.data.priceBreakdown;
+      if (breakdown && breakdown.totalPrice !== lastQuotedTotalRef.current) {
+        // The preview re-runs on every seat, child-seat and waypoint change, so an
+        // unguarded push would inflate this event many times over per session.
+        lastQuotedTotalRef.current = breakdown.totalPrice;
+        pushEvent('view_price_quote', {
+          value: breakdown.totalPrice,
+          currency: breakdown.currency,
+          seats: breakdown.seatsBooked,
+          service_fee: breakdown.serviceFee,
+          luggage_fee: breakdown.luggageFee,
+        });
+      }
     } catch {
       // Preview optional
     } finally {
@@ -824,6 +873,23 @@ function RideDetailContent() {
   useEffect(() => {
     if (ride) loadPricePreview();
   }, [ride, seats, travelingWithChildUnderTwo, bringingOwnChildSeat, selectedPickupValue, selectedDropoffValue, childSeatControlsEnabled]);
+
+  function pushPurchase(booking: Booking) {
+    // A retry confirms the same PaymentIntent again; without this guard the same
+    // booking would be counted twice.
+    if (purchasedBookingRef.current === booking.id) return;
+    purchasedBookingRef.current = booking.id;
+    pushEcommerceEvent(
+      'purchase',
+      {
+        transaction_id: bookingTransactionId(booking),
+        value: booking.totalPrice,
+        currency: booking.priceBreakdown?.currency,
+        items: bookingItems(booking, ride),
+      },
+      { seats: booking.seatsBooked },
+    );
+  }
 
   async function confirmStripeBookingPayment(targetBooking: Booking) {
     if (!targetBooking.payment?.clientSecret) return targetBooking;
@@ -844,11 +910,19 @@ function RideDetailContent() {
     );
 
     if (stripeError) {
+      pushEvent('payment_failed', { error_message: stripeError.message, stage: 'book' });
       throw new Error(stripeError.message || t('rideDetail.cardPaymentFailed'));
     }
 
     if (paymentIntent && ['succeeded', 'processing', 'requires_capture'].includes(paymentIntent.status)) {
       setPaymentMessage(t('rideDetail.paymentConfirmedWaitingDriver'));
+      // 'processing' can still fail, so it is reported separately and never counted
+      // as a purchase.
+      if (paymentIntent.status === 'processing') {
+        pushEvent('payment_pending', { transaction_id: bookingTransactionId(targetBooking) });
+      } else {
+        pushPurchase(targetBooking);
+      }
       try {
         const refreshed = await bookingsApi.confirmPayment(targetBooking.id);
         return refreshed.data || targetBooking;
@@ -907,6 +981,16 @@ function RideDetailContent() {
       });
       const createdBooking = res.data;
       setMyBooking(createdBooking);
+      pushEcommerceEvent(
+        'booking_request',
+        {
+          transaction_id: bookingTransactionId(createdBooking),
+          value: createdBooking.totalPrice,
+          currency: createdBooking.priceBreakdown?.currency,
+          items: bookingItems(createdBooking, ride),
+        },
+        { seats: createdBooking.seatsBooked, paid: Boolean(createdBooking.payment?.clientSecret) },
+      );
 
       if (createdBooking.payment?.clientSecret) {
         const confirmedBooking = await confirmStripeBookingPayment(createdBooking);
@@ -922,6 +1006,7 @@ function RideDetailContent() {
         ? t('rideDetail.mustAcceptTerms')
         : message);
       setPaymentMessage('');
+      pushEvent('payment_failed', { error_message: message, stage: 'book' });
       showError(t('rideDetail.bookingFailed'), message);
     } finally {
       setBooking(false);
@@ -936,11 +1021,14 @@ function RideDetailContent() {
     try {
       const confirmedBooking = await confirmStripeBookingPayment(myBooking);
       setMyBooking(confirmedBooking);
+      pushEvent('payment_retry', { outcome: 'success' });
       showSuccess(t('rideDetail.paymentConfirmed'), t('rideDetail.requestWaitingDriverConfirmation'));
     } catch (err: unknown) {
       const message = getApiErrorMessage(err, t('rideDetail.paymentFailed'));
       setBookError(message);
       setPaymentMessage('');
+      pushEvent('payment_retry', { outcome: 'failure' });
+      pushEvent('payment_failed', { error_message: message, stage: 'retry' });
       showError(t('rideDetail.paymentFailed'), message);
     } finally {
       setBooking(false);
@@ -952,6 +1040,11 @@ function RideDetailContent() {
     setRiderActionLoading(true);
     try {
       await bookingsApi.cancel(myBooking.id, withdrawReason.trim() || undefined);
+      pushEcommerceEvent('refund', {
+        transaction_id: bookingTransactionId(myBooking),
+        value: myBooking.totalPrice,
+        currency: myBooking.priceBreakdown?.currency,
+      }, { reason: 'withdraw' });
       await loadMyBooking();
       showSuccess(t('rideDetail.requestCancelled'), t('rideDetail.requestCancelledCopy'));
     } catch (err: unknown) {
@@ -968,6 +1061,11 @@ function RideDetailContent() {
     setRiderActionLoading(true);
     try {
       await bookingsApi.cancel(myBooking.id);
+      pushEcommerceEvent('refund', {
+        transaction_id: bookingTransactionId(myBooking),
+        value: myBooking.totalPrice,
+        currency: myBooking.priceBreakdown?.currency,
+      }, { reason: 'cancel' });
       await loadMyBooking();
       showSuccess(t('rideDetail.bookingCancelled'), t('rideDetail.bookingCancelledCopy'));
     } catch (err: unknown) {
@@ -1660,7 +1758,14 @@ function RideDetailContent() {
 
                 <button
                   type="button"
-                  onClick={handleBook}
+                  onClick={() => {
+                    pushEcommerceEvent('begin_checkout', {
+                      currency: previewBreakdown?.currency,
+                      value: previewBreakdown?.totalPrice,
+                      items: ride ? [{ item_id: ride.id, price: previewBreakdown?.basePricePerSeat, quantity: seats }] : undefined,
+                    }, { seats });
+                    void handleBook();
+                  }}
                   disabled={booking || paymentMethodsLoading || (isStripeConfigured() && (!selectedPaymentMethodId || showAddPaymentMethod)) || (needsTosAcceptance && !tosAcceptedForBooking) || (childSeatControlsEnabled && travelingWithChildUnderTwo && !bringingOwnChildSeat)}
                   className="btn-primary w-full py-3.5 text-base gap-2 disabled:opacity-60"
                 >
@@ -2359,6 +2464,7 @@ function RideAddPaymentMethodForm({ onSaved }: { onSaved: (method: PaymentMethod
         ? setupIntent.payment_method
         : setupIntent.payment_method?.id;
       if (!stripePaymentMethodId) throw new Error(t('rideDetail.stripeNoPaymentMethod'));
+      pushEcommerceEvent('add_payment_info', {}, { payment_type: 'card', context: 'checkout' });
 
       const saved = await paymentMethodsApi.save(stripePaymentMethodId, customerId);
       showSuccess(t('rideDetail.cardSaved'), t('rideDetail.cardSavedCopy'));

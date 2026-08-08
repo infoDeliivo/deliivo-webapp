@@ -1,22 +1,29 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft, Clock, Loader2, MapPin, Radio } from 'lucide-react';
 import GoogleMap from '@/components/GoogleMap';
 import { PublicTrackingData, trackingApi } from '@/lib/api';
+import { pushEvent } from '@/lib/analytics';
 
 export default function PublicTrackingPage() {
   const { token } = useParams<{ token: string }>();
   const [data, setData] = useState<PublicTrackingData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const reportedRef = useRef(false);
 
   async function load() {
     try {
       const res = await trackingApi.getPublic(token);
       setData(res.data);
+      // The page re-polls every 8s; only the first successful load is the view.
+      if (!reportedRef.current) {
+        reportedRef.current = true;
+        pushEvent('tracking_view', { active_target: res.data.activeTarget });
+      }
       setError('');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Tracking link is unavailable');

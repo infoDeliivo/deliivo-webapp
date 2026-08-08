@@ -50,6 +50,7 @@ import {
   PublishRequirementKey,
 } from "@/lib/api";
 import { DlVerificationModal, useDlVerification } from "@/components/DlVerification";
+import { pushEvent } from '@/lib/analytics';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,6 +96,7 @@ interface WizardState {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const TOTAL_STEPS = 6;
+const PUBLISH_STEP_NAMES = ['route', 'stopovers', 'datetime', 'seats', 'price', 'confirm'] as const;
 const MAX_ROUTE_PICKUP_POINTS = 3;
 const MAX_ORIGIN_PICKUPS = 3;
 const MAX_DESTINATION_DROPOFFS = 3;
@@ -1872,13 +1874,22 @@ function PublishRideWizard() {
   // One call replaces the separate vehicle/payout probes: the backend evaluates
   // licence, identity, bank account and vehicle in the same place it enforces them
   // at publish time, so the checklist can never drift from the actual gate.
+  const eligibilityReportedRef = useRef<'pending' | 'done'>('pending');
   const checkEligibility = useCallback(async () => {
     setEligibilityStatus('loading');
     setGateError('');
     try {
       const res = await publishRideApi.eligibility();
       setEligibility(res.data);
-      setEligibilityStatus(getBlockingRequirements(res.data).length > 0 ? 'blocked' : 'ready');
+      const blocking = getBlockingRequirements(res.data);
+      setEligibilityStatus(blocking.length > 0 ? 'blocked' : 'ready');
+      // Reported once per mount: the gate is re-polled on window focus and after
+      // verification completes, and every re-poll would otherwise repeat the event.
+      if (eligibilityReportedRef.current !== 'done') {
+        eligibilityReportedRef.current = 'done';
+        if (blocking.length > 0) pushEvent('publish_blocked', { reason: blocking.join(',') });
+        else pushEvent('publish_start');
+      }
     } catch {
       setEligibilityStatus('error');
     }
@@ -1999,6 +2010,7 @@ function PublishRideWizard() {
 
   async function handleContinue() {
     if (step >= TOTAL_STEPS) return;
+    pushEvent('publish_step', { step_number: step, step_name: PUBLISH_STEP_NAMES[step - 1] });
     setLoading(true);
     setError('');
 
@@ -2029,6 +2041,7 @@ function PublishRideWizard() {
         try {
           const priceRes = await publishRideApi.getRecommendedPrice();
           const rec = priceRes.data;
+          pushEvent('price_recommendation_viewed', { recommended_price: rec.recommendedPrice });
           setState(prev => ({
             ...prev,
             recommendation: rec,
@@ -2116,6 +2129,12 @@ function PublishRideWizard() {
 
       // Publish
       await publishRideApi.publish();
+      pushEvent('publish_ride', {
+        origin: state.origin?.address,
+        destination: state.destination?.address,
+        seats: state.seats,
+        price_per_seat: state.basePricePerSeat,
+      });
       vehicleDetourState = null;
       setPublished(true);
     } catch (err: unknown) {

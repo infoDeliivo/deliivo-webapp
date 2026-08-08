@@ -11,6 +11,7 @@ import { getSafeReturnTo, resolvePostLoginPath, withReturnTo } from "@/lib/auth-
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { isOnboardingComplete } from "@/lib/onboarding";
 import { featureFlags } from "@/lib/features";
+import { pushEvent } from '@/lib/analytics';
 
 type Step = 'form' | 'otp';
 type Method = 'email' | 'phone';
@@ -55,6 +56,7 @@ export default function SignUpPage() {
     try {
       const res = await authApi.signup(method, identifier);
       if (res.data?.code) setDevCode(res.data.code);
+      pushEvent('sign_up_start', { method });
       setStep('otp');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Signup failed';
@@ -75,6 +77,7 @@ export default function SignUpPage() {
     try {
       const res = await authApi.verifyOtp(identifier, otp, 'signup', method);
       await login(res.data.accessToken, res.data.refreshToken);
+      pushEvent('sign_up', { method });
       router.replace(withReturnTo('/onboarding', returnTo || getSafeReturnTo()));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Verification failed';
@@ -93,6 +96,7 @@ export default function SignUpPage() {
     try {
       const res = await authApi.resendOtp(identifier, 'signup', method);
       if (res.data?.code) setDevCode(res.data.code);
+      pushEvent('otp_resend', { method, context: 'signup' });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to resend';
       setError(msg);
