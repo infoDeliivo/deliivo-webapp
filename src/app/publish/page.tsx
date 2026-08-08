@@ -153,7 +153,7 @@ function getPublishGuide(step: number): { title: string; steps: FlowGuideStep[] 
         title: 'Use the suggested price unless you have a reason.',
         steps: [
           { title: 'Distance based', copy: 'The recommendation uses the active admin pricing rule.' },
-          { title: 'Allowed range', copy: 'Keep your price inside the min/max guidance.' },
+          { title: 'Suggested range', copy: 'You can price above the suggested range, but recommended pricing may attract more riders.' },
           { title: 'Per seat', copy: 'This is the amount one rider pays for the selected ride.' },
         ],
       };
@@ -1347,6 +1347,7 @@ function StepPrice({
   const estimatedRiderTotalPerSeat = state.basePricePerSeat + estimatedServiceFeePerSeat;
   const estimatedFullRideServiceFees = estimatedServiceFeePerSeat * state.seats;
   const estimatedFullRideRiderTotal = estimatedRiderTotalPerSeat * state.seats;
+  const priceAboveSuggestedRange = Boolean(rec && state.basePricePerSeat > rec.maxPrice);
   const recommendationAdjusted = Boolean(
     rec && Math.abs(rec.breakdown.estimatedRouteCost - rec.recommendedPrice) >= 0.01
   );
@@ -1434,6 +1435,11 @@ function StepPrice({
             <Plus className="h-4 w-4" />
           </button>
         </div>
+        {priceAboveSuggestedRange && (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {t('publish.highPriceGuidance')}
+          </p>
+        )}
         <div className="mt-4 grid gap-3 border-t border-gray-100 pt-4 text-sm sm:grid-cols-2">
           <div className="rounded-xl bg-gray-50 px-3 py-3">
             <p className="text-xs font-medium text-deliivo-gray">{t('publish.driverReceivesPerSeat')}</p>

@@ -13,6 +13,7 @@ export const publicConfig = {
   // GTM container. Every GA4 and Ads tag lives in it, so an empty value means no
   // analytics at all rather than a degraded set - the snippet is skipped entirely.
   gtmContainerId: process.env.NEXT_PUBLIC_GTM_CONTAINER_ID || '',
+  crispWebsiteId: process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID || '',
   // Veriff publishable key. The browser SDK creates the licence session with it, so
   // licence verification cannot start at all when this is empty.
   veriffApiKey: process.env.NEXT_PUBLIC_VERIFF_API_KEY || '',

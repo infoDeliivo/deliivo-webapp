@@ -1117,8 +1117,9 @@ function RideDetailContent() {
   const dateLabel = new Date(ride.departureDate).toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const durationLabel = formatDurationHhMm(ride.routeDurationSeconds);
   const distanceKm = ride.routeDistanceMeters ? (ride.routeDistanceMeters / 1000).toFixed(1) : null;
-  const price = ride.segment?.segmentFare ?? ride.basePricePerSeat;
   const previewBreakdown = preview?.priceBreakdown;
+  const displaySeatPrice = previewBreakdown?.basePricePerSeat ?? ride.segment?.segmentFare ?? ride.basePricePerSeat;
+  const displaySeatCurrency = previewBreakdown?.currency ?? ride.currency;
   const bookedBreakdown = myBooking?.priceBreakdown;
   const previewSeatFareLabel = previewBreakdown
     ? `${previewBreakdown.currency} ${previewBreakdown.basePricePerSeat.toFixed(2)}${t('rideDetail.perSeatShort')}`
@@ -1215,9 +1216,9 @@ function RideDetailContent() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start">
-          <main className="space-y-5">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_440px] lg:items-start">
+          <main className="order-2 space-y-5 lg:order-none">
         {/* Route card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
           <div className="bg-gradient-to-r from-deliivo-orange to-primary-600 px-5 py-4">
@@ -1325,7 +1326,7 @@ function RideDetailContent() {
             </div>
             <div className="rounded-xl bg-gray-50 px-4 py-2.5">
               <p className="text-xs font-semibold uppercase text-deliivo-gray">Price</p>
-              <p className="mt-1"><span className="text-lg font-bold text-primary-500">{ride.currency} {price.toFixed(2)}</span><span className="ml-1 text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></p>
+              <p className="mt-1"><span className="text-lg font-bold text-primary-500">{displaySeatCurrency} {displaySeatPrice.toFixed(2)}</span><span className="ml-1 text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></p>
             </div>
           </div>
           {ride.notes && (
@@ -1370,6 +1371,159 @@ function RideDetailContent() {
           </div>
         )}
       </div>
+
+        {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm lg:hidden">
+            <h3 className="text-sm font-semibold text-amber-950">Booking closed for this departure</h3>
+            <p className="mt-2 text-sm text-amber-800">Same-day rides must be booked at least 1 hour before departure.</p>
+          </div>
+        )}
+
+        {!user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed && (
+          <div className="space-y-4 lg:hidden">
+            <FlowGuide
+              storageKey="deliivo.booking.quick-guide.v1"
+              eyebrow="Booking guide"
+              title={bookingGuide.title}
+              steps={bookingGuide.steps}
+            />
+            <div className="rounded-2xl border border-primary-100 bg-primary-50 p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
+              <p className="mt-2 text-sm text-deliivo-gray">{t('rideDetail.signInToChoosePickup')}</p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Link href={withReturnTo('/auth/signin', rideReturnTo)} className="btn-primary px-5 py-2.5 text-sm">
+                  {t('nav.signIn')}
+                </Link>
+                <Link href={withReturnTo('/auth/signup', rideReturnTo)} className="btn-outline px-5 py-2.5 text-sm">
+                  {t('nav.signUp')}
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {canStartBooking && (
+          <section className="space-y-4 rounded-2xl bg-white p-5 shadow-sm lg:hidden">
+            <FlowGuide
+              storageKey="deliivo.booking.quick-guide.v1"
+              eyebrow="Booking guide"
+              title={bookingGuide.title}
+              steps={bookingGuide.steps}
+            />
+            <div className="space-y-4">
+              <div className="flex flex-col gap-2">
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-deliivo-dark">{t('rideDetail.yourTripOnThisRide')}</p>
+                  <p className="mt-1 text-sm text-deliivo-gray">{t('rideDetail.choosePickupDropoffCopy')}</p>
+                </div>
+                <span className="w-fit rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium text-deliivo-gray">
+                  {selectablePickupOptions.length} pickup · {selectableDropoffOptions.length} drop-off choices
+                </span>
+              </div>
+
+              <div className="grid gap-3">
+                <div className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                  <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-100 text-deliivo-orange">
+                      <MapPin className="h-3.5 w-3.5" />
+                    </span>
+                    {t('rideDetail.pickupChoice')}
+                  </span>
+                  <div className="mt-3 grid gap-2" role="radiogroup" aria-label={t('rideDetail.pickupChoice')}>
+                    {filteredPickupOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handlePickupChange(option.value)}
+                        className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          selectedPickupValue === option.value
+                            ? 'border-deliivo-orange bg-white shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-deliivo-orange/50'
+                        }`}
+                        aria-checked={selectedPickupValue === option.value}
+                        role="radio"
+                      >
+                        <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                          selectedPickupValue === option.value ? 'border-deliivo-orange bg-deliivo-orange' : 'border-gray-300'
+                        }`}>
+                          {selectedPickupValue === option.value && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                            {pointKindLabel(option.kind)}
+                          </span>
+                          <span className="mt-0.5 block break-words text-sm font-semibold text-deliivo-dark">
+                            {option.address}
+                          </span>
+                          <span className="mt-1 block text-xs text-deliivo-gray">
+                            {t('rideDetail.estimatedPickup')}: {option.estimatedArrivalTime || ride.departureTime}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                  <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-red-600">
+                      <MapPin className="h-3.5 w-3.5" />
+                    </span>
+                    {t('rideDetail.dropoffChoice')}
+                  </span>
+                  <div className="mt-3 grid gap-2" role="radiogroup" aria-label={t('rideDetail.dropoffChoice')}>
+                    {filteredDropoffOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleDropoffChange(option.value)}
+                        className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          selectedDropoffValue === option.value
+                            ? 'border-deliivo-orange bg-white shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-deliivo-orange/50'
+                        }`}
+                        aria-checked={selectedDropoffValue === option.value}
+                        role="radio"
+                      >
+                        <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                          selectedDropoffValue === option.value ? 'border-deliivo-orange bg-deliivo-orange' : 'border-gray-300'
+                        }`}>
+                          {selectedDropoffValue === option.value && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                            {pointKindLabel(option.kind)}
+                          </span>
+                          <span className="mt-0.5 block break-words text-sm font-semibold text-deliivo-dark">
+                            {option.address}
+                          </span>
+                          <span className="mt-1 block text-xs text-deliivo-gray">
+                            {t('rideDetail.estimatedDropoff')}: {option.estimatedArrivalTime || t('rideDetail.atDestination')}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-orange-50/70 px-4 py-3">
+                <div className="flex items-center gap-1.5" aria-hidden="true">
+                  <span className="h-2.5 w-2.5 rounded-full border-2 border-deliivo-orange bg-white" />
+                  <span className="h-0.5 w-8 bg-orange-200" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-deliivo-orange" />
+                </div>
+                <div className="mt-3 space-y-2">
+                  <p className="break-words text-sm font-medium text-deliivo-dark">{selectedPickupOption.address}</p>
+                  <p className="break-words text-sm text-deliivo-gray">to {selectedDropoffOption.address}</p>
+                  {previewBreakdown && (
+                    <p className="pt-1 text-sm font-bold text-deliivo-orange">{previewSeatFareLabel}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {canStartBooking && (
           <section className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
@@ -1552,7 +1706,7 @@ function RideDetailContent() {
               ) : preview && previewBreakdown ? (
                 <div className="overflow-hidden rounded-xl border border-primary-100 bg-primary-50">
                   <div className="border-b border-primary-100 px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.priceBreakdown')}</p>
                       <span className="shrink-0 text-sm font-bold text-primary-500">
                         {previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}
@@ -1563,7 +1717,7 @@ function RideDetailContent() {
                     </p>
                   </div>
                   <div className="space-y-2 px-4 py-3">
-                    <div className="flex justify-between gap-4 text-sm">
+                    <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <span className="text-deliivo-gray">
                         {t('rideDetail.seatCalculation', {
                           currency: previewBreakdown.currency,
@@ -1574,11 +1728,11 @@ function RideDetailContent() {
                       </span>
                       <span className="font-medium text-deliivo-dark">{previewBreakdown.currency} {previewBreakdown.subtotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between gap-4 text-sm">
+                    <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <span className="text-deliivo-gray">{t('rideDetail.serviceFee')}</span>
                       <span className="font-medium text-deliivo-dark">{previewBreakdown.currency} {previewBreakdown.serviceFee.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between gap-4 border-t border-primary-200 pt-3 text-base font-bold">
+                    <div className="flex flex-col gap-1 border-t border-primary-200 pt-3 text-base font-bold sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <span>{t('rideDetail.totalToPay')}</span>
                       <span className="text-primary-500">{previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}</span>
                     </div>
@@ -1715,18 +1869,18 @@ function RideDetailContent() {
 
           </main>
 
-          <aside className="space-y-5 lg:contents">
+          <aside className="order-2 space-y-5 lg:order-none lg:contents">
 
         {/* Booking section */}
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
+          <div className="hidden rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm lg:block lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <h3 className="text-sm font-semibold text-amber-950">Booking closed for this departure</h3>
             <p className="mt-2 text-sm text-amber-800">Same-day rides must be booked at least 1 hour before departure.</p>
           </div>
         )}
 
         {!user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed && (
-          <div className="space-y-4 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
+          <div className="hidden space-y-4 lg:block lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <FlowGuide
               storageKey="deliivo.booking.quick-guide.v1"
               eyebrow="Booking guide"
@@ -1749,7 +1903,7 @@ function RideDetailContent() {
         )}
 
         {canStartBooking && (
-          <div className="space-y-4 rounded-2xl bg-white p-5 shadow-sm lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
+          <div className="hidden space-y-4 rounded-2xl bg-white p-5 shadow-sm lg:block lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <FlowGuide
               storageKey="deliivo.booking.quick-guide.v1"
               eyebrow="Booking guide"
@@ -1857,21 +2011,19 @@ function RideDetailContent() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 rounded-xl bg-orange-50/70 px-4 py-3">
-                <div className="flex shrink-0 items-center gap-1.5" aria-hidden="true">
+              <div className="rounded-xl bg-orange-50/70 px-4 py-3">
+                <div className="flex items-center gap-1.5" aria-hidden="true">
                   <span className="h-2.5 w-2.5 rounded-full border-2 border-deliivo-orange bg-white" />
                   <span className="h-0.5 w-8 bg-orange-200" />
                   <span className="h-2.5 w-2.5 rounded-full bg-deliivo-orange" />
                 </div>
-                <p className="min-w-0 text-sm font-medium text-deliivo-dark">
-                  <span className="block break-words">{selectedPickupOption.address}</span>
-                  <span className="block break-words text-deliivo-gray">to {selectedDropoffOption.address}</span>
-                </p>
-                {previewBreakdown && (
-                  <span className="ml-auto shrink-0 text-sm font-bold text-deliivo-orange">
-                    {previewSeatFareLabel}
-                  </span>
-                )}
+                <div className="mt-3 space-y-2">
+                  <p className="break-words text-sm font-medium text-deliivo-dark">{selectedPickupOption.address}</p>
+                  <p className="break-words text-sm text-deliivo-gray">to {selectedDropoffOption.address}</p>
+                  {previewBreakdown && (
+                    <p className="pt-1 text-sm font-bold text-deliivo-orange">{previewSeatFareLabel}</p>
+                  )}
+                </div>
               </div>
             </div>
 
