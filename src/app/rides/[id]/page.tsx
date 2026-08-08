@@ -1118,8 +1118,8 @@ function RideDetailContent() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_440px] lg:items-start">
           <main className="order-2 space-y-5 lg:order-none">
         {/* Route card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
@@ -1610,7 +1610,7 @@ function RideDetailContent() {
               ) : preview && previewBreakdown ? (
                 <div className="overflow-hidden rounded-xl border border-primary-100 bg-primary-50">
                   <div className="border-b border-primary-100 px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.priceBreakdown')}</p>
                       <span className="shrink-0 text-sm font-bold text-primary-500">
                         {previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}
@@ -1621,7 +1621,7 @@ function RideDetailContent() {
                     </p>
                   </div>
                   <div className="space-y-2 px-4 py-3">
-                    <div className="flex justify-between gap-4 text-sm">
+                    <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <span className="text-deliivo-gray">
                         {t('rideDetail.seatCalculation', {
                           currency: previewBreakdown.currency,
@@ -1632,11 +1632,11 @@ function RideDetailContent() {
                       </span>
                       <span className="font-medium text-deliivo-dark">{previewBreakdown.currency} {previewBreakdown.subtotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between gap-4 text-sm">
+                    <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <span className="text-deliivo-gray">{t('rideDetail.serviceFee')}</span>
                       <span className="font-medium text-deliivo-dark">{previewBreakdown.currency} {previewBreakdown.serviceFee.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between gap-4 border-t border-primary-200 pt-3 text-base font-bold">
+                    <div className="flex flex-col gap-1 border-t border-primary-200 pt-3 text-base font-bold sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <span>{t('rideDetail.totalToPay')}</span>
                       <span className="text-primary-500">{previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}</span>
                     </div>
