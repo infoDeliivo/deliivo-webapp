@@ -72,7 +72,7 @@ export default function FlowGuide({ storageKey, eyebrow, title, steps, className
         </button>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-3">
         {steps.map((step, index) => (
           <div key={`${step.title}-${index}`} className="rounded-2xl border border-orange-100 bg-white/85 p-3 min-w-0">
             <div className="flex items-start gap-2">
