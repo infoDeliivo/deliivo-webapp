@@ -8,6 +8,7 @@ import { vehicleApi, dlVerificationApi, Vehicle, VehicleType, VehicleDocument, v
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { useTranslation } from '@/lib/i18n-context';
+import { pushEvent } from '@/lib/analytics';
 
 export default function VehiclePage() {
   return (
@@ -184,6 +185,7 @@ function VehicleContent() {
     setSaving(true);
     try {
       await vehicleApi.createDraft(licenseCountry, licenseNumber);
+      pushEvent('vehicle_draft_start', { license_country: licenseCountry });
       setStep(2);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('profile.vehicleDraftFailed'));
@@ -235,6 +237,7 @@ function VehicleContent() {
         // KYC (licence/insurance/registry): private target, attached by key. No
         // public URL, so track completion by the known documentType.
         const uploaded = await vehicleApi.uploadDraftPrivateDocument(file, documentType);
+        pushEvent('vehicle_document_uploaded', { document_type: documentType });
         setDocuments(prev => upsertDocument(prev, { documentType }));
 
         // A licence also enters the manual admin review queue. The vehicle draft and
@@ -285,6 +288,7 @@ function VehicleContent() {
     setError('');
     try {
       await vehicleApi.saveDraft();
+      pushEvent('vehicle_complete');
       await fetchVehicles();
       setShowAddForm(false);
       setStep(1);

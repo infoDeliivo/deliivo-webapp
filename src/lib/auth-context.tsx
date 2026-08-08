@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { getTokens, clearTokens, setTokens, userApi, UserProfile } from './api';
+import { pushUserIdentified, pushUserLogout } from './analytics';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -94,10 +95,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    pushUserLogout();
     clearTokens();
     setUser(null);
     window.location.href = '/';
   };
+
+  // Identify from the resolved user rather than from login(), which returns before
+  // fetchUser lands. Keying on the id also covers a reload with a stored token, where
+  // no login() call happens at all but GA4 still needs the user_id.
+  const identifiedUserId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user?.id || identifiedUserId.current === user.id) return;
+    identifiedUserId.current = user.id;
+    pushUserIdentified(user.id);
+  }, [user?.id]);
 
   const refreshUser = useCallback(() => fetchUser(false, true), [fetchUser]);
 

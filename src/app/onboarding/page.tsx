@@ -8,6 +8,7 @@ import BrandLogo from '@/components/BrandLogo';
 import { useTranslation } from '@/lib/i18n-context';
 import { getSafeReturnTo } from '@/lib/auth-redirect';
 import { isOnboardingComplete } from '@/lib/onboarding';
+import { pushEvent } from '@/lib/analytics';
 
 const MINIMUM_BOOKING_AGE_YEARS = 8;
 const PERSON_NAME_PATTERN = /^(?=.*\p{L})[\p{L}\p{M} .'-]+$/u;
@@ -103,6 +104,7 @@ function OnboardingForm() {
         gender: gender || undefined,
       });
       await refreshUser();
+      pushEvent('complete_registration');
       // Signup ends on the homepage, never on the route that triggered onboarding. That route is
       // usually /publish, whose eligibility gate would greet a brand-new account with a list of
       // driver requirements it cannot possibly have met yet.

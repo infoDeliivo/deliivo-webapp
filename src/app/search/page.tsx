@@ -33,6 +33,7 @@ import {
   RecentSearch,
 } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n-context';
+import { pushEvent, pushEcommerceEvent } from '@/lib/analytics';
 
 // ─── Place Input (reusable autocomplete) ──────────────────────────────────────
 
@@ -432,6 +433,7 @@ function SearchPageContent() {
         destinationAddress: destination.address,
       });
       setAlertCreated(true);
+      pushEvent('ride_alert_created', { origin: origin.address, destination: destination.address });
     } catch { /* ignore */ }
     finally { setAlertCreating(false); }
   }
@@ -472,7 +474,35 @@ function SearchPageContent() {
       const rides = res.data.rides || [];
       const visibleRides = canUseWomenOnly ? rides : rides.filter((ride) => !ride.femaleOnly);
       setResults(visibleRides);
-      setTotal(canUseWomenOnly ? (res.data.pagination?.total || 0) : visibleRides.length);
+      const resultsCount = canUseWomenOnly ? (res.data.pagination?.total || 0) : visibleRides.length;
+      setTotal(resultsCount);
+      pushEvent('search', {
+        origin: origin.address,
+        destination: destination.address,
+        departure_date: date,
+        seats,
+        female_only: canUseWomenOnly && femaleOnly,
+        search_source: 'results',
+      });
+      if (resultsCount === 0) {
+        pushEvent('search_no_results', {
+          origin: origin.address,
+          destination: destination.address,
+          departure_date: date,
+        });
+      } else {
+        pushEcommerceEvent(
+          'view_item_list',
+          { items: visibleRides.map((ride) => ({ item_id: ride.id, price: ride.segment?.segmentFare ?? ride.basePricePerSeat, quantity: 1 })) },
+          {
+            item_list_id: 'search_results',
+            results_count: resultsCount,
+            sort_by: sortBy,
+            max_price: maxPrice || undefined,
+            departure_period: departurePeriod || undefined,
+          },
+        );
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('search.failed');
       setError(message);

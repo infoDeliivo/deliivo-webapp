@@ -10,6 +10,7 @@ import LoadFailureCard from '@/components/LoadFailureCard';
 import { getApiErrorMessage, paymentMethodsApi, PaymentMethod, paymentsApi, RiderTransaction } from '@/lib/api';
 import { showError, showSuccess } from '@/lib/app-feedback';
 import { useTranslation } from '@/lib/i18n-context';
+import { pushEcommerceEvent } from '@/lib/analytics';
 
 function formatMoney(amount?: number, currency?: string) {
   if (typeof amount !== 'number') return '--';
@@ -357,6 +358,7 @@ function AddCardForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
           throw new Error(t('profile.cardMethodMissing'));
         }
         await paymentMethodsApi.save(paymentMethodId, customerId);
+        pushEcommerceEvent('add_payment_info', {}, { payment_type: 'card', context: 'profile' });
         showSuccess(t('profile.cardSaved'), t('profile.cardSavedCopy'));
         onSuccess();
       }
