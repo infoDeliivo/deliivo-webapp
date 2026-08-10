@@ -294,7 +294,8 @@ export default function AdminUserDetailsPage() {
       || latestVeriffRecord.dobMatch === false
       || latestVeriffRecord.genderMatch === false
     )
-  ) || latestVeriffRecord?.status === 'IDENTITY_MISMATCH';
+  );
+  const legacyIdentityMismatch = latestVeriffRecord?.status === 'IDENTITY_MISMATCH';
   const historyRecords = details.dlVerifications.filter((record) => record.id !== manualRecord?.id && record.id !== latestVeriffRecord?.id);
   const canOverrideManual = Boolean(manualRecord && manualRecord.status !== 'SUPERSEDED');
   const verificationSteps = [
@@ -308,11 +309,15 @@ export default function AdminUserDetailsPage() {
       value: user.verificationFlags.veriffVerified,
       hint: veriffIdentityMismatch
         ? 'Veriff approved the document, but the identity does not match the profile.'
+        : legacyIdentityMismatch
+          ? 'Identity mismatch was detected, but no approved Veriff decision is recorded.'
         : 'Automated Veriff verification approved.',
       statusLabel: veriffIdentityMismatch
         ? 'Approved, mismatch'
+        : legacyIdentityMismatch
+          ? 'Identity mismatch'
         : undefined,
-      tone: veriffIdentityMismatch
+      tone: veriffIdentityMismatch || legacyIdentityMismatch
         ? 'danger' as const
         : undefined,
     },
