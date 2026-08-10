@@ -268,7 +268,11 @@ export default function AdminUserDetailsPage() {
   const initials = fullName(user).split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
   const manualSessionKey = `manual:${user.id}`;
   const manualRecord = details.dlVerifications.find((record) => record.veriffSessionId === manualSessionKey) || null;
-  const veriffRecords = details.dlVerifications.filter((record) => record.veriffSessionId !== manualSessionKey);
+  const veriffRecords = details.dlVerifications.filter((record) => {
+    if (record.veriffSessionId === manualSessionKey) return false;
+    if (user.verificationFlags.veriffVerified && record.status === 'PENDING') return false;
+    return true;
+  });
   const latestVeriffRecord =
     veriffRecords.find((record) => record.status === 'APPROVED')
     || veriffRecords.find((record) => record.status === 'IDENTITY_MISMATCH')
