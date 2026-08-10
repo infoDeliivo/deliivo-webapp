@@ -1525,6 +1525,12 @@ export const adminApi = {
       { method: 'POST', body: JSON.stringify({ reason }) },
     );
   },
+  requestDlResubmission(userId: string, reason: string) {
+    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
+      `/api/v1/admin/dl-verifications/${userId}/resubmit`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    );
+  },
   // Vehicle review queue. Oldest-first server-side, so the list arrives in the order
   // it should be worked.
   listVehicles(params?: { status?: string; page?: number; limit?: number }) {

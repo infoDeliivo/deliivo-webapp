@@ -102,7 +102,7 @@ export default function AdminUserDetailsPage() {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [veriffActionLoading, setVeriffActionLoading] = useState(false);
-  const [verificationAction, setVerificationAction] = useState<'approve' | 'decline' | 'require-veriff' | null>(null);
+  const [verificationAction, setVerificationAction] = useState<'approve' | 'decline' | 'resubmit' | 'require-veriff' | null>(null);
   const [documentLoading, setDocumentLoading] = useState<string | null>(null);
 
   useEffect(() => {
@@ -179,6 +179,22 @@ export default function AdminUserDetailsPage() {
       showSuccess('Manual override declined', `${fullName(details.user)} licence review was declined.`);
     } catch (err: unknown) {
       showError('Action failed', getApiErrorMessage(err, 'Could not decline the manual licence review'));
+    } finally {
+      setVerificationAction(null);
+    }
+  }
+
+  async function requestManualResubmission() {
+    if (!details) return;
+    const reason = window.prompt('Enter re-request reason');
+    if (!reason || !reason.trim()) return;
+    setVerificationAction('resubmit');
+    try {
+      await adminApi.requestDlResubmission(details.user.id, reason.trim());
+      await loadDetails();
+      showSuccess('Resubmission requested', `${fullName(details.user)} must upload the licence again.`);
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not request licence resubmission'));
     } finally {
       setVerificationAction(null);
     }
@@ -367,13 +383,10 @@ export default function AdminUserDetailsPage() {
 
           <Section title="Verification" icon={IdCard}>
             <div className="mb-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Verification list</p>
               {verificationSteps.map((step) => (
                 <VerificationFlagRow key={step.label} label={step.label} value={step.value} hint={step.hint} />
               ))}
-            </div>
-
-            <div className="mb-4 space-y-3 border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Current verification state</p>
 
               {manualRecord ? (
                 <VerificationRecordCard
@@ -408,6 +421,14 @@ export default function AdminUserDetailsPage() {
                           >
                             {verificationAction === 'decline' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
                             Decline override
+                          </button>
+                          <button
+                            onClick={requestManualResubmission}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                          >
+                            {verificationAction === 'resubmit' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                            Re-request
                           </button>
                         </>
                       )}
