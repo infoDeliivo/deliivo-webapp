@@ -268,7 +268,13 @@ export default function AdminUserDetailsPage() {
   const initials = fullName(user).split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
   const manualSessionKey = `manual:${user.id}`;
   const manualRecord = details.dlVerifications.find((record) => record.veriffSessionId === manualSessionKey) || null;
-  const latestVeriffRecord = details.dlVerifications.find((record) => record.veriffSessionId !== manualSessionKey) || null;
+  const veriffRecords = details.dlVerifications.filter((record) => record.veriffSessionId !== manualSessionKey);
+  const latestVeriffRecord =
+    veriffRecords.find((record) => record.status === 'APPROVED')
+    || veriffRecords.find((record) => record.status === 'IDENTITY_MISMATCH')
+    || veriffRecords.find((record) => record.status === 'RESUBMISSION_REQUESTED')
+    || veriffRecords[0]
+    || null;
   const historyRecords = details.dlVerifications.filter((record) => record.id !== manualRecord?.id && record.id !== latestVeriffRecord?.id);
   const canOverrideManual = Boolean(manualRecord && manualRecord.status !== 'SUPERSEDED');
   const verificationSteps = [
