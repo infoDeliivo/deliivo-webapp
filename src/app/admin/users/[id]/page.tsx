@@ -102,6 +102,7 @@ export default function AdminUserDetailsPage() {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [veriffActionLoading, setVeriffActionLoading] = useState(false);
+  const [verificationAction, setVerificationAction] = useState<'approve' | 'decline' | 'require-veriff' | null>(null);
   const [documentLoading, setDocumentLoading] = useState<string | null>(null);
 
   useEffect(() => {
@@ -140,6 +141,7 @@ export default function AdminUserDetailsPage() {
   async function requireVeriff() {
     if (!details?.user.verificationFlags.canRequireVeriff) return;
     setVeriffActionLoading(true);
+    setVerificationAction('require-veriff');
     try {
       await adminApi.requireVeriff(details.user.id);
       await loadDetails();
@@ -148,6 +150,37 @@ export default function AdminUserDetailsPage() {
       showError('Action failed', getApiErrorMessage(err, 'Could not require Veriff for this user'));
     } finally {
       setVeriffActionLoading(false);
+      setVerificationAction(null);
+    }
+  }
+
+  async function approveManualOverride() {
+    if (!details) return;
+    setVerificationAction('approve');
+    try {
+      await adminApi.approveDlSubmission(details.user.id);
+      await loadDetails();
+      showSuccess('Manual override approved', `${fullName(details.user)} is now licence verified.`);
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not approve the manual licence review'));
+    } finally {
+      setVerificationAction(null);
+    }
+  }
+
+  async function declineManualOverride() {
+    if (!details) return;
+    const reason = window.prompt('Enter decline reason');
+    if (!reason || !reason.trim()) return;
+    setVerificationAction('decline');
+    try {
+      await adminApi.declineDlSubmission(details.user.id, reason.trim());
+      await loadDetails();
+      showSuccess('Manual override declined', `${fullName(details.user)} licence review was declined.`);
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not decline the manual licence review'));
+    } finally {
+      setVerificationAction(null);
     }
   }
 
@@ -187,6 +220,11 @@ export default function AdminUserDetailsPage() {
 
   const { user, summary } = details;
   const initials = fullName(user).split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+  const manualSessionKey = `manual:${user.id}`;
+  const manualRecord = details.dlVerifications.find((record) => record.veriffSessionId === manualSessionKey) || null;
+  const latestVeriffRecord = details.dlVerifications.find((record) => record.veriffSessionId !== manualSessionKey) || null;
+  const historyRecords = details.dlVerifications.filter((record) => record.id !== manualRecord?.id && record.id !== latestVeriffRecord?.id);
+  const canOverrideManual = Boolean(manualRecord && manualRecord.status !== 'SUPERSEDED');
   const verificationSteps = [
     {
       label: '1. Onboarding complete',
@@ -334,6 +372,93 @@ export default function AdminUserDetailsPage() {
               ))}
             </div>
 
+            <div className="mb-4 space-y-3 border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Current verification state</p>
+
+              {manualRecord ? (
+                <VerificationRecordCard
+                  title="Manual review"
+                  record={manualRecord}
+                  actions={
+                    <div className="flex flex-wrap gap-2">
+                      {manualRecord.previewKey && (
+                        <button
+                          onClick={() => openPrivateDocument(manualRecord.previewKey!, 'licence document')}
+                          disabled={documentLoading === manualRecord.previewKey}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:border-[#F97316] hover:text-[#F97316] disabled:opacity-50"
+                        >
+                          {documentLoading === manualRecord.previewKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                          Licence
+                        </button>
+                      )}
+                      {canOverrideManual && (
+                        <>
+                          <button
+                            onClick={approveManualOverride}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
+                          >
+                            {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                            Approve override
+                          </button>
+                          <button
+                            onClick={declineManualOverride}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50"
+                          >
+                            {verificationAction === 'decline' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                            Decline override
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  }
+                />
+              ) : (
+                <EmptyLine>No manual licence review row.</EmptyLine>
+              )}
+
+              {latestVeriffRecord ? (
+                <VerificationRecordCard
+                  title="Veriff"
+                  record={latestVeriffRecord}
+                  actions={
+                    user.verificationFlags.canRequireVeriff ? (
+                      <button
+                        onClick={requireVeriff}
+                        disabled={veriffActionLoading}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 disabled:opacity-50"
+                      >
+                        {veriffActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                        Require Veriff
+                      </button>
+                    ) : null
+                  }
+                />
+              ) : user.verificationFlags.canRequireVeriff ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">Veriff not completed yet</p>
+                      <p className="text-xs text-amber-800">This user is manually approved only. You can force them back into the Veriff flow.</p>
+                    </div>
+                    <button
+                      onClick={requireVeriff}
+                      disabled={veriffActionLoading}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-700 disabled:opacity-50"
+                    >
+                      {veriffActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                      Require Veriff
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mb-3 border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Verification history</p>
+            </div>
+
             {details.dlVerifications.length === 0 ? (
               <EmptyLine>No driving licence submissions.</EmptyLine>
             ) : (
@@ -423,6 +548,42 @@ function VerificationFlagRow({ label, value, hint }: { label: string; value: boo
         {value ? <ShieldCheck className="h-3.5 w-3.5" /> : <ShieldAlert className="h-3.5 w-3.5" />}
         {value ? 'Approved' : 'Pending'}
       </span>
+    </div>
+  );
+}
+
+function VerificationRecordCard({
+  title,
+  record,
+  actions,
+}: {
+  title: string;
+  record: AdminUserDetails['dlVerifications'][number];
+  actions?: ReactNode;
+}) {
+  const tone =
+    record.status === 'APPROVED'
+      ? 'good'
+      : record.status === 'DECLINED' || record.status === 'IDENTITY_MISMATCH'
+        ? 'danger'
+        : 'neutral';
+
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-gray-900">{title}</p>
+            <StatusBadge tone={tone}>{record.status.replace(/_/g, ' ')}</StatusBadge>
+          </div>
+          <p className="mt-1 text-xs text-gray-400">{formatDate(record.createdAt, true)}</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Name {record.nameMatch === null ? '-' : record.nameMatch ? 'match' : 'mismatch'} · DOB {record.dobMatch === null ? '-' : record.dobMatch ? 'match' : 'mismatch'} · Gender {record.genderMatch === null ? '-' : record.genderMatch ? 'match' : 'mismatch'}
+          </p>
+          {record.declineReason && <p className="mt-1 text-xs text-red-500">{record.declineReason}</p>}
+        </div>
+        {actions ? <div className="shrink-0">{actions}</div> : null}
+      </div>
     </div>
   );
 }
