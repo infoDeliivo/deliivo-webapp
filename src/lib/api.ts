@@ -1501,6 +1501,12 @@ export const adminApi = {
       { method: 'POST' },
     );
   },
+  syncUserVeriff(id: string) {
+    return apiFetch<{ data: { scanned: number; updated: number; skipped: number } }>(
+      `/api/v1/admin/users/${id}/sync-veriff`,
+      { method: 'POST' },
+    );
+  },
   // Driving-licence review queue. The licence photo comes back as `previewKey` —
   // a private S3 key exchanged for a short-lived signed URL via getDocumentReadUrl.
   listDlSubmissions(params?: { status?: string; page?: number; limit?: number }) {

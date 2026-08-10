@@ -114,6 +114,9 @@ export default function AdminUserDetailsPage() {
     setLoading(true);
     setError('');
     try {
+      await adminApi.syncUserVeriff(userId).catch((err: unknown) => {
+        console.warn('Admin Veriff sync failed before loading user details', err);
+      });
       const res = await adminApi.getUserDetails(userId);
       setDetails(res.data);
     } catch (err: unknown) {
