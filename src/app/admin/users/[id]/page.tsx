@@ -293,7 +293,15 @@ export default function AdminUserDetailsPage() {
     {
       label: '2. Veriff verification',
       value: user.verificationFlags.veriffVerified,
-      hint: 'Automated Veriff verification approved.',
+      hint: latestVeriffRecord?.status === 'IDENTITY_MISMATCH'
+        ? 'Veriff approved the document, but the identity does not match the profile.'
+        : 'Automated Veriff verification approved.',
+      statusLabel: latestVeriffRecord?.status === 'IDENTITY_MISMATCH'
+        ? 'Identity mismatch'
+        : undefined,
+      tone: latestVeriffRecord?.status === 'IDENTITY_MISMATCH'
+        ? 'danger' as const
+        : undefined,
     },
     {
       label: '3. Licence verified',
@@ -428,7 +436,7 @@ export default function AdminUserDetailsPage() {
             <div className="mb-4 space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Verification list</p>
               {verificationSteps.map((step) => (
-                <VerificationFlagRow key={step.label} label={step.label} value={step.value} hint={step.hint} />
+                <VerificationFlagRow key={step.label} label={step.label} value={step.value} hint={step.hint} statusLabel={step.statusLabel} tone={step.tone} />
               ))}
 
               {manualRecord ? (
@@ -700,16 +708,36 @@ function StatusBadge({ children, tone }: { children: ReactNode; tone: 'good' | '
   return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${classes[tone]}`}>{children}</span>;
 }
 
-function VerificationFlagRow({ label, value, hint }: { label: string; value: boolean; hint: string }) {
+function VerificationFlagRow({
+  label,
+  value,
+  hint,
+  statusLabel,
+  tone,
+}: {
+  label: string;
+  value: boolean;
+  hint: string;
+  statusLabel?: string;
+  tone?: 'good' | 'danger' | 'pending';
+}) {
+  const resolvedTone = tone ?? (value ? 'good' : 'pending');
+  const toneClass =
+    resolvedTone === 'good'
+      ? 'bg-green-50 text-green-700'
+      : resolvedTone === 'danger'
+        ? 'bg-red-50 text-red-600'
+        : 'bg-amber-50 text-amber-700';
+
   return (
     <div className="flex items-start justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-gray-900">{label}</p>
         <p className="text-xs text-gray-500">{hint}</p>
       </div>
-      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${value ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-        {value ? <ShieldCheck className="h-3.5 w-3.5" /> : <ShieldAlert className="h-3.5 w-3.5" />}
-        {value ? 'Approved' : 'Pending'}
+      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${toneClass}`}>
+        {resolvedTone === 'good' ? <ShieldCheck className="h-3.5 w-3.5" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+        {statusLabel ?? (value ? 'Approved' : 'Pending')}
       </span>
     </div>
   );
