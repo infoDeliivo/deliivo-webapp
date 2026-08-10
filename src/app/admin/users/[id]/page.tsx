@@ -241,6 +241,35 @@ export default function AdminUserDetailsPage() {
   const latestVeriffRecord = details.dlVerifications.find((record) => record.veriffSessionId !== manualSessionKey) || null;
   const historyRecords = details.dlVerifications.filter((record) => record.id !== manualRecord?.id && record.id !== latestVeriffRecord?.id);
   const canOverrideManual = Boolean(manualRecord && manualRecord.status !== 'SUPERSEDED');
+  const verificationSteps = [
+    {
+      label: '1. Onboarding complete',
+      value: user.verificationFlags.completeOnboardingVerified,
+      hint: 'Profile basics completed and onboarding submitted.',
+    },
+    {
+      label: '2. Veriff verification',
+      value: user.verificationFlags.veriffVerified,
+      hint: 'Automated Veriff verification approved.',
+    },
+    {
+      label: '3. Licence verified',
+      value: user.verificationFlags.licenseVerified,
+      hint: 'Driving licence approval flag active on the user.',
+    },
+    {
+      label: 'Manual licence approval',
+      value: user.verificationFlags.manualLicenseApproved,
+      hint: user.verificationFlags.canRequireVeriff
+        ? 'Manual approval is active. Admin can require Veriff again.'
+        : 'No active manual-only licence approval.',
+    },
+    {
+      label: '4. Vehicle verified',
+      value: user.verificationFlags.vehicleVerified,
+      hint: 'At least one active vehicle is approved.',
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-5">
@@ -355,6 +384,9 @@ export default function AdminUserDetailsPage() {
           <Section title="Verification" icon={IdCard}>
             <div className="mb-4 space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Verification list</p>
+              {verificationSteps.map((step) => (
+                <VerificationFlagRow key={step.label} label={step.label} value={step.value} hint={step.hint} />
+              ))}
 
               {manualRecord ? (
                 <VerificationRecordCard
