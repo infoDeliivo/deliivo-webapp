@@ -21,6 +21,7 @@ import {
   Phone,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   User,
 } from 'lucide-react';
 import {
@@ -100,6 +101,7 @@ export default function AdminUserDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [veriffActionLoading, setVeriffActionLoading] = useState(false);
   const [documentLoading, setDocumentLoading] = useState<string | null>(null);
 
   useEffect(() => {
@@ -132,6 +134,20 @@ export default function AdminUserDetailsPage() {
       showError('Action failed', getApiErrorMessage(err, 'Could not update ban status'));
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  async function requireVeriff() {
+    if (!details?.user.verificationFlags.canRequireVeriff) return;
+    setVeriffActionLoading(true);
+    try {
+      await adminApi.requireVeriff(details.user.id);
+      await loadDetails();
+      showSuccess('Veriff required', `${fullName(details.user)} must now complete Veriff verification.`);
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not require Veriff for this user'));
+    } finally {
+      setVeriffActionLoading(false);
     }
   }
 
@@ -171,6 +187,35 @@ export default function AdminUserDetailsPage() {
 
   const { user, summary } = details;
   const initials = fullName(user).split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+  const verificationSteps = [
+    {
+      label: '1. Onboarding complete',
+      value: user.verificationFlags.completeOnboardingVerified,
+      hint: 'Profile basics completed and onboarding submitted.',
+    },
+    {
+      label: '2. Veriff verification',
+      value: user.verificationFlags.veriffVerified,
+      hint: 'Automated Veriff verification approved.',
+    },
+    {
+      label: '3. Licence verified',
+      value: user.verificationFlags.licenseVerified,
+      hint: 'Driving licence approval flag active on the user.',
+    },
+    {
+      label: 'Manual licence approval',
+      value: user.verificationFlags.manualLicenseApproved,
+      hint: user.verificationFlags.canRequireVeriff
+        ? 'Manual approval is active. Admin can require Veriff again.'
+        : 'No active manual-only licence approval.',
+    },
+    {
+      label: '4. Vehicle verified',
+      value: user.verificationFlags.vehicleVerified,
+      hint: 'At least one active vehicle is approved.',
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-5">
@@ -208,6 +253,16 @@ export default function AdminUserDetailsPage() {
           <button onClick={loadDetails} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:text-[#F97316]">
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </button>
+          {user.verificationFlags.canRequireVeriff && (
+            <button
+              onClick={requireVeriff}
+              disabled={veriffActionLoading}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {veriffActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+              Require Veriff
+            </button>
+          )}
           {user.role !== 'ADMIN' && (
             <button
               onClick={toggleBan}
@@ -273,6 +328,12 @@ export default function AdminUserDetailsPage() {
           </Section>
 
           <Section title="Verification" icon={IdCard}>
+            <div className="mb-4 space-y-3">
+              {verificationSteps.map((step) => (
+                <VerificationFlagRow key={step.label} label={step.label} value={step.value} hint={step.hint} />
+              ))}
+            </div>
+
             {details.dlVerifications.length === 0 ? (
               <EmptyLine>No driving licence submissions.</EmptyLine>
             ) : (
@@ -349,6 +410,21 @@ function StatusBadge({ children, tone }: { children: ReactNode; tone: 'good' | '
     neutral: 'bg-gray-100 text-gray-600',
   };
   return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${classes[tone]}`}>{children}</span>;
+}
+
+function VerificationFlagRow({ label, value, hint }: { label: string; value: boolean; hint: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-gray-900">{label}</p>
+        <p className="text-xs text-gray-500">{hint}</p>
+      </div>
+      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${value ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+        {value ? <ShieldCheck className="h-3.5 w-3.5" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+        {value ? 'Approved' : 'Pending'}
+      </span>
+    </div>
+  );
 }
 
 function Metric({ icon: Icon, label, value, hint }: { icon: ElementType; label: string; value: string; hint: string }) {

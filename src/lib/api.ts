@@ -1495,6 +1495,12 @@ export const adminApi = {
   unbanUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/unban`, { method: 'POST' });
   },
+  requireVeriff(id: string) {
+    return apiFetch<{ data: { id: string; dlVerified: boolean; requiresVeriff: boolean } }>(
+      `/api/v1/admin/users/${id}/require-veriff`,
+      { method: 'POST' },
+    );
+  },
   // Driving-licence review queue. The licence photo comes back as `previewKey` —
   // a private S3 key exchanged for a short-lived signed URL via getDocumentReadUrl.
   listDlSubmissions(params?: { status?: string; page?: number; limit?: number }) {
@@ -1844,6 +1850,14 @@ export interface AdminUserDetails {
     privacyAcceptedAt: string | null;
     privacyVersion: string | null;
     updatedAt: string;
+    verificationFlags: {
+      completeOnboardingVerified: boolean;
+      veriffVerified: boolean;
+      manualLicenseApproved: boolean;
+      licenseVerified: boolean;
+      vehicleVerified: boolean;
+      canRequireVeriff: boolean;
+    };
     travelPreference?: { chattiness: string | null; pets: string | null } | null;
     ratingStats?: { totalRatings: number; totalStars: number; averageRating: number } | null;
   };
