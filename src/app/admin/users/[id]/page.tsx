@@ -103,6 +103,7 @@ export default function AdminUserDetailsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [veriffActionLoading, setVeriffActionLoading] = useState(false);
   const [verificationAction, setVerificationAction] = useState<'approve' | 'decline' | 'resubmit' | 'require-veriff' | null>(null);
+  const [vehicleActionKey, setVehicleActionKey] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState<string | null>(null);
 
   useEffect(() => {
@@ -197,6 +198,35 @@ export default function AdminUserDetailsPage() {
       showError('Action failed', getApiErrorMessage(err, 'Could not request licence resubmission'));
     } finally {
       setVerificationAction(null);
+    }
+  }
+
+  async function approveVehicleReview(vehicleId: string) {
+    setVehicleActionKey(`approve:${vehicleId}`);
+    try {
+      await adminApi.verifyVehicle(vehicleId);
+      await loadDetails();
+      showSuccess('Vehicle approved', 'Vehicle verification has been approved.');
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not approve the vehicle'));
+    } finally {
+      setVehicleActionKey(null);
+    }
+  }
+
+  async function rejectVehicleReview(vehicleId: string, mode: 'decline' | 'rerequest') {
+    const promptText = mode === 'rerequest' ? 'Enter re-request reason' : 'Enter decline reason';
+    const reason = window.prompt(promptText);
+    if (!reason || !reason.trim()) return;
+    setVehicleActionKey(`${mode}:${vehicleId}`);
+    try {
+      await adminApi.rejectVehicle(vehicleId, reason.trim());
+      await loadDetails();
+      showSuccess(mode === 'rerequest' ? 'Vehicle re-requested' : 'Vehicle declined', reason.trim());
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not update the vehicle review'));
+    } finally {
+      setVehicleActionKey(null);
     }
   }
 
@@ -516,6 +546,61 @@ export default function AdminUserDetailsPage() {
                   </div>
                 </div>
               )}
+
+              {details.vehicles.map((vehicle) => {
+                const vehicleTitle = [vehicle.brand, vehicle.model_name || vehicle.model_num].filter(Boolean).join(' ') || 'Vehicle';
+                return (
+                  <VerificationRecordCard
+                    key={vehicle.id}
+                    title={`Vehicle review · ${vehicleTitle}`}
+                    record={{
+                      id: vehicle.id,
+                      status: vehicle.verificationStatus,
+                      veriffSessionId: `vehicle:${vehicle.id}`,
+                      verifiedName: null,
+                      verifiedDob: null,
+                      verifiedGender: null,
+                      nameMatch: null,
+                      dobMatch: null,
+                      genderMatch: null,
+                      previewKey: null,
+                      declineReason: vehicle.rejectionReason,
+                      reviewedById: null,
+                      reviewedAt: null,
+                      createdAt: vehicle.createdAt ?? new Date().toISOString(),
+                      updatedAt: vehicle.reviewedAt ?? vehicle.createdAt ?? new Date().toISOString(),
+                    }}
+                    actions={
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => approveVehicleReview(vehicle.id)}
+                          disabled={vehicleActionKey !== null}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
+                        >
+                          {vehicleActionKey === `approve:${vehicle.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => rejectVehicleReview(vehicle.id, 'decline')}
+                          disabled={vehicleActionKey !== null}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50"
+                        >
+                          {vehicleActionKey === `decline:${vehicle.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                          Decline
+                        </button>
+                        <button
+                          onClick={() => rejectVehicleReview(vehicle.id, 'rerequest')}
+                          disabled={vehicleActionKey !== null}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                        >
+                          {vehicleActionKey === `rerequest:${vehicle.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                          Re-request
+                        </button>
+                      </div>
+                    }
+                  />
+                );
+              })}
             </div>
 
             <div className="mb-3 border-t border-gray-100 pt-4">
