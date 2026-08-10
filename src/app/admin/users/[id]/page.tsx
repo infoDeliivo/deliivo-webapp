@@ -241,35 +241,6 @@ export default function AdminUserDetailsPage() {
   const latestVeriffRecord = details.dlVerifications.find((record) => record.veriffSessionId !== manualSessionKey) || null;
   const historyRecords = details.dlVerifications.filter((record) => record.id !== manualRecord?.id && record.id !== latestVeriffRecord?.id);
   const canOverrideManual = Boolean(manualRecord && manualRecord.status !== 'SUPERSEDED');
-  const verificationSteps = [
-    {
-      label: '1. Onboarding complete',
-      value: user.verificationFlags.completeOnboardingVerified,
-      hint: 'Profile basics completed and onboarding submitted.',
-    },
-    {
-      label: '2. Veriff verification',
-      value: user.verificationFlags.veriffVerified,
-      hint: 'Automated Veriff verification approved.',
-    },
-    {
-      label: '3. Licence verified',
-      value: user.verificationFlags.licenseVerified,
-      hint: 'Driving licence approval flag active on the user.',
-    },
-    {
-      label: 'Manual licence approval',
-      value: user.verificationFlags.manualLicenseApproved,
-      hint: user.verificationFlags.canRequireVeriff
-        ? 'Manual approval is active. Admin can require Veriff again.'
-        : 'No active manual-only licence approval.',
-    },
-    {
-      label: '4. Vehicle verified',
-      value: user.verificationFlags.vehicleVerified,
-      hint: 'At least one active vehicle is approved.',
-    },
-  ];
 
   return (
     <div className="flex flex-col gap-5">
@@ -384,9 +355,6 @@ export default function AdminUserDetailsPage() {
           <Section title="Verification" icon={IdCard}>
             <div className="mb-4 space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Verification list</p>
-              {verificationSteps.map((step) => (
-                <VerificationFlagRow key={step.label} label={step.label} value={step.value} hint={step.hint} />
-              ))}
 
               {manualRecord ? (
                 <VerificationRecordCard
@@ -412,7 +380,7 @@ export default function AdminUserDetailsPage() {
                             className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
                           >
                             {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                            Approve override
+                            Approve
                           </button>
                           <button
                             onClick={declineManualOverride}
@@ -420,7 +388,7 @@ export default function AdminUserDetailsPage() {
                             className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50"
                           >
                             {verificationAction === 'decline' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
-                            Decline override
+                            Decline
                           </button>
                           <button
                             onClick={requestManualResubmission}
@@ -444,51 +412,95 @@ export default function AdminUserDetailsPage() {
                   title="Veriff"
                   record={latestVeriffRecord}
                   actions={
-                    user.verificationFlags.canRequireVeriff ? (
+                    <div className="flex flex-wrap gap-2">
+                      {canOverrideManual && (
+                        <>
+                          <button
+                            onClick={approveManualOverride}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
+                          >
+                            {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                            Approve
+                          </button>
+                          <button
+                            onClick={declineManualOverride}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50"
+                          >
+                            {verificationAction === 'decline' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                            Decline
+                          </button>
+                        </>
+                      )}
                       <button
-                        onClick={requireVeriff}
-                        disabled={veriffActionLoading}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 disabled:opacity-50"
+                        onClick={user.verificationFlags.canRequireVeriff ? requireVeriff : requestManualResubmission}
+                        disabled={verificationAction !== null || veriffActionLoading}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 disabled:opacity-50"
                       >
-                        {veriffActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
-                        Require Veriff
+                        {verificationAction === 'require-veriff' || verificationAction === 'resubmit' || veriffActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        Re-request
                       </button>
-                    ) : null
+                    </div>
                   }
                 />
-              ) : user.verificationFlags.canRequireVeriff ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+              ) : (
+                <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-amber-900">Veriff not completed yet</p>
-                      <p className="text-xs text-amber-800">This user is manually approved only. You can force them back into the Veriff flow.</p>
+                      <p className="text-sm font-semibold text-gray-900">Veriff</p>
+                      <p className="text-xs text-gray-500">No active Veriff record is available for this user.</p>
                     </div>
-                    <button
-                      onClick={requireVeriff}
-                      disabled={veriffActionLoading}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-700 disabled:opacity-50"
-                    >
-                      {veriffActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
-                      Require Veriff
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      {canOverrideManual && (
+                        <>
+                          <button
+                            onClick={approveManualOverride}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
+                          >
+                            {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                            Approve
+                          </button>
+                          <button
+                            onClick={declineManualOverride}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50"
+                          >
+                            {verificationAction === 'decline' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                            Decline
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={user.verificationFlags.canRequireVeriff ? requireVeriff : requestManualResubmission}
+                        disabled={verificationAction !== null || veriffActionLoading}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                      >
+                        {verificationAction === 'require-veriff' || verificationAction === 'resubmit' || veriffActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        Re-request
+                      </button>
+                    </div>
                   </div>
                 </div>
-              ) : null}
+              )}
             </div>
 
             <div className="mb-3 border-t border-gray-100 pt-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Verification history</p>
             </div>
 
-            {details.dlVerifications.length === 0 ? (
+            {historyRecords.length === 0 ? (
               <EmptyLine>No driving licence submissions.</EmptyLine>
             ) : (
               <div className="divide-y divide-gray-100">
-                {details.dlVerifications.map((record) => (
+                {historyRecords.map((record) => (
                   <div key={record.id} className="py-3 first:pt-0 last:pb-0">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">{record.status.replace(/_/g, ' ')}</p>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {record.veriffSessionId === manualSessionKey ? 'Manual review' : 'Veriff'} · {record.status.replace(/_/g, ' ')}
+                        </p>
                         <p className="text-xs text-gray-400">{formatDate(record.createdAt, true)}</p>
                       </div>
                       {record.previewKey && (
