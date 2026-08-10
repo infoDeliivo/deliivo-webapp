@@ -270,9 +270,13 @@ export default function AdminUserDetailsPage() {
   const { user, summary } = details;
   const initials = fullName(user).split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
   const manualSessionKey = `manual:${user.id}`;
-  const manualRecord = details.dlVerifications.find((record) => record.veriffSessionId === manualSessionKey) || null;
+  const isManualDlRecord = (record: typeof details.dlVerifications[number]) =>
+    record.veriffSessionId.startsWith('manual:') || Boolean(record.previewKey);
+  const manualRecord = details.dlVerifications.find((record) => record.veriffSessionId === manualSessionKey)
+    || details.dlVerifications.find(isManualDlRecord)
+    || null;
   const veriffRecords = details.dlVerifications.filter((record) => {
-    if (record.veriffSessionId === manualSessionKey) return false;
+    if (isManualDlRecord(record)) return false;
     if (user.verificationFlags.veriffVerified && record.status === 'PENDING') return false;
     return true;
   });
