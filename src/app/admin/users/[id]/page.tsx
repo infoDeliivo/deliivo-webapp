@@ -282,6 +282,15 @@ export default function AdminUserDetailsPage() {
     || veriffRecords.find((record) => record.status === 'RESUBMISSION_REQUESTED')
     || veriffRecords[0]
     || null;
+  const veriffIdentityMismatch = Boolean(
+    latestVeriffRecord
+    && latestVeriffRecord.status === 'APPROVED'
+    && (
+      latestVeriffRecord.nameMatch === false
+      || latestVeriffRecord.dobMatch === false
+      || latestVeriffRecord.genderMatch === false
+    )
+  ) || latestVeriffRecord?.status === 'IDENTITY_MISMATCH';
   const historyRecords = details.dlVerifications.filter((record) => record.id !== manualRecord?.id && record.id !== latestVeriffRecord?.id);
   const canOverrideManual = Boolean(manualRecord && manualRecord.status !== 'SUPERSEDED');
   const verificationSteps = [
@@ -293,13 +302,13 @@ export default function AdminUserDetailsPage() {
     {
       label: '2. Veriff verification',
       value: user.verificationFlags.veriffVerified,
-      hint: latestVeriffRecord?.status === 'IDENTITY_MISMATCH'
+      hint: veriffIdentityMismatch
         ? 'Veriff approved the document, but the identity does not match the profile.'
         : 'Automated Veriff verification approved.',
-      statusLabel: latestVeriffRecord?.status === 'IDENTITY_MISMATCH'
-        ? 'Identity mismatch'
+      statusLabel: veriffIdentityMismatch
+        ? 'Approved, mismatch'
         : undefined,
-      tone: latestVeriffRecord?.status === 'IDENTITY_MISMATCH'
+      tone: veriffIdentityMismatch
         ? 'danger' as const
         : undefined,
     },
