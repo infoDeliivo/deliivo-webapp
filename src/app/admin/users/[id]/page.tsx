@@ -143,7 +143,7 @@ export default function AdminUserDetailsPage() {
   }
 
   async function requireVeriff() {
-    if (!details?.user.verificationFlags.canRequireVeriff) return;
+    if (!details || details.user.verificationFlags.veriffVerified) return;
     setVeriffActionLoading(true);
     setVerificationAction('require-veriff');
     try {
@@ -329,7 +329,7 @@ export default function AdminUserDetailsPage() {
     {
       label: 'Manual licence approval',
       value: user.verificationFlags.manualLicenseApproved,
-      hint: user.verificationFlags.canRequireVeriff
+      hint: user.verificationFlags.manualLicenseApproved
         ? 'Manual approval is active. Admin can require Veriff again.'
         : 'No active manual-only licence approval.',
     },
@@ -535,7 +535,7 @@ export default function AdminUserDetailsPage() {
                         </>
                       )}
                       <button
-                        onClick={user.verificationFlags.canRequireVeriff ? requireVeriff : requestManualResubmission}
+                        onClick={user.verificationFlags.veriffVerified ? requestManualResubmission : requireVeriff}
                         disabled={verificationAction !== null || veriffActionLoading}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 disabled:opacity-50"
                       >
@@ -574,7 +574,7 @@ export default function AdminUserDetailsPage() {
                         </>
                       )}
                       <button
-                        onClick={user.verificationFlags.canRequireVeriff ? requireVeriff : requestManualResubmission}
+                        onClick={user.verificationFlags.veriffVerified ? requestManualResubmission : requireVeriff}
                         disabled={verificationAction !== null || veriffActionLoading}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 disabled:opacity-50"
                       >
