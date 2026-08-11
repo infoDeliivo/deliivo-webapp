@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import {
   adminApi,
+  AdminVerificationEmailDraft,
   AdminUserBooking,
   AdminUserDetails,
   AdminUserPublishedRide,
@@ -105,6 +106,11 @@ export default function AdminUserDetailsPage() {
   const [verificationAction, setVerificationAction] = useState<'approve' | 'decline' | 'resubmit' | 'require-veriff' | null>(null);
   const [vehicleActionKey, setVehicleActionKey] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState<string | null>(null);
+  const [emailDraftLoading, setEmailDraftLoading] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailDraft, setEmailDraft] = useState<AdminVerificationEmailDraft | null>(null);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailText, setEmailText] = useState('');
 
   useEffect(() => {
     loadDetails();
@@ -201,6 +207,38 @@ export default function AdminUserDetailsPage() {
       showError('Action failed', getApiErrorMessage(err, 'Could not request licence resubmission'));
     } finally {
       setVerificationAction(null);
+    }
+  }
+
+  async function openVerificationEmailDialog() {
+    if (!details) return;
+    setEmailDraftLoading(true);
+    try {
+      const res = await adminApi.getVerificationEmailDraft(details.user.id);
+      setEmailDraft(res.data);
+      setEmailSubject(res.data.subject);
+      setEmailText(res.data.text);
+    } catch (err: unknown) {
+      showError('Email draft failed', getApiErrorMessage(err, 'Could not prepare verification email'));
+    } finally {
+      setEmailDraftLoading(false);
+    }
+  }
+
+  async function sendVerificationEmail() {
+    if (!details || !emailDraft) return;
+    setEmailSending(true);
+    try {
+      await adminApi.sendVerificationEmail(details.user.id, {
+        subject: emailSubject.trim(),
+        text: emailText.trim(),
+      });
+      setEmailDraft(null);
+      showSuccess('Email sent', `Verification email sent to ${emailDraft.to}.`);
+    } catch (err: unknown) {
+      showError('Email send failed', getApiErrorMessage(err, 'Could not send verification email'));
+    } finally {
+      setEmailSending(false);
     }
   }
 
@@ -341,6 +379,7 @@ export default function AdminUserDetailsPage() {
   ];
 
   return (
+    <>
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
@@ -375,6 +414,14 @@ export default function AdminUserDetailsPage() {
         <div className="flex flex-wrap gap-2">
           <button onClick={loadDetails} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:text-[#F97316]">
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          </button>
+          <button
+            onClick={openVerificationEmailDialog}
+            disabled={emailDraftLoading || !user.email}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+          >
+            {emailDraftLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+            Email verification steps
           </button>
           {user.verificationFlags.canRequireVeriff && (
             <button
@@ -713,6 +760,84 @@ export default function AdminUserDetailsPage() {
         </div>
       </div>
     </div>
+
+      {emailDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
+            <div className="border-b border-gray-100 px-5 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Review verification email</h2>
+                  <p className="mt-1 text-sm text-gray-500">To {emailDraft.to}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEmailDraft(null)}
+                  disabled={emailSending}
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-[75vh] space-y-4 overflow-y-auto px-5 py-4">
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Detected missing items</p>
+                {emailDraft.missingItems.length > 0 ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
+                    {emailDraft.missingItems.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-amber-900">No missing verification items were detected.</p>
+                )}
+              </div>
+
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Subject</span>
+                <input
+                  value={emailSubject}
+                  onChange={(event) => setEmailSubject(event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-900 outline-none focus:border-[#F97316] focus:ring-2 focus:ring-orange-100"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Message</span>
+                <textarea
+                  value={emailText}
+                  onChange={(event) => setEmailText(event.target.value)}
+                  rows={13}
+                  className="mt-1 w-full resize-y rounded-xl border border-gray-200 px-3 py-2 text-sm leading-6 text-gray-900 outline-none focus:border-[#F97316] focus:ring-2 focus:ring-orange-100"
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setEmailDraft(null)}
+                disabled={emailSending}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                onClick={sendVerificationEmail}
+                disabled={emailSending || emailSubject.trim().length < 3 || emailText.trim().length < 20}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#F97316] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-50"
+              >
+                {emailSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                Send email
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

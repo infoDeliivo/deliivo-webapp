@@ -1509,6 +1509,17 @@ export const adminApi = {
   },
   // Driving-licence review queue. The licence photo comes back as `previewKey` —
   // a private S3 key exchanged for a short-lived signed URL via getDocumentReadUrl.
+  getVerificationEmailDraft(id: string) {
+    return apiFetch<{ data: AdminVerificationEmailDraft }>(
+      `/api/v1/admin/users/${id}/verification-email/draft`,
+    );
+  },
+  sendVerificationEmail(id: string, data: { subject: string; text: string }) {
+    return apiFetch<{ data: { to: string; subject: string; missingItems: string[]; sentBy: string | null } }>(
+      `/api/v1/admin/users/${id}/verification-email/send`,
+      { method: 'POST', body: JSON.stringify(data) },
+    );
+  },
   listDlSubmissions(params?: { status?: string; page?: number; limit?: number }) {
     const query = new URLSearchParams();
     // 'ALL' is the absence of a filter, not a value the backend understands.
@@ -1826,6 +1837,14 @@ export interface AdminDlRecord {
   verifiedDob: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AdminVerificationEmailDraft {
+  to: string;
+  subject: string;
+  text: string;
+  missingItems: string[];
+  isDriverCandidate: boolean;
 }
 
 export interface AdminUser {
