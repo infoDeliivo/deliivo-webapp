@@ -1,6 +1,8 @@
 export const SUPPORTED_LOCALES = [
   { code: 'en', urlCode: 'en', label: 'English', shortLabel: 'EN' },
   { code: 'et', urlCode: 'ee', label: 'Eesti', shortLabel: 'EE' },
+  { code: 'lv', urlCode: 'lv', label: 'Latviešu', shortLabel: 'LV' },
+  { code: 'lt', urlCode: 'lt', label: 'Lietuvių', shortLabel: 'LT' },
   { code: 'ru', urlCode: 'ru', label: 'Русский', shortLabel: 'RU' },
 ] as const;
 

@@ -1,5 +1,6 @@
 import { dictionaries } from './i18n-dictionaries';
 import { DEFAULT_LOCALE, localeToUrlCode, SUPPORTED_LOCALES, type SupportedLocale } from './i18n';
+import { getLocaleTranslation } from './locale-overrides';
 import { publicConfig } from './public-config';
 
 export const SEO_HEADER_LOCALE = 'x-deliivo-locale';
@@ -19,7 +20,7 @@ const NOINDEX_PREFIXES = [
   '/tracking',
 ];
 
-export const PUBLIC_SITEMAP_INTERNAL_PATHS = ['/', '/blog', '/contact', '/faq', '/terms', '/privacy'] as const;
+export const PUBLIC_SITEMAP_INTERNAL_PATHS = ['/', '/blog', '/contact', '/faq', '/knowledge-base', '/terms', '/privacy'] as const;
 
 type TranslationParams = Record<string, string | number>;
 
@@ -58,7 +59,10 @@ function interpolate(value: string, params?: TranslationParams) {
 }
 
 export function translateSeo(locale: SupportedLocale, key: string, params?: TranslationParams) {
-  return interpolate(dictionaries[locale]?.[key] || dictionaries.en[key] || key, params);
+  return interpolate(
+    getLocaleTranslation(locale, key) || dictionaries[locale]?.[key] || dictionaries.en[key] || key,
+    params,
+  );
 }
 
 export function normalizeInternalPath(pathname?: string | null) {
@@ -86,6 +90,8 @@ export function getHtmlLang(locale: SupportedLocale) {
 
 function getOgLocale(locale: SupportedLocale) {
   if (locale === 'et') return 'et_EE';
+  if (locale === 'lv') return 'lv_LV';
+  if (locale === 'lt') return 'lt_LT';
   if (locale === 'ru') return 'ru_RU';
   return 'en_US';
 }
@@ -158,6 +164,12 @@ function resolveDefaultSeoCopy(locale: SupportedLocale, internalPath: string, bl
     return {
       title: `${translateSeo(locale, 'faq.title')} | Deliivo`,
       description: translateSeo(locale, 'faq.quickStartIntro'),
+    };
+  }
+  if (internalPath === '/knowledge-base') {
+    return {
+      title: 'Deliivo App Knowledge Base | Deliivo',
+      description: 'Support reference for chat assistants and support tools covering Deliivo rider, driver, booking, payment, payout, and dispute flows.',
     };
   }
   if (internalPath === '/terms') {

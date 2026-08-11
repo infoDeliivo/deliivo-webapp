@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { dictionaries } from './i18n-dictionaries';
+import { getLocaleTranslation } from './locale-overrides';
 import {
   DEFAULT_LOCALE,
   getBrowserLocale,
@@ -64,7 +65,10 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       setLocaleState(nextLocale);
     },
     t(key, params) {
-      const translated = dictionaries[locale]?.[key] || dictionaries.en[key] || key;
+      const translated = getLocaleTranslation(locale, key)
+        || dictionaries[locale]?.[key]
+        || dictionaries.en[key]
+        || key;
       return interpolate(translated, params);
     },
   }), [locale]);

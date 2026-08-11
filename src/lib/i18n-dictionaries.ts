@@ -1,6 +1,6 @@
 ﻿import type { SupportedLocale } from './i18n';
 
-const blogAndCommonAdditions: Record<SupportedLocale, Record<string, string>> = {
+const blogAndCommonAdditions: Record<string, Record<string, string>> = {
   en: {
     'common.remove': 'Remove',
     'common.retry': 'Try again',
@@ -141,7 +141,7 @@ const blogAndCommonAdditions: Record<SupportedLocale, Record<string, string>> = 
   },
 };
 
-const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
+const publishTranslations: Record<string, Record<string, string>> = {
   en: {
     'publish.routePointsCopy': 'Search and add up to 3 origin pickup points, up to 3 stopover points, and up to 3 destination drop-off points.',
     'publish.routePointFlowCopy': 'Add starting pickup points first. If you want stops along the route, choose suggested stopover cities and then add one exact point inside each selected stopover. Finish by adding destination drop-off points.',
@@ -643,7 +643,7 @@ const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
   },
 };
 
-export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
+export const dictionaries: Record<string, Record<string, string>> = {
   en: {
     "consent.title": "Cookies on Deliivo",
     "consent.copy": "We use necessary cookies to run the site. With your permission we also measure how the site is used and how our ads perform. You can change this at any time.",
