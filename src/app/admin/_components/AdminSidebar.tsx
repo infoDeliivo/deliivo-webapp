@@ -79,7 +79,6 @@ export default function AdminSidebar({
             <Link
               key={href}
               href={href}
-              onClick={onClose}
               className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
                 isActive
                   ? 'bg-[#F97316] text-white'
