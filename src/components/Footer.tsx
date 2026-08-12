@@ -7,6 +7,7 @@ import { useTranslation } from "@/lib/i18n-context";
 import { publicConfig } from "@/lib/public-config";
 import { FaFacebookF, FaInstagram, FaLinkedinIn, FaTiktok, FaXTwitter } from "react-icons/fa6";
 import { prefetchHref, useRoutePrefetch } from "@/lib/use-route-prefetch";
+import { openConsentSettings } from '@/lib/consent';
 
 const socialLinks = [
   { label: "X", href: publicConfig.xUrl, icon: FaXTwitter },
@@ -93,6 +94,19 @@ export default function Footer() {
                     </Link>
                   </li>
                 ))}
+                {col.heading === t('footer.support') ? (
+                  <li>
+                    {/* Withdrawal has to be reachable from every page, not only
+                        on the first visit while the banner is still up. */}
+                    <button
+                      type="button"
+                      onClick={openConsentSettings}
+                      className="text-sm text-gray-500 transition-colors hover:text-deliivo-orange"
+                    >
+                      {t('consent.manage')}
+                    </button>
+                  </li>
+                ) : null}
               </ul>
             </div>
           ))}

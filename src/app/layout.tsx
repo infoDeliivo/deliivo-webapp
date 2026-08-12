@@ -6,6 +6,7 @@ import { cache } from 'react';
 import './globals.css';
 import { Providers } from './providers';
 import { publicConfig } from '@/lib/public-config';
+import { CONSENT_STORAGE_KEY, CONSENT_VERSION } from '@/lib/consent';
 import {
   buildLocalizedPath,
   resolveLocaleFromHeader,
@@ -122,14 +123,21 @@ export default async function RootLayout({
     <html lang={resolvedSeo.htmlLang} className={`${inter.variable} h-full antialiased`}>
       <body className="flex min-h-screen flex-col overflow-x-hidden bg-deliivo-cream font-sans text-deliivo-dark">
         {/*
-          Consent Mode v2 defaults. Raw <script> rather than next/script so it executes
-          inline, in document order, strictly before the container below - GTM reads the
-          consent state at load time and anything arriving later is already too late.
+          Consent Mode v2 defaults, then an immediate replay of any stored choice.
+          Raw <script> rather than next/script so both run inline, in document order,
+          strictly before the container below - GTM reads the consent state at load
+          time and anything arriving later is already too late.
+
+          The replay has to happen here rather than in ConsentBanner's effect: events
+          fire from effects too, and effect ordering between siblings is not
+          guaranteed, so a returning visitor who already accepted would lose whatever
+          fired before the replay. Reading localStorage synchronously removes the race.
+
           Deliivo serves EE/LV/LT, so everything non-essential starts denied.
         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied',functionality_storage:'granted',security_storage:'granted',wait_for_update:500});`,
+            __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied',functionality_storage:'granted',security_storage:'granted',wait_for_update:500});try{var c=JSON.parse(localStorage.getItem('${CONSENT_STORAGE_KEY}')||'null');if(c&&c.version===${CONSENT_VERSION}){gtag('consent','update',{analytics_storage:c.analytics?'granted':'denied',ad_storage:c.marketing?'granted':'denied',ad_user_data:c.marketing?'granted':'denied',ad_personalization:c.marketing?'granted':'denied'});}}catch(e){}`,
           }}
         />
         {publicConfig.gtmContainerId ? (
