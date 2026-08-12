@@ -189,6 +189,7 @@ export default function SignInPage() {
                             inputMode="numeric"
                             required
                             placeholder="51234567"
+                            maxLength={PHONE_COUNTRY_OPTIONS.find(o => o.code === phoneCountryCode)?.maxLength || 15}
                             value={phone}
                             onChange={(e) => setPhone(sanitizePhoneLocalNumber(e.target.value))}
                             className="input-field"

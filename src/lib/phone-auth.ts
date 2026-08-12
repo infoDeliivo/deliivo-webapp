@@ -1,17 +1,20 @@
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
+
 export type PhoneCountryOption = {
   code: string;
   label: string;
+  maxLength: number;
 };
 
 export const PHONE_COUNTRY_OPTIONS: PhoneCountryOption[] = [
-  { code: '+372', label: 'Estonia (+372)' },
-  { code: '+371', label: 'Latvia (+371)' },
-  { code: '+370', label: 'Lithuania (+370)' },
-  { code: '+358', label: 'Finland (+358)' },
-  { code: '+46', label: 'Sweden (+46)' },
-  { code: '+49', label: 'Germany (+49)' },
-  { code: '+44', label: 'United Kingdom (+44)' },
-  { code: '+1', label: 'United States (+1)' },
+  { code: '+372', label: 'Estonia (+372)', maxLength: 8 },
+  { code: '+371', label: 'Latvia (+371)', maxLength: 8 },
+  { code: '+370', label: 'Lithuania (+370)', maxLength: 8 },
+  { code: '+358', label: 'Finland (+358)', maxLength: 12 },
+  { code: '+46', label: 'Sweden (+46)', maxLength: 9 },
+  { code: '+49', label: 'Germany (+49)', maxLength: 11 },
+  { code: '+44', label: 'United Kingdom (+44)', maxLength: 10 },
+  { code: '+1', label: 'United States (+1)', maxLength: 10 },
 ];
 
 export function sanitizePhoneLocalNumber(value: string): string {
@@ -25,9 +28,10 @@ export function buildE164PhoneNumber(countryCode: string, localNumber: string): 
   const sanitizedLocalNumber = sanitizePhoneLocalNumber(localNumber).replace(/^0+/, '');
   const candidate = `${sanitizedCountryCode}${sanitizedLocalNumber}`;
 
-  if (!/^\+[1-9]\d{5,14}$/.test(candidate)) {
+  const phoneNumber = parsePhoneNumberFromString(candidate);
+  if (!phoneNumber || !phoneNumber.isValid()) {
     return null;
   }
 
-  return candidate;
+  return phoneNumber.number;
 }
