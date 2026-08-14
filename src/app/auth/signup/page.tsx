@@ -28,7 +28,6 @@ export default function SignUpPage() {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [returnTo, setReturnTo] = useState<string | null>(null);
 
   const identifier = method === 'email' ? email.trim() : buildE164PhoneNumber(phoneCountryCode, phone);
@@ -54,8 +53,7 @@ export default function SignUpPage() {
     }
     setLoading(true);
     try {
-      const res = await authApi.signup(method, identifier);
-      if (res.data?.code) setDevCode(res.data.code);
+      await authApi.signup(method, identifier);
       pushEvent('sign_up_start', { method });
       setStep('otp');
     } catch (err: unknown) {
@@ -94,8 +92,7 @@ export default function SignUpPage() {
       return;
     }
     try {
-      const res = await authApi.resendOtp(identifier, 'signup', method);
-      if (res.data?.code) setDevCode(res.data.code);
+      await authApi.resendOtp(identifier, 'signup', method);
       pushEvent('otp_resend', { method, context: 'signup' });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to resend';
@@ -202,6 +199,7 @@ export default function SignUpPage() {
                             inputMode="numeric"
                             required
                             placeholder="51234567"
+                            maxLength={PHONE_COUNTRY_OPTIONS.find(o => o.code === phoneCountryCode)?.maxLength || 15}
                             value={phone}
                             onChange={(e) => setPhone(sanitizePhoneLocalNumber(e.target.value))}
                             className="input-field"
@@ -247,12 +245,6 @@ export default function SignUpPage() {
                 We sent a 4-digit code to <strong>{identifier}</strong>
               </p>
 
-              {devCode && (
-                <p className="mb-4 text-xs bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-yellow-800">
-                  Dev mode — OTP: <strong>{devCode}</strong>
-                </p>
-              )}
-
               <form className="space-y-4" onSubmit={handleVerifyOtp}>
                 <div>
                   <label htmlFor="otp" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
@@ -283,7 +275,7 @@ export default function SignUpPage() {
               <div className="mt-4 flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={() => { setStep('form'); setOtp(''); setError(''); setDevCode(null); }}
+                  onClick={() => { setStep('form'); setOtp(''); setError(''); }}
                   className="text-sm text-deliivo-gray hover:text-deliivo-dark"
                 >
                   &larr; Back
