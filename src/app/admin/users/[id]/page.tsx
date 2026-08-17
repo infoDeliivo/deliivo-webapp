@@ -22,6 +22,7 @@ import {
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
+  Wallet,
   User,
 } from 'lucide-react';
 import {
@@ -34,6 +35,7 @@ import {
   getApiErrorMessage,
   vehicleApi,
 } from '@/lib/api';
+import type { RewardWallet } from '@/lib/api';
 import { showError, showSuccess } from '@/lib/app-feedback';
 
 function shortId(id: string) {
@@ -111,6 +113,11 @@ export default function AdminUserDetailsPage() {
   const [emailDraft, setEmailDraft] = useState<AdminVerificationEmailDraft | null>(null);
   const [emailSubject, setEmailSubject] = useState('');
   const [emailText, setEmailText] = useState('');
+  const [rewardWallet, setRewardWallet] = useState<RewardWallet | null>(null);
+  const [rewardGrantAmount, setRewardGrantAmount] = useState('5');
+  const [rewardGrantWalletType, setRewardGrantWalletType] = useState<'RIDER' | 'DRIVER'>('DRIVER');
+  const [rewardGrantReason, setRewardGrantReason] = useState('Manual wallet adjustment');
+  const [rewardGrantLoading, setRewardGrantLoading] = useState(false);
 
   useEffect(() => {
     loadDetails();
@@ -123,8 +130,12 @@ export default function AdminUserDetailsPage() {
       await adminApi.syncUserVeriff(userId).catch((err: unknown) => {
         console.warn('Admin Veriff sync failed before loading user details', err);
       });
-      const res = await adminApi.getUserDetails(userId);
-      setDetails(res.data);
+      const [detailsRes, rewardsRes] = await Promise.all([
+        adminApi.getUserDetails(userId),
+        adminApi.getUserRewards(userId),
+      ]);
+      setDetails(detailsRes.data);
+      setRewardWallet(rewardsRes.data);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'Failed to load user details'));
     } finally {
@@ -207,6 +218,30 @@ export default function AdminUserDetailsPage() {
       showError('Action failed', getApiErrorMessage(err, 'Could not request licence resubmission'));
     } finally {
       setVerificationAction(null);
+    }
+  }
+
+  async function grantManualReward() {
+    if (!details) return;
+    const amount = Number(rewardGrantAmount);
+    if (!Number.isFinite(amount) || amount === 0) {
+      showError('Invalid amount', 'Enter a non-zero reward amount.');
+      return;
+    }
+    setRewardGrantLoading(true);
+    try {
+      await adminApi.grantUserReward(details.user.id, {
+        amount,
+        walletType: rewardGrantWalletType,
+        reason: rewardGrantReason.trim(),
+      });
+      const rewardsRes = await adminApi.getUserRewards(details.user.id);
+      setRewardWallet(rewardsRes.data);
+      showSuccess('Reward granted', `${fullName(details.user)} reward wallet updated.`);
+    } catch (err: unknown) {
+      showError('Reward grant failed', getApiErrorMessage(err, 'Could not grant reward'));
+    } finally {
+      setRewardGrantLoading(false);
     }
   }
 
@@ -726,6 +761,83 @@ export default function AdminUserDetailsPage() {
               </div>
             )}
           </Section>
+
+          <Section title="Rewards" icon={Wallet}>
+            {rewardWallet ? (
+              <div className="space-y-4">
+                <InfoGrid
+                  items={[
+                    ['Referral code', rewardWallet.referralCode],
+                    ['Wallet buckets', String(rewardWallet.totals.length)],
+                    ['Latest credit', rewardWallet.history[0] ? `${rewardWallet.history[0].currency} ${rewardWallet.history[0].amount.toFixed(2)}` : '-'],
+                  ]}
+                />
+
+                {rewardWallet.totals.length > 0 ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {rewardWallet.totals.map((bucket) => (
+                      <div key={`${bucket.walletType}-${bucket.currency}`} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{bucket.walletType}</p>
+                        <p className="mt-1 text-lg font-bold text-gray-900">{bucket.currency} {bucket.balance.toFixed(2)}</p>
+                        <p className="mt-1 text-xs text-gray-500">Credited {bucket.currency} {bucket.credited.toFixed(2)} · Debited {bucket.currency} {bucket.debited.toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyLine>No rewards have been granted yet.</EmptyLine>
+                )}
+
+                <div className="rounded-xl border border-gray-100 bg-white p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Manual reward grant</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <input
+                      value={rewardGrantAmount}
+                      onChange={(e) => setRewardGrantAmount(e.target.value)}
+                      className="input-field"
+                      type="number"
+                      step="0.01"
+                      placeholder="Amount"
+                    />
+                    <select value={rewardGrantWalletType} onChange={(e) => setRewardGrantWalletType(e.target.value as 'RIDER' | 'DRIVER')} className="input-field">
+                      <option value="DRIVER">Driver wallet</option>
+                      <option value="RIDER">Rider wallet</option>
+                    </select>
+                  </div>
+                  <textarea
+                    value={rewardGrantReason}
+                    onChange={(e) => setRewardGrantReason(e.target.value)}
+                    className="input-field mt-3 min-h-[88px]"
+                    placeholder="Reason"
+                  />
+                  <button
+                    onClick={grantManualReward}
+                    disabled={rewardGrantLoading}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-[#F97316] px-4 py-2 text-xs font-semibold text-white hover:bg-[#ea580c] disabled:opacity-50"
+                  >
+                    {rewardGrantLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />}
+                    Grant reward
+                  </button>
+                </div>
+
+                {rewardWallet.history.length > 0 && (
+                  <div className="space-y-2 border-t border-gray-100 pt-3">
+                    {rewardWallet.history.slice(0, 4).map((entry) => (
+                      <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-gray-900">{entry.description || entry.entryType.replace(/_/g, ' ').toLowerCase()}</p>
+                          <p className="text-xs text-gray-400">{formatDate(entry.createdAt, true)}</p>
+                        </div>
+                        <p className={`shrink-0 text-sm font-bold ${entry.direction === 'CREDIT' ? 'text-green-700' : 'text-red-600'}`}>{entry.direction === 'CREDIT' ? '+' : '-'}{entry.currency} {entry.amount.toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <EmptyLine>Loading wallet details.</EmptyLine>
+            )}
+          </Section>
+
         </div>
 
         <div className="flex flex-col gap-5">

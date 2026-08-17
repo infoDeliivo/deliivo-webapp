@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, CheckCircle2, ChevronLeft, Loader2, Wallet } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import LoadFailureCard from '@/components/LoadFailureCard';
-import { ConnectStatus, DriverEarningItem, DriverEarnings, getApiErrorMessage, paymentsApi, payoutsApi } from '@/lib/api';
+import { ConnectStatus, DriverEarningItem, DriverEarnings, getApiErrorMessage, paymentsApi, payoutsApi, rewardsApi } from '@/lib/api';
+import type { RewardWallet } from '@/lib/api';
 import { showError, showSuccess } from '@/lib/app-feedback';
 import { useTranslation } from '@/lib/i18n-context';
 
@@ -55,6 +56,7 @@ function EarningsContent() {
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
   const [earnings, setEarnings] = useState<DriverEarnings | null>(null);
   const [items, setItems] = useState<DriverEarningItem[]>([]);
+  const [wallet, setWallet] = useState<RewardWallet | null>(null);
   const [activeTab, setActiveTab] = useState<'pending' | 'paid'>('pending');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -68,14 +70,16 @@ function EarningsContent() {
     setLoading(true);
     setError('');
     try {
-      const [statusRes, earningsRes, itemRes] = await Promise.all([
+      const [statusRes, earningsRes, itemRes, walletRes] = await Promise.all([
         paymentsApi.connectStatus(),
         payoutsApi.getEarnings(),
         payoutsApi.getEarningItems(),
+        rewardsApi.getMyWallet(),
       ]);
       setConnectStatus(statusRes.data);
       setEarnings(earningsRes.data);
       setItems(itemRes.data || []);
+      setWallet(walletRes.data);
     } catch (err: unknown) {
       const message = getApiErrorMessage(err, t('profile.earningsLoadFailed'));
       setError(message);
@@ -111,6 +115,11 @@ function EarningsContent() {
   const paidItems = useMemo(() => items.filter(isPaid), [items]);
   const visibleItems = activeTab === 'pending' ? pendingItems : paidItems;
   const currency = items[0]?.currency || 'EUR';
+  const rewardBalance = useMemo(
+    () => wallet?.totals.reduce((sum, total) => sum + total.balance, 0) ?? 0,
+    [wallet],
+  );
+  const rewardCurrency = wallet?.totals[0]?.currency || 'EUR';
   const eligiblePending = useMemo(
     () => pendingItems.reduce((sum, item) => sum + (item.status === 'PAYOUT_ELIGIBLE' ? item.fareAmount : 0), 0),
     [pendingItems],
@@ -138,6 +147,51 @@ function EarningsContent() {
             onRetry={loadData}
           />
         )}
+
+        <section className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium uppercase text-deliivo-gray">Reward wallet</p>
+              <p className="mt-1 text-2xl font-bold text-gray-900">{rewardCurrency} {rewardBalance.toFixed(2)}</p>
+              <p className="mt-1 text-xs text-deliivo-gray">
+                Referral code: <span className="font-semibold text-gray-900">{wallet?.referralCode || '--'}</span>
+              </p>
+            </div>
+            <div className="text-right text-xs text-deliivo-gray">
+              <p>Rider and driver rewards are shown here.</p>
+              <p className="mt-1">{wallet?.totals.length ? `${wallet.totals.length} wallet bucket(s)` : 'No rewards yet'}</p>
+            </div>
+          </div>
+
+          {wallet?.totals?.length ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {wallet.totals.map((total) => (
+                <div key={`${total.walletType}-${total.currency}`} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-xs font-semibold uppercase text-deliivo-gray">{total.walletType}</p>
+                  <p className="mt-1 text-lg font-bold text-gray-900">{total.currency} {total.balance.toFixed(2)}</p>
+                  <p className="mt-1 text-xs text-deliivo-gray">Credited {total.currency} {total.credited.toFixed(2)} · Spent {total.currency} {total.debited.toFixed(2)}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {wallet?.history?.length ? (
+            <div className="mt-4 space-y-2 border-t border-gray-100 pt-4">
+              {wallet.history.slice(0, 5).map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-900">{entry.description || entry.entryType.replace(/_/g, ' ').toLowerCase()}</p>
+                    <p className="mt-1 text-xs text-deliivo-gray">{new Date(entry.createdAt).toLocaleString()}</p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className={`text-sm font-bold ${entry.direction === 'CREDIT' ? 'text-green-700' : 'text-red-600'}`}>{entry.direction === 'CREDIT' ? '+' : '-'}{entry.currency} {entry.amount.toFixed(2)}</p>
+                    <p className="text-xs text-deliivo-gray">{entry.walletType}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
 
         <section className={`rounded-2xl border p-5 shadow-sm ${payoutsReady ? 'border-green-100 bg-green-50' : 'border-amber-200 bg-white'}`}>
           <div className="flex items-start justify-between gap-4">

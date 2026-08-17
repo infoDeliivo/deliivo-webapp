@@ -1400,6 +1400,94 @@ export const payoutsApi = {
   },
 };
 
+export interface RewardWalletSummary {
+  walletType: 'RIDER' | 'DRIVER';
+  currency: string;
+  balance: number;
+  credited: number;
+  debited: number;
+}
+
+export interface RewardWalletCampaign {
+  id: string;
+  code: string;
+  name: string;
+  audience: 'RIDER' | 'DRIVER';
+  triggerType: string;
+  thresholdCount: number;
+  rewardAmount: number;
+  currency: string;
+  active: boolean;
+  repeatable: boolean;
+  description: string | null;
+  terms: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  createdById: string | null;
+  updatedById: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RewardWalletEntry {
+  id: string;
+  walletType: 'RIDER' | 'DRIVER';
+  entryType: string;
+  direction: 'CREDIT' | 'DEBIT';
+  amount: number;
+  currency: string;
+  sourceType: string;
+  sourceId: string;
+  description: string | null;
+  campaign: {
+    id: string;
+    code: string;
+    name: string;
+    triggerType: string;
+    audience: string;
+  } | null;
+  referral: {
+    id: string;
+    referrerUserId: string;
+    referredUserId: string;
+    status: string;
+  } | null;
+  createdAt: string;
+}
+
+export interface RewardWallet {
+  userId: string;
+  referralCode: string;
+  referredByUserId: string | null;
+  totals: RewardWalletSummary[];
+  history: RewardWalletEntry[];
+}
+
+export const rewardsApi = {
+  getMyWallet() {
+    return apiFetch<{ data: RewardWallet }>('/api/v1/users/me/rewards');
+  },
+  listCampaigns() {
+    return apiFetch<{ data: RewardWalletCampaign[] }>('/api/v1/admin/rewards/campaigns');
+  },
+  saveCampaign(data: Partial<RewardWalletCampaign> & Pick<RewardWalletCampaign, 'code' | 'name' | 'audience' | 'triggerType' | 'rewardAmount'>) {
+    const isUpdate = Boolean(data.id);
+    return apiFetch<{ data: RewardWalletCampaign }>(`/api/v1/admin/rewards/campaigns${isUpdate ? `/${data.id}` : ''}`, {
+      method: isUpdate ? 'PUT' : 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  getUserWallet(userId: string) {
+    return apiFetch<{ data: RewardWallet }>(`/api/v1/admin/rewards/users/${encodeURIComponent(userId)}/rewards`);
+  },
+  grantUserReward(userId: string, data: { amount: number; currency?: string; walletType?: 'RIDER' | 'DRIVER'; reason: string; sourceType?: string; sourceId?: string; metadataJson?: Record<string, unknown> | null }) {
+    return apiFetch<{ data: { entry: RewardWalletEntry; created: boolean } }>(`/api/v1/admin/rewards/users/${encodeURIComponent(userId)}/rewards/manual-grant`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 // Payment Methods API
 export const paymentMethodsApi = {
   list() {
@@ -1480,6 +1568,9 @@ export const adminApi = {
   getUserDetails(id: string) {
     return apiFetch<{ data: AdminUserDetails }>(`/api/v1/admin/users/${encodeURIComponent(id)}`);
   },
+  getUserRewards(id: string) {
+    return apiFetch<{ data: RewardWallet }>(`/api/v1/admin/rewards/users/${encodeURIComponent(id)}/rewards`);
+  },
   getRides(params?: { page?: number; limit?: number; status?: string; search?: string; searchBy?: string }) {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
@@ -1546,6 +1637,12 @@ export const adminApi = {
     return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
       `/api/v1/admin/dl-verifications/${userId}/resubmit`,
       { method: 'POST', body: JSON.stringify({ reason }) },
+    );
+  },
+  grantUserReward(userId: string, data: { amount: number; currency?: string; walletType?: 'RIDER' | 'DRIVER'; reason: string; sourceType?: string; sourceId?: string; metadataJson?: Record<string, unknown> | null }) {
+    return apiFetch<{ data: { entry: RewardWalletEntry; created: boolean } }>(
+      `/api/v1/admin/rewards/users/${encodeURIComponent(userId)}/rewards/manual-grant`,
+      { method: 'POST', body: JSON.stringify(data) },
     );
   },
   // Vehicle review queue. Oldest-first server-side, so the list arrives in the order
