@@ -29,7 +29,6 @@ export default function SignInPage() {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const normalizedIdentifier = method === 'email' ? identifier.trim() : buildE164PhoneNumber(phoneCountryCode, phone);
   const emailPhoneAuthEnabled = featureFlags.emailPhoneAuth;
@@ -59,8 +58,7 @@ export default function SignInPage() {
     }
     setLoading(true);
     try {
-      const res = await authApi.login(method, normalizedIdentifier);
-      if (res.data?.code) setDevCode(res.data.code);
+      await authApi.login(method, normalizedIdentifier);
       setStep('otp');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Login failed';
@@ -98,8 +96,7 @@ export default function SignInPage() {
       return;
     }
     try {
-      const res = await authApi.resendOtp(normalizedIdentifier, 'login', method);
-      if (res.data?.code) setDevCode(res.data.code);
+      await authApi.resendOtp(normalizedIdentifier, 'login', method);
       pushEvent('otp_resend', { method, context: 'login' });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to resend';
@@ -189,6 +186,7 @@ export default function SignInPage() {
                             inputMode="numeric"
                             required
                             placeholder="51234567"
+                            maxLength={PHONE_COUNTRY_OPTIONS.find(o => o.code === phoneCountryCode)?.maxLength || 15}
                             value={phone}
                             onChange={(e) => setPhone(sanitizePhoneLocalNumber(e.target.value))}
                             className="input-field"
@@ -251,12 +249,6 @@ export default function SignInPage() {
                 We sent a 4-digit code to <strong>{normalizedIdentifier}</strong>
               </p>
 
-              {devCode && (
-                <p className="mb-4 text-xs bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-yellow-800">
-                  Dev mode — OTP: <strong>{devCode}</strong>
-                </p>
-              )}
-
               <form className="space-y-4" onSubmit={handleVerifyOtp}>
                 <div>
                   <label htmlFor="otp" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
@@ -287,7 +279,7 @@ export default function SignInPage() {
               <div className="mt-4 flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={() => { setStep('identifier'); setOtp(''); setError(''); setDevCode(null); }}
+                  onClick={() => { setStep('identifier'); setOtp(''); setError(''); }}
                   className="text-sm text-deliivo-gray hover:text-deliivo-dark"
                 >
                   &larr; Change {method}
