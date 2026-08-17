@@ -1423,6 +1423,7 @@ export interface RewardWalletCampaign {
   terms: string | null;
   startsAt: string | null;
   endsAt: string | null;
+  metadataJson: Record<string, unknown> | null;
   createdById: string | null;
   updatedById: string | null;
   createdAt: string;
