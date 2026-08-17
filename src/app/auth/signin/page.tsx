@@ -58,7 +58,10 @@ export default function SignInPage() {
     }
     setLoading(true);
     try {
-      await authApi.login(method, normalizedIdentifier);
+      const res = await authApi.login(method, normalizedIdentifier);
+      if (res.data.code) {
+        setOtp(res.data.code);
+      }
       setStep('otp');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Login failed';
@@ -96,7 +99,10 @@ export default function SignInPage() {
       return;
     }
     try {
-      await authApi.resendOtp(normalizedIdentifier, 'login', method);
+      const res = await authApi.resendOtp(normalizedIdentifier, 'login', method);
+      if (res.data.code) {
+        setOtp(res.data.code);
+      }
       pushEvent('otp_resend', { method, context: 'login' });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to resend';
@@ -248,6 +254,12 @@ export default function SignInPage() {
               <p className="mb-2 text-sm text-deliivo-gray">
                 We sent a 4-digit code to <strong>{normalizedIdentifier}</strong>
               </p>
+              {otp && (
+                <div className="mb-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-deliivo-dark">
+                  <p className="font-semibold text-deliivo-orange">Staging OTP</p>
+                  <p className="mt-1 font-mono text-lg tracking-[0.35em]">{otp}</p>
+                </div>
+              )}
 
               <form className="space-y-4" onSubmit={handleVerifyOtp}>
                 <div>
