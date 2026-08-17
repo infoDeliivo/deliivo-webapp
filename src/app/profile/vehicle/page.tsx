@@ -31,7 +31,7 @@ const VEHICLE_DOCUMENT_OPTIONS = [
 // full set below before /vehicles/draft/save accepts the vehicle. Keep in sync
 // with DOCUMENT_REQUIRED_COUNTRIES / REQUIRED_DOCUMENT_TYPES in vehicle.constants.ts.
 const DOCUMENT_REQUIRED_COUNTRIES = new Set(['EE']);
-const REQUIRED_DOC_TYPES = ['VEHICLE_IMAGE_FRONT', 'VEHICLE_IMAGE_BACK', 'VEHICLE_DOCUMENT'] as const;
+const REQUIRED_DOC_TYPES = ['VEHICLE_IMAGE_FRONT', 'VEHICLE_IMAGE_BACK', 'VEHICLE_DOCUMENT', 'INSURANCE_DOCUMENT'] as const;
 const requiresFullDocumentSet = (licenseCountry: string) =>
   DOCUMENT_REQUIRED_COUNTRIES.has(licenseCountry.trim().toUpperCase());
 
@@ -594,7 +594,7 @@ function VehicleContent() {
             <div className="space-y-4">
               <p className="text-sm text-deliivo-gray">
                 {documentsRequired
-                  ? `Vehicles with a ${licenseCountry.toUpperCase()} plate need the front photo, rear photo, registration document and your driving licence. The rest are optional.`
+                  ? `Vehicles with a ${licenseCountry.toUpperCase()} plate need the front photo, rear photo, registration document, insurance document and your driving licence.`
                   : 'Upload documents if available. This is optional, and you can still save the vehicle without them.'}
               </p>
 

@@ -25,6 +25,29 @@ function LanguageFlag({ locale, className = 'h-4 w-6' }: { locale: SupportedLoca
     );
   }
 
+  if (locale === 'lv') {
+    return (
+      <span className={frameClass} aria-hidden="true">
+        <svg viewBox="0 0 60 40" className="h-full w-full" role="img">
+          <rect width="60" height="40" fill="#7E1E28" />
+          <rect width="60" height="9" y="15.5" fill="#FFFFFF" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (locale === 'lt') {
+    return (
+      <span className={frameClass} aria-hidden="true">
+        <svg viewBox="0 0 60 40" className="h-full w-full" role="img">
+          <rect width="60" height="13.34" y="0" fill="#FDB913" />
+          <rect width="60" height="13.33" y="13.34" fill="#006A44" />
+          <rect width="60" height="13.33" y="26.67" fill="#C1272D" />
+        </svg>
+      </span>
+    );
+  }
+
   if (locale === 'ru') {
     return (
       <span className={frameClass} aria-hidden="true">

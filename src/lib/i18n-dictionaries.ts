@@ -1,6 +1,6 @@
 ﻿import type { SupportedLocale } from './i18n';
 
-const blogAndCommonAdditions: Record<SupportedLocale, Record<string, string>> = {
+const blogAndCommonAdditions: Record<string, Record<string, string>> = {
   en: {
     'common.remove': 'Remove',
     'common.retry': 'Try again',
@@ -141,7 +141,7 @@ const blogAndCommonAdditions: Record<SupportedLocale, Record<string, string>> = 
   },
 };
 
-const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
+const publishTranslations: Record<string, Record<string, string>> = {
   en: {
     'publish.routePointsCopy': 'Search and add up to 3 origin pickup points, up to 3 stopover points, and up to 3 destination drop-off points.',
     'publish.routePointFlowCopy': 'Add starting pickup points first. If you want stops along the route, choose suggested stopover cities and then add one exact point inside each selected stopover. Finish by adding destination drop-off points.',
@@ -643,8 +643,23 @@ const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
   },
 };
 
-export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
+export const dictionaries: Record<string, Record<string, string>> = {
   en: {
+    "consent.title": "Cookies on Deliivo",
+    "consent.copy": "We use necessary cookies to run the site. With your permission we also measure how the site is used and how our ads perform. You can change this at any time.",
+    "consent.privacyLink": "Privacy policy",
+    "consent.necessaryTitle": "Necessary",
+    "consent.necessaryCopy": "Sign-in, security and core features. These cannot be switched off.",
+    "consent.analyticsTitle": "Analytics",
+    "consent.analyticsCopy": "Helps us see which pages and steps people struggle with, so we can fix them.",
+    "consent.marketingTitle": "Advertising",
+    "consent.marketingCopy": "Lets us measure our ads and show more relevant ones.",
+    "consent.acceptAll": "Accept all",
+    "consent.rejectAll": "Reject all",
+    "consent.customise": "Customise",
+    "consent.saveChoices": "Save choices",
+    "consent.close": "Close",
+    "consent.manage": "Cookie settings",
     "payout.testModeTitle": "Test mode.",
     "payout.testModeCopy": "Fill the form with Stripe's test values to complete setup without real details.",
     "payout.testFill": "Use test account",
@@ -1885,6 +1900,21 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     ...publishTranslations.en,
   },
   et: {
+    "consent.title": "Kupsised Deliivos",
+    "consent.copy": "Kasutame saidi toimimiseks vajalikke kupsiseid. Sinu loal moodame ka seda, kuidas saiti kasutatakse ja kuidas meie reklaamid toimivad. Saad seda igal ajal muuta.",
+    "consent.privacyLink": "Privaatsuspoliitika",
+    "consent.necessaryTitle": "Vajalikud",
+    "consent.necessaryCopy": "Sisselogimine, turvalisus ja pohifunktsioonid. Neid ei saa valja lulitada.",
+    "consent.analyticsTitle": "Analuutika",
+    "consent.analyticsCopy": "Aitab naha, millised lehed ja sammud on kasutajatele rasked, et saaksime need parandada.",
+    "consent.marketingTitle": "Reklaam",
+    "consent.marketingCopy": "Voimaldab moota meie reklaamide tulemusi ja naidata asjakohasemaid reklaame.",
+    "consent.acceptAll": "Noustu koigiga",
+    "consent.rejectAll": "Keeldu koigist",
+    "consent.customise": "Kohanda",
+    "consent.saveChoices": "Salvesta valikud",
+    "consent.close": "Sulge",
+    "consent.manage": "Kupsiste seaded",
     "payout.testModeTitle": "Testrežiim.",
     "payout.testModeCopy": "Täida vorm Stripe'i testväärtustega, et seadistus päris andmeteta lõpetada.",
     "payout.testFill": "Kasuta testkontot",
@@ -2834,6 +2864,21 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     ...publishTranslations.et,
   },
   ru: {
+    "consent.title": "Файлы cookie на Deliivo",
+    "consent.copy": "Мы используем необходимые файлы cookie для работы сайта. С вашего разрешения мы также измеряем, как используется сайт и как работает наша реклама. Вы можете изменить это в любой момент.",
+    "consent.privacyLink": "Политика конфиденциальности",
+    "consent.necessaryTitle": "Необходимые",
+    "consent.necessaryCopy": "Вход, безопасность и основные функции. Их нельзя отключить.",
+    "consent.analyticsTitle": "Аналитика",
+    "consent.analyticsCopy": "Помогает увидеть, какие страницы и шаги вызывают сложности, чтобы мы могли их исправить.",
+    "consent.marketingTitle": "Реклама",
+    "consent.marketingCopy": "Позволяет измерять результаты нашей рекламы и показывать более подходящую.",
+    "consent.acceptAll": "Принять все",
+    "consent.rejectAll": "Отклонить все",
+    "consent.customise": "Настроить",
+    "consent.saveChoices": "Сохранить выбор",
+    "consent.close": "Закрыть",
+    "consent.manage": "Настройки cookie",
     "payout.testModeTitle": "Тестовый режим.",
     "payout.testModeCopy": "Заполнить форму тестовыми данными Stripe, чтобы завершить настройку без реальных реквизитов.",
     "payout.testFill": "Тестовый счёт",

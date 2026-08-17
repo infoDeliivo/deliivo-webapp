@@ -21,10 +21,12 @@ import {
   Phone,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   User,
 } from 'lucide-react';
 import {
   adminApi,
+  AdminVerificationEmailDraft,
   AdminUserBooking,
   AdminUserDetails,
   AdminUserPublishedRide,
@@ -100,7 +102,15 @@ export default function AdminUserDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [veriffActionLoading, setVeriffActionLoading] = useState(false);
+  const [verificationAction, setVerificationAction] = useState<'approve' | 'decline' | 'resubmit' | 'require-veriff' | null>(null);
+  const [vehicleActionKey, setVehicleActionKey] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState<string | null>(null);
+  const [emailDraftLoading, setEmailDraftLoading] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailDraft, setEmailDraft] = useState<AdminVerificationEmailDraft | null>(null);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailText, setEmailText] = useState('');
 
   useEffect(() => {
     loadDetails();
@@ -110,6 +120,9 @@ export default function AdminUserDetailsPage() {
     setLoading(true);
     setError('');
     try {
+      await adminApi.syncUserVeriff(userId).catch((err: unknown) => {
+        console.warn('Admin Veriff sync failed before loading user details', err);
+      });
       const res = await adminApi.getUserDetails(userId);
       setDetails(res.data);
     } catch (err: unknown) {
@@ -132,6 +145,129 @@ export default function AdminUserDetailsPage() {
       showError('Action failed', getApiErrorMessage(err, 'Could not update ban status'));
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  async function requireVeriff() {
+    if (!details || details.user.verificationFlags.veriffVerified) return;
+    setVeriffActionLoading(true);
+    setVerificationAction('require-veriff');
+    try {
+      await adminApi.requireVeriff(details.user.id);
+      await loadDetails();
+      showSuccess('Veriff required', `${fullName(details.user)} must now complete Veriff verification.`);
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not require Veriff for this user'));
+    } finally {
+      setVeriffActionLoading(false);
+      setVerificationAction(null);
+    }
+  }
+
+  async function approveManualOverride() {
+    if (!details) return;
+    setVerificationAction('approve');
+    try {
+      await adminApi.approveDlSubmission(details.user.id);
+      await loadDetails();
+      showSuccess('Manual override approved', `${fullName(details.user)} is now licence verified.`);
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not approve the manual licence review'));
+    } finally {
+      setVerificationAction(null);
+    }
+  }
+
+  async function declineManualOverride() {
+    if (!details) return;
+    const reason = window.prompt('Enter decline reason');
+    if (!reason || !reason.trim()) return;
+    setVerificationAction('decline');
+    try {
+      await adminApi.declineDlSubmission(details.user.id, reason.trim());
+      await loadDetails();
+      showSuccess('Manual override declined', `${fullName(details.user)} licence review was declined.`);
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not decline the manual licence review'));
+    } finally {
+      setVerificationAction(null);
+    }
+  }
+
+  async function requestManualResubmission() {
+    if (!details) return;
+    const reason = window.prompt('Enter re-request reason');
+    if (!reason || !reason.trim()) return;
+    setVerificationAction('resubmit');
+    try {
+      await adminApi.requestDlResubmission(details.user.id, reason.trim());
+      await loadDetails();
+      showSuccess('Resubmission requested', `${fullName(details.user)} must upload the licence again.`);
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not request licence resubmission'));
+    } finally {
+      setVerificationAction(null);
+    }
+  }
+
+  async function openVerificationEmailDialog() {
+    if (!details) return;
+    setEmailDraftLoading(true);
+    try {
+      const res = await adminApi.getVerificationEmailDraft(details.user.id);
+      setEmailDraft(res.data);
+      setEmailSubject(res.data.subject);
+      setEmailText(res.data.text);
+    } catch (err: unknown) {
+      showError('Email draft failed', getApiErrorMessage(err, 'Could not prepare verification email'));
+    } finally {
+      setEmailDraftLoading(false);
+    }
+  }
+
+  async function sendVerificationEmail() {
+    if (!details || !emailDraft) return;
+    setEmailSending(true);
+    try {
+      await adminApi.sendVerificationEmail(details.user.id, {
+        subject: emailSubject.trim(),
+        text: emailText.trim(),
+      });
+      setEmailDraft(null);
+      showSuccess('Email sent', `Verification email sent to ${emailDraft.to}.`);
+    } catch (err: unknown) {
+      showError('Email send failed', getApiErrorMessage(err, 'Could not send verification email'));
+    } finally {
+      setEmailSending(false);
+    }
+  }
+
+  async function approveVehicleReview(vehicleId: string) {
+    setVehicleActionKey(`approve:${vehicleId}`);
+    try {
+      await adminApi.verifyVehicle(vehicleId);
+      await loadDetails();
+      showSuccess('Vehicle approved', 'Vehicle verification has been approved.');
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not approve the vehicle'));
+    } finally {
+      setVehicleActionKey(null);
+    }
+  }
+
+  async function rejectVehicleReview(vehicleId: string, mode: 'decline' | 'rerequest') {
+    const promptText = mode === 'rerequest' ? 'Enter re-request reason' : 'Enter decline reason';
+    const reason = window.prompt(promptText);
+    if (!reason || !reason.trim()) return;
+    setVehicleActionKey(`${mode}:${vehicleId}`);
+    try {
+      await adminApi.rejectVehicle(vehicleId, reason.trim());
+      await loadDetails();
+      showSuccess(mode === 'rerequest' ? 'Vehicle re-requested' : 'Vehicle declined', reason.trim());
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not update the vehicle review'));
+    } finally {
+      setVehicleActionKey(null);
     }
   }
 
@@ -171,8 +307,79 @@ export default function AdminUserDetailsPage() {
 
   const { user, summary } = details;
   const initials = fullName(user).split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+  const manualSessionKey = `manual:${user.id}`;
+  const isManualDlRecord = (record: typeof details.dlVerifications[number]) =>
+    record.veriffSessionId.startsWith('manual:') || Boolean(record.previewKey);
+  const manualRecord = details.dlVerifications.find((record) => record.veriffSessionId === manualSessionKey)
+    || details.dlVerifications.find(isManualDlRecord)
+    || null;
+  const veriffRecords = details.dlVerifications.filter((record) => {
+    if (isManualDlRecord(record)) return false;
+    if (user.verificationFlags.veriffVerified && record.status === 'PENDING') return false;
+    return true;
+  });
+  const latestVeriffRecord =
+    veriffRecords.find((record) => record.status === 'APPROVED')
+    || veriffRecords.find((record) => record.status === 'IDENTITY_MISMATCH')
+    || veriffRecords.find((record) => record.status === 'RESUBMISSION_REQUESTED')
+    || veriffRecords[0]
+    || null;
+  const veriffIdentityMismatch = Boolean(
+    latestVeriffRecord
+    && latestVeriffRecord.status === 'APPROVED'
+    && (
+      latestVeriffRecord.nameMatch === false
+      || latestVeriffRecord.dobMatch === false
+      || latestVeriffRecord.genderMatch === false
+    )
+  );
+  const legacyIdentityMismatch = latestVeriffRecord?.status === 'IDENTITY_MISMATCH';
+  const historyRecords = details.dlVerifications.filter((record) => record.id !== manualRecord?.id && record.id !== latestVeriffRecord?.id);
+  const canOverrideManual = Boolean(manualRecord && manualRecord.status !== 'SUPERSEDED');
+  const verificationSteps = [
+    {
+      label: '1. Onboarding complete',
+      value: user.verificationFlags.completeOnboardingVerified,
+      hint: 'Profile basics completed and onboarding submitted.',
+    },
+    {
+      label: '2. Veriff verification',
+      value: user.verificationFlags.veriffVerified,
+      hint: veriffIdentityMismatch
+        ? 'Veriff approved the document, but the identity does not match the profile.'
+        : legacyIdentityMismatch
+          ? 'Identity mismatch was detected, but no approved Veriff decision is recorded.'
+        : 'Automated Veriff verification approved.',
+      statusLabel: veriffIdentityMismatch
+        ? 'Approved, mismatch'
+        : legacyIdentityMismatch
+          ? 'Identity mismatch'
+        : undefined,
+      tone: veriffIdentityMismatch || legacyIdentityMismatch
+        ? 'danger' as const
+        : undefined,
+    },
+    {
+      label: '3. Licence verified',
+      value: user.verificationFlags.licenseVerified,
+      hint: 'Driving licence approval flag active on the user.',
+    },
+    {
+      label: 'Manual licence approval',
+      value: user.verificationFlags.manualLicenseApproved,
+      hint: user.verificationFlags.manualLicenseApproved
+        ? 'Manual approval is active. Admin can require Veriff again.'
+        : 'No active manual-only licence approval.',
+    },
+    {
+      label: '4. Vehicle verified',
+      value: user.verificationFlags.vehicleVerified,
+      hint: 'At least one active vehicle is approved.',
+    },
+  ];
 
   return (
+    <>
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
@@ -208,6 +415,24 @@ export default function AdminUserDetailsPage() {
           <button onClick={loadDetails} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:text-[#F97316]">
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </button>
+          <button
+            onClick={openVerificationEmailDialog}
+            disabled={emailDraftLoading || !user.email}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+          >
+            {emailDraftLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+            Email verification steps
+          </button>
+          {user.verificationFlags.canRequireVeriff && (
+            <button
+              onClick={requireVeriff}
+              disabled={veriffActionLoading}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {veriffActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+              Require Veriff
+            </button>
+          )}
           {user.role !== 'ADMIN' && (
             <button
               onClick={toggleBan}
@@ -273,15 +498,212 @@ export default function AdminUserDetailsPage() {
           </Section>
 
           <Section title="Verification" icon={IdCard}>
-            {details.dlVerifications.length === 0 ? (
+            <div className="mb-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Verification list</p>
+              {verificationSteps.map((step) => (
+                <VerificationFlagRow key={step.label} label={step.label} value={step.value} hint={step.hint} statusLabel={step.statusLabel} tone={step.tone} />
+              ))}
+
+              {manualRecord ? (
+                <VerificationRecordCard
+                  title="Manual review"
+                  record={manualRecord}
+                  actions={
+                    <div className="flex flex-wrap gap-2">
+                      {manualRecord.previewKey && (
+                        <button
+                          onClick={() => openPrivateDocument(manualRecord.previewKey!, 'licence document')}
+                          disabled={documentLoading === manualRecord.previewKey}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:border-[#F97316] hover:text-[#F97316] disabled:opacity-50"
+                        >
+                          {documentLoading === manualRecord.previewKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                          Licence
+                        </button>
+                      )}
+                      {canOverrideManual && (
+                        <>
+                          <button
+                            onClick={approveManualOverride}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
+                          >
+                            {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                            Approve
+                          </button>
+                          <button
+                            onClick={declineManualOverride}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50"
+                          >
+                            {verificationAction === 'decline' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                            Decline
+                          </button>
+                          <button
+                            onClick={requestManualResubmission}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                          >
+                            {verificationAction === 'resubmit' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                            Re-request
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  }
+                />
+              ) : (
+                <EmptyLine>No manual licence review row.</EmptyLine>
+              )}
+
+              {latestVeriffRecord ? (
+                <VerificationRecordCard
+                  title="Veriff"
+                  record={latestVeriffRecord}
+                  actions={
+                    <div className="flex flex-wrap gap-2">
+                      {canOverrideManual && (
+                        <>
+                          <button
+                            onClick={approveManualOverride}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
+                          >
+                            {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                            Approve
+                          </button>
+                          <button
+                            onClick={declineManualOverride}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50"
+                          >
+                            {verificationAction === 'decline' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                            Decline
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={user.verificationFlags.veriffVerified ? requestManualResubmission : requireVeriff}
+                        disabled={verificationAction !== null || veriffActionLoading}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                      >
+                        {verificationAction === 'require-veriff' || verificationAction === 'resubmit' || veriffActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        Re-request
+                      </button>
+                    </div>
+                  }
+                />
+              ) : (
+                <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Veriff</p>
+                      <p className="text-xs text-gray-500">No active Veriff record is available for this user.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {canOverrideManual && (
+                        <>
+                          <button
+                            onClick={approveManualOverride}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
+                          >
+                            {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                            Approve
+                          </button>
+                          <button
+                            onClick={declineManualOverride}
+                            disabled={verificationAction !== null}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50"
+                          >
+                            {verificationAction === 'decline' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                            Decline
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={user.verificationFlags.veriffVerified ? requestManualResubmission : requireVeriff}
+                        disabled={verificationAction !== null || veriffActionLoading}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                      >
+                        {verificationAction === 'require-veriff' || verificationAction === 'resubmit' || veriffActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        Re-request
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {details.vehicles.map((vehicle) => {
+                const vehicleTitle = [vehicle.brand, vehicle.model_name || vehicle.model_num].filter(Boolean).join(' ') || 'Vehicle';
+                return (
+                  <VerificationRecordCard
+                    key={vehicle.id}
+                    title={`Vehicle review · ${vehicleTitle}`}
+                    record={{
+                      id: vehicle.id,
+                      status: vehicle.verificationStatus,
+                      veriffSessionId: `vehicle:${vehicle.id}`,
+                      verifiedName: null,
+                      verifiedDob: null,
+                      verifiedGender: null,
+                      nameMatch: null,
+                      dobMatch: null,
+                      genderMatch: null,
+                      previewKey: null,
+                      declineReason: vehicle.rejectionReason,
+                      reviewedById: null,
+                      reviewedAt: null,
+                      createdAt: vehicle.createdAt ?? new Date().toISOString(),
+                      updatedAt: vehicle.reviewedAt ?? vehicle.createdAt ?? new Date().toISOString(),
+                    }}
+                    actions={
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => approveVehicleReview(vehicle.id)}
+                          disabled={vehicleActionKey !== null}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
+                        >
+                          {vehicleActionKey === `approve:${vehicle.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => rejectVehicleReview(vehicle.id, 'decline')}
+                          disabled={vehicleActionKey !== null}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50"
+                        >
+                          {vehicleActionKey === `decline:${vehicle.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                          Decline
+                        </button>
+                        <button
+                          onClick={() => rejectVehicleReview(vehicle.id, 'rerequest')}
+                          disabled={vehicleActionKey !== null}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                        >
+                          {vehicleActionKey === `rerequest:${vehicle.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                          Re-request
+                        </button>
+                      </div>
+                    }
+                  />
+                );
+              })}
+            </div>
+
+            <div className="mb-3 border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Verification history</p>
+            </div>
+
+            {historyRecords.length === 0 ? (
               <EmptyLine>No driving licence submissions.</EmptyLine>
             ) : (
               <div className="divide-y divide-gray-100">
-                {details.dlVerifications.map((record) => (
+                {historyRecords.map((record) => (
                   <div key={record.id} className="py-3 first:pt-0 last:pb-0">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">{record.status.replace(/_/g, ' ')}</p>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {record.veriffSessionId === manualSessionKey ? 'Manual review' : 'Veriff'} · {record.status.replace(/_/g, ' ')}
+                        </p>
                         <p className="text-xs text-gray-400">{formatDate(record.createdAt, true)}</p>
                       </div>
                       {record.previewKey && (
@@ -338,6 +760,84 @@ export default function AdminUserDetailsPage() {
         </div>
       </div>
     </div>
+
+      {emailDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
+            <div className="border-b border-gray-100 px-5 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Review verification email</h2>
+                  <p className="mt-1 text-sm text-gray-500">To {emailDraft.to}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEmailDraft(null)}
+                  disabled={emailSending}
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-[75vh] space-y-4 overflow-y-auto px-5 py-4">
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Detected missing items</p>
+                {emailDraft.missingItems.length > 0 ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
+                    {emailDraft.missingItems.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-amber-900">No missing verification items were detected.</p>
+                )}
+              </div>
+
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Subject</span>
+                <input
+                  value={emailSubject}
+                  onChange={(event) => setEmailSubject(event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-900 outline-none focus:border-[#F97316] focus:ring-2 focus:ring-orange-100"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Message</span>
+                <textarea
+                  value={emailText}
+                  onChange={(event) => setEmailText(event.target.value)}
+                  rows={13}
+                  className="mt-1 w-full resize-y rounded-xl border border-gray-200 px-3 py-2 text-sm leading-6 text-gray-900 outline-none focus:border-[#F97316] focus:ring-2 focus:ring-orange-100"
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setEmailDraft(null)}
+                disabled={emailSending}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                onClick={sendVerificationEmail}
+                disabled={emailSending || emailSubject.trim().length < 3 || emailText.trim().length < 20}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#F97316] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ea580c] disabled:opacity-50"
+              >
+                {emailSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                Send email
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -349,6 +849,77 @@ function StatusBadge({ children, tone }: { children: ReactNode; tone: 'good' | '
     neutral: 'bg-gray-100 text-gray-600',
   };
   return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${classes[tone]}`}>{children}</span>;
+}
+
+function VerificationFlagRow({
+  label,
+  value,
+  hint,
+  statusLabel,
+  tone,
+}: {
+  label: string;
+  value: boolean;
+  hint: string;
+  statusLabel?: string;
+  tone?: 'good' | 'danger' | 'pending';
+}) {
+  const resolvedTone = tone ?? (value ? 'good' : 'pending');
+  const toneClass =
+    resolvedTone === 'good'
+      ? 'bg-green-50 text-green-700'
+      : resolvedTone === 'danger'
+        ? 'bg-red-50 text-red-600'
+        : 'bg-amber-50 text-amber-700';
+
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-gray-900">{label}</p>
+        <p className="text-xs text-gray-500">{hint}</p>
+      </div>
+      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${toneClass}`}>
+        {resolvedTone === 'good' ? <ShieldCheck className="h-3.5 w-3.5" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+        {statusLabel ?? (value ? 'Approved' : 'Pending')}
+      </span>
+    </div>
+  );
+}
+
+function VerificationRecordCard({
+  title,
+  record,
+  actions,
+}: {
+  title: string;
+  record: AdminUserDetails['dlVerifications'][number];
+  actions?: ReactNode;
+}) {
+  const tone =
+    record.status === 'APPROVED'
+      ? 'good'
+      : record.status === 'DECLINED' || record.status === 'IDENTITY_MISMATCH'
+        ? 'danger'
+        : 'neutral';
+
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-gray-900">{title}</p>
+            <StatusBadge tone={tone}>{record.status.replace(/_/g, ' ')}</StatusBadge>
+          </div>
+          <p className="mt-1 text-xs text-gray-400">{formatDate(record.createdAt, true)}</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Name {record.nameMatch === null ? '-' : record.nameMatch ? 'match' : 'mismatch'} · DOB {record.dobMatch === null ? '-' : record.dobMatch ? 'match' : 'mismatch'} · Gender {record.genderMatch === null ? '-' : record.genderMatch ? 'match' : 'mismatch'}
+          </p>
+          {record.declineReason && <p className="mt-1 text-xs text-red-500">{record.declineReason}</p>}
+        </div>
+        {actions ? <div className="shrink-0">{actions}</div> : null}
+      </div>
+    </div>
+  );
 }
 
 function Metric({ icon: Icon, label, value, hint }: { icon: ElementType; label: string; value: string; hint: string }) {

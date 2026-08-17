@@ -1495,8 +1495,31 @@ export const adminApi = {
   unbanUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/unban`, { method: 'POST' });
   },
+  requireVeriff(id: string) {
+    return apiFetch<{ data: { id: string; dlVerified: boolean; requiresVeriff: boolean } }>(
+      `/api/v1/admin/users/${id}/require-veriff`,
+      { method: 'POST' },
+    );
+  },
+  syncUserVeriff(id: string) {
+    return apiFetch<{ data: { scanned: number; updated: number; skipped: number } }>(
+      `/api/v1/admin/users/${id}/sync-veriff`,
+      { method: 'POST' },
+    );
+  },
   // Driving-licence review queue. The licence photo comes back as `previewKey` —
   // a private S3 key exchanged for a short-lived signed URL via getDocumentReadUrl.
+  getVerificationEmailDraft(id: string) {
+    return apiFetch<{ data: AdminVerificationEmailDraft }>(
+      `/api/v1/admin/users/${id}/verification-email/draft`,
+    );
+  },
+  sendVerificationEmail(id: string, data: { subject: string; text: string }) {
+    return apiFetch<{ data: { to: string; subject: string; missingItems: string[]; sentBy: string | null } }>(
+      `/api/v1/admin/users/${id}/verification-email/send`,
+      { method: 'POST', body: JSON.stringify(data) },
+    );
+  },
   listDlSubmissions(params?: { status?: string; page?: number; limit?: number }) {
     const query = new URLSearchParams();
     // 'ALL' is the absence of a filter, not a value the backend understands.
@@ -1516,6 +1539,12 @@ export const adminApi = {
   declineDlSubmission(userId: string, reason: string) {
     return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
       `/api/v1/admin/dl-verifications/${userId}/decline`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    );
+  },
+  requestDlResubmission(userId: string, reason: string) {
+    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
+      `/api/v1/admin/dl-verifications/${userId}/resubmit`,
       { method: 'POST', body: JSON.stringify({ reason }) },
     );
   },
@@ -1810,6 +1839,14 @@ export interface AdminDlRecord {
   updatedAt: string;
 }
 
+export interface AdminVerificationEmailDraft {
+  to: string;
+  subject: string;
+  text: string;
+  missingItems: string[];
+  isDriverCandidate: boolean;
+}
+
 export interface AdminUser {
   id: string;
   firstName: string | null;
@@ -1844,6 +1881,14 @@ export interface AdminUserDetails {
     privacyAcceptedAt: string | null;
     privacyVersion: string | null;
     updatedAt: string;
+    verificationFlags: {
+      completeOnboardingVerified: boolean;
+      veriffVerified: boolean;
+      manualLicenseApproved: boolean;
+      licenseVerified: boolean;
+      vehicleVerified: boolean;
+      canRequireVeriff: boolean;
+    };
     travelPreference?: { chattiness: string | null; pets: string | null } | null;
     ratingStats?: { totalRatings: number; totalStars: number; averageRating: number } | null;
   };
