@@ -254,6 +254,7 @@ export default function SignInPage() {
               <p className="mb-2 text-sm text-deliivo-gray">
                 We sent a 4-digit code to <strong>{normalizedIdentifier}</strong>
               </p>
+              {/* Staging-only helper banner; the backend returns the OTP code in debug mode. */}
               {otp && (
                 <div className="mb-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-deliivo-dark">
                   <p className="font-semibold text-deliivo-orange">Staging OTP</p>
