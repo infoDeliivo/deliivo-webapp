@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Users, Car, Euro, CalendarCheck, TrendingUp, Loader2, Database, BellRing, CreditCard, Activity, ShieldCheck, FileWarning, BookOpen, ArrowRight, BadgeCheck } from 'lucide-react'
+import { Users, Car, Euro, CalendarCheck, TrendingUp, Loader2, Database, BellRing, CreditCard, Activity, ShieldCheck, FileWarning, BookOpen, ArrowRight, BadgeCheck, Gift } from 'lucide-react'
 import { adminApi, AdminStats, AdminOperationsSummary } from '@/lib/api'
 import LoadFailureCard from '@/components/LoadFailureCard'
 
@@ -83,7 +83,7 @@ export default function AdminDashboardPage() {
             <OpsCard label="Vehicles pending review" value={String(ops.operations.pendingVehicles)} icon={BadgeCheck} tone={ops.operations.pendingVehicles === 0 ? 'green' : 'amber'} copy="Drivers blocked from publishing until approved" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-5 gap-4">
             <QuickLinkCard
               title="Vehicle verification"
               copy="Review driver vehicles and their registry documents, then approve or send them back with a reason."
@@ -111,6 +111,13 @@ export default function AdminDashboardPage() {
               href="/admin/reports"
               icon={FileWarning}
               meta={`${stats?.totalBookings?.toLocaleString() || '0'} bookings tracked`}
+            />
+            <QuickLinkCard
+              title="Rewards and campaigns"
+              copy="Design referral rewards, milestone bonuses, and other incentive campaigns."
+              href="/admin/rewards"
+              icon={Gift}
+              meta="Campaign designer"
             />
           </div>
 
