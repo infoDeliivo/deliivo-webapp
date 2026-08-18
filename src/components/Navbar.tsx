@@ -106,7 +106,7 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-3">
           {user && walletBalance !== null ? (
             <Link
-              href="/profile/earnings#wallet"
+              href="/profile/wallet"
               className="inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
             >
               <Wallet size={14} />
@@ -152,12 +152,12 @@ export default function Navbar() {
                     {t('nav.myRides')}
                   </Link>
                   <Link
-              href="/profile/earnings#wallet"
+              href="/profile/wallet"
                     className="flex items-center gap-2 px-4 py-2 text-sm text-deliivo-dark hover:bg-primary-50"
                     onClick={() => setDropdownOpen(false)}
                   >
                     <Wallet size={14} />
-                    {t('nav.earnings')}
+                    Wallet
                   </Link>
                   {user.role === 'ADMIN' && (
                     <Link
@@ -247,7 +247,7 @@ export default function Navbar() {
 
             {user && walletBalance !== null ? (
               <Link
-              href="/profile/earnings#wallet"
+              href="/profile/wallet"
                 className="mt-4 flex items-center justify-between rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 text-sm font-semibold text-deliivo-orange"
                 onClick={() => setMobileOpen(false)}
               >

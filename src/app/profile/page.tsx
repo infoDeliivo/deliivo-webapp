@@ -161,7 +161,7 @@ function ProfileContent() {
     { label: t('rides.myRides'), href: '/rides', icon: Route },
     { label: t('profile.vehicle'), href: '/profile/vehicle', icon: Car },
     { label: t('nav.notifications'), href: '/profile/notifications', icon: Bell },
-    { label: 'Wallet', href: '/profile/earnings#wallet', icon: Wallet },
+    { label: 'Wallet', href: '/profile/wallet', icon: Wallet },
     { label: t('profile.paymentsHistory'), href: '/profile/payment-methods', icon: CreditCard },
     { label: t('profile.earningsPayouts'), href: '/profile/earnings', icon: Wallet },
     { label: t('profile.disputes'), href: '/profile/disputes', icon: Shield },
@@ -251,7 +251,7 @@ function ProfileContent() {
                   {walletCampaignCount > 0 ? `${walletCampaignCount} active campaign${walletCampaignCount === 1 ? '' : 's'}` : 'No active campaigns yet'}
                 </p>
               </div>
-              <Link href="/profile/earnings#wallet" className="rounded-full border border-orange-200 bg-white px-3 py-1.5 text-xs font-semibold text-deliivo-orange hover:bg-orange-50">
+              <Link href="/profile/wallet" className="rounded-full border border-orange-200 bg-white px-3 py-1.5 text-xs font-semibold text-deliivo-orange hover:bg-orange-50">
                 Open wallet
               </Link>
             </div>
