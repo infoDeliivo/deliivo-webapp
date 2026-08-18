@@ -1453,6 +1453,9 @@ export interface RewardWalletEntry {
     referredUserId: string;
     status: string;
   } | null;
+  previousHash?: string | null;
+  entryHash?: string | null;
+  reversalOfEntryId?: string | null;
   createdAt: string;
 }
 
@@ -1462,6 +1465,7 @@ export interface RewardWallet {
   referredByUserId: string | null;
   totals: RewardWalletSummary[];
   campaigns?: RewardWalletCampaign[];
+  ledgerIntegrity?: { ok: boolean; brokenEntryId: string | null };
   history: RewardWalletEntry[];
 }
 
