@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Menu, X, ChevronDown, User, LogOut, Car, Wallet } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
@@ -10,6 +10,7 @@ import { useTranslation } from "@/lib/i18n-context";
 import { useNotificationStore } from "@/lib/notification-store";
 import BrandLogo from "@/components/BrandLogo";
 import { prefetchHref, useRoutePrefetch } from "@/lib/use-route-prefetch";
+import { rewardsApi } from "@/lib/api";
 
 export default function Navbar() {
   const router = useRouter();
@@ -17,6 +18,8 @@ export default function Navbar() {
   const { t } = useTranslation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [walletCurrency, setWalletCurrency] = useState('EUR');
   const { unreadCount } = useNotificationStore(user?.id);
 
   type NavLink = {
@@ -50,6 +53,31 @@ export default function Navbar() {
     "/privacy",
   ]);
 
+  useEffect(() => {
+    if (!user) {
+      setWalletBalance(null);
+      setWalletCurrency('EUR');
+      return;
+    }
+
+    let active = true;
+    rewardsApi.getMyWallet()
+      .then((res) => {
+        if (!active) return;
+        const balance = res.data.totals.reduce((sum, total) => sum + total.balance, 0);
+        setWalletBalance(balance);
+        setWalletCurrency(res.data.totals[0]?.currency || 'EUR');
+      })
+      .catch(() => {
+        if (!active) return;
+        setWalletBalance(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
   return (
     <header className="sticky top-0 z-50 w-full bg-white shadow-sm">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -76,6 +104,15 @@ export default function Navbar() {
 
         {/* Desktop right side */}
         <div className="hidden md:flex items-center gap-3">
+          {user && walletBalance !== null ? (
+            <Link
+              href="/profile/earnings#wallet"
+              className="inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-deliivo-orange hover:bg-orange-100"
+            >
+              <Wallet size={14} />
+              {walletCurrency} {walletBalance.toFixed(2)}
+            </Link>
+          ) : null}
           <LanguageSwitcher compact />
           {loading ? (
             <div className="h-8 w-24 animate-pulse rounded-full bg-gray-100" />
@@ -115,7 +152,7 @@ export default function Navbar() {
                     {t('nav.myRides')}
                   </Link>
                   <Link
-                    href="/profile/earnings"
+              href="/profile/earnings#wallet"
                     className="flex items-center gap-2 px-4 py-2 text-sm text-deliivo-dark hover:bg-primary-50"
                     onClick={() => setDropdownOpen(false)}
                   >
@@ -207,6 +244,20 @@ export default function Navbar() {
             <div className="mt-4">
               <LanguageSwitcher />
             </div>
+
+            {user && walletBalance !== null ? (
+              <Link
+              href="/profile/earnings#wallet"
+                className="mt-4 flex items-center justify-between rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 text-sm font-semibold text-deliivo-orange"
+                onClick={() => setMobileOpen(false)}
+              >
+                <span className="flex items-center gap-2">
+                  <Wallet size={14} />
+                  Wallet
+                </span>
+                <span>{walletCurrency} {walletBalance.toFixed(2)}</span>
+              </Link>
+            ) : null}
 
             <div className="mt-auto grid gap-2 pt-6">
               {user ? (

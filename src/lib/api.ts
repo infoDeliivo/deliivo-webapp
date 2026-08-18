@@ -1461,6 +1461,7 @@ export interface RewardWallet {
   referralCode: string;
   referredByUserId: string | null;
   totals: RewardWalletSummary[];
+  campaigns?: RewardWalletCampaign[];
   history: RewardWalletEntry[];
 }
 

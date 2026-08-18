@@ -42,6 +42,33 @@ function earningStatusLabel(status: string) {
   return labels[status] || status.replace(/_/g, ' ');
 }
 
+function parseCampaignMetadata(metadata: Record<string, unknown> | null | undefined) {
+  return {
+    headline: typeof metadata?.headline === 'string' ? metadata.headline : '',
+    summary: typeof metadata?.summary === 'string' ? metadata.summary : '',
+    ctaLabel: typeof metadata?.ctaLabel === 'string' ? metadata.ctaLabel : '',
+    placement: typeof metadata?.placement === 'string' ? metadata.placement : '',
+    audienceSegment: typeof metadata?.audienceSegment === 'string' ? metadata.audienceSegment : '',
+    channel: typeof metadata?.channel === 'string' ? metadata.channel : '',
+  };
+}
+
+function campaignActionText(triggerType: string, thresholdCount: number, audience: 'RIDER' | 'DRIVER') {
+  const threshold = Math.max(1, thresholdCount || 1);
+  switch (triggerType) {
+    case 'RIDER_REFERRAL_BOOKING_COMPLETION':
+      return `Share your rider referral code. The reward lands after the referred rider completes their first booking.`;
+    case 'DRIVER_REFERRAL_RIDE_COMPLETION':
+      return `Share your driver referral code. The reward lands after the referred driver completes their first ride.`;
+    case 'RIDER_COMPLETION_MILESTONE':
+      return `Complete ${threshold} bookings and the rider wallet is credited automatically.`;
+    case 'DRIVER_COMPLETION_MILESTONE':
+      return `Complete ${threshold} rides and the driver wallet is credited automatically.`;
+    default:
+      return `${audience === 'DRIVER' ? 'Driver' : 'Rider'} wallet reward is applied automatically when the configured trigger is met.`;
+  }
+}
+
 export default function EarningsPage() {
   return (
     <ProtectedRoute>
@@ -120,6 +147,7 @@ function EarningsContent() {
     [wallet],
   );
   const rewardCurrency = wallet?.totals[0]?.currency || 'EUR';
+  const activeCampaigns = wallet?.campaigns || [];
   const eligiblePending = useMemo(
     () => pendingItems.reduce((sum, item) => sum + (item.status === 'PAYOUT_ELIGIBLE' ? item.fareAmount : 0), 0),
     [pendingItems],
@@ -148,7 +176,7 @@ function EarningsContent() {
           />
         )}
 
-        <section className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
+        <section id="wallet" className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-medium uppercase text-deliivo-gray">Reward wallet</p>
@@ -189,6 +217,57 @@ function EarningsContent() {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : null}
+
+          {activeCampaigns.length > 0 ? (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium uppercase text-deliivo-gray">Active campaigns</p>
+                  <p className="mt-1 text-sm text-deliivo-gray">These offers apply automatically when you complete the configured action.</p>
+                </div>
+                <p className="text-xs text-deliivo-gray">{activeCampaigns.length} live</p>
+              </div>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                {activeCampaigns.map((campaign) => {
+                  const metadata = parseCampaignMetadata(campaign.metadataJson);
+                  return (
+                    <div key={campaign.id} className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-gray-900">{campaign.name}</p>
+                          <p className="mt-1 text-xs text-deliivo-gray">{campaign.code} · {campaign.audience}</p>
+                        </div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-deliivo-orange ring-1 ring-orange-100">
+                          {campaign.currency} {campaign.rewardAmount.toFixed(2)}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm text-gray-900">
+                        {metadata.headline || campaign.description || metadata.summary || 'Active reward campaign'}
+                      </p>
+                      <p className="mt-2 text-xs text-deliivo-gray">
+                        {campaignActionText(campaign.triggerType, campaign.thresholdCount, campaign.audience)}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 ring-1 ring-gray-200">
+                          Threshold {campaign.thresholdCount}
+                        </span>
+                        {metadata.placement ? (
+                          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 ring-1 ring-gray-200">
+                            {metadata.placement}
+                          </span>
+                        ) : null}
+                        {metadata.ctaLabel ? (
+                          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 ring-1 ring-gray-200">
+                            {metadata.ctaLabel}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ) : null}
         </section>

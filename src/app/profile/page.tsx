@@ -22,7 +22,8 @@ import {
   Route,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { getApiErrorMessage, userApi, travelPreferencesApi, TravelPreference, UserFullProfile, validateImageFile, UPLOAD_ACCEPT } from '@/lib/api';
+import { getApiErrorMessage, userApi, travelPreferencesApi, TravelPreference, UserFullProfile, validateImageFile, UPLOAD_ACCEPT, rewardsApi } from '@/lib/api';
+import type { RewardWallet } from '@/lib/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { showError, showSuccess } from '@/lib/app-feedback';
@@ -56,6 +57,7 @@ function ProfileContent() {
   const { t } = useTranslation();
   const [travelPref, setTravelPref] = useState<TravelPreference | null>(null);
   const [fullProfile, setFullProfile] = useState<UserFullProfile | null>(null);
+  const [rewardWallet, setRewardWallet] = useState<RewardWallet | null>(null);
   const [editingPrefs, setEditingPrefs] = useState(false);
   const [chattiness, setChattiness] = useState<string>('');
   const [pets, setPets] = useState<string>('');
@@ -80,6 +82,9 @@ function ProfileContent() {
       .catch(() => {});
     userApi.getMyProfile()
       .then((res) => setFullProfile(res.data))
+      .catch(() => {});
+    rewardsApi.getMyWallet()
+      .then((res) => setRewardWallet(res.data))
       .catch(() => {});
   }, []);
 
@@ -156,6 +161,7 @@ function ProfileContent() {
     { label: t('rides.myRides'), href: '/rides', icon: Route },
     { label: t('profile.vehicle'), href: '/profile/vehicle', icon: Car },
     { label: t('nav.notifications'), href: '/profile/notifications', icon: Bell },
+    { label: 'Wallet', href: '/profile/earnings#wallet', icon: Wallet },
     { label: t('profile.paymentsHistory'), href: '/profile/payment-methods', icon: CreditCard },
     { label: t('profile.earningsPayouts'), href: '/profile/earnings', icon: Wallet },
     { label: t('profile.disputes'), href: '/profile/disputes', icon: Shield },
@@ -178,6 +184,10 @@ function ProfileContent() {
     no_pets: t('profile.noPets'),
     depends_on_animal: t('profile.dependsOnAnimal'),
   };
+
+  const walletBalance = rewardWallet?.totals.reduce((sum, total) => sum + total.balance, 0) ?? 0;
+  const walletCurrency = rewardWallet?.totals[0]?.currency || 'EUR';
+  const walletCampaignCount = rewardWallet?.campaigns?.length ?? 0;
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -230,6 +240,20 @@ function ProfileContent() {
                 {fullProfile?.stats?.successfulCompletedRides ?? 0}
               </p>
               <p className="text-[11px] text-deliivo-gray">{t('profile.ridden')}</p>
+            </div>
+          </div>
+          <div className="mt-4 w-full rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 text-left">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-deliivo-gray">Wallet balance</p>
+                <p className="mt-1 text-2xl font-bold text-deliivo-dark">{walletCurrency} {walletBalance.toFixed(2)}</p>
+                <p className="mt-1 text-xs text-deliivo-gray">
+                  {walletCampaignCount > 0 ? `${walletCampaignCount} active campaign${walletCampaignCount === 1 ? '' : 's'}` : 'No active campaigns yet'}
+                </p>
+              </div>
+              <Link href="/profile/earnings#wallet" className="rounded-full border border-orange-200 bg-white px-3 py-1.5 text-xs font-semibold text-deliivo-orange hover:bg-orange-50">
+                Open wallet
+              </Link>
             </div>
           </div>
           <button onClick={startEditProfile} className="mt-3 flex items-center gap-1 text-xs font-semibold text-deliivo-orange hover:underline">
