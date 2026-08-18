@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Loader2, Wallet } from 'lucide-react';
+import { Check, ChevronLeft, Copy, Loader2, Share2, Wallet } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import LoadFailureCard from '@/components/LoadFailureCard';
 import { getApiErrorMessage, rewardsApi, type RewardWallet } from '@/lib/api';
@@ -13,10 +13,6 @@ function parseCampaignMetadata(metadata: Record<string, unknown> | null | undefi
   return {
     headline: typeof metadata?.headline === 'string' ? metadata.headline : '',
     summary: typeof metadata?.summary === 'string' ? metadata.summary : '',
-    ctaLabel: typeof metadata?.ctaLabel === 'string' ? metadata.ctaLabel : '',
-    placement: typeof metadata?.placement === 'string' ? metadata.placement : '',
-    audienceSegment: typeof metadata?.audienceSegment === 'string' ? metadata.audienceSegment : '',
-    channel: typeof metadata?.channel === 'string' ? metadata.channel : '',
   };
 }
 
@@ -24,15 +20,15 @@ function campaignActionText(triggerType: string, thresholdCount: number, audienc
   const threshold = Math.max(1, thresholdCount || 1);
   switch (triggerType) {
     case 'RIDER_REFERRAL_BOOKING_COMPLETION':
-      return `Share your rider referral code. The reward lands after the referred rider completes their first booking.`;
+      return 'Share your rider code. The reward lands after your invited rider completes their first booking.';
     case 'DRIVER_REFERRAL_RIDE_COMPLETION':
-      return `Share your driver referral code. The reward lands after the referred driver completes their first ride.`;
+      return 'Share your driver code. The reward lands after your invited driver completes their first ride.';
     case 'RIDER_COMPLETION_MILESTONE':
-      return `Complete ${threshold} bookings and the rider wallet is credited automatically.`;
+      return `Complete ${threshold} bookings and this reward is added automatically.`;
     case 'DRIVER_COMPLETION_MILESTONE':
-      return `Complete ${threshold} rides and the driver wallet is credited automatically.`;
+      return `Complete ${threshold} rides and this reward is added automatically.`;
     default:
-      return `${audience === 'DRIVER' ? 'Driver' : 'Rider'} wallet reward is applied automatically when the configured trigger is met.`;
+      return `${audience === 'DRIVER' ? 'Driver' : 'Rider'} reward is added automatically when the trigger is met.`;
   }
 }
 
@@ -49,6 +45,7 @@ function WalletContent() {
   const [wallet, setWallet] = useState<RewardWallet | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [copiedCode, setCopiedCode] = useState(false);
 
   useEffect(() => {
     loadWallet();
@@ -66,6 +63,33 @@ function WalletContent() {
       showError(t('profile.earningsLoadError'), message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function copyReferralCode() {
+    if (!wallet?.referralCode) return;
+    try {
+      await navigator.clipboard.writeText(wallet.referralCode);
+      setCopiedCode(true);
+      window.setTimeout(() => setCopiedCode(false), 1800);
+    } catch {
+      setCopiedCode(false);
+    }
+  }
+
+  async function shareReferralCode() {
+    if (!wallet?.referralCode) return;
+    const shareText = `Join Deliivo with my referral code: ${wallet.referralCode}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Deliivo referral code', text: shareText });
+      } else {
+        await navigator.clipboard.writeText(shareText);
+        setCopiedCode(true);
+        window.setTimeout(() => setCopiedCode(false), 1800);
+      }
+    } catch {
+      // silent fallback
     }
   }
 
@@ -103,9 +127,29 @@ function WalletContent() {
             <div>
               <p className="text-xs font-medium uppercase text-deliivo-gray">Reward wallet</p>
               <p className="mt-1 text-2xl font-bold text-gray-900">{walletCurrency} {walletBalance.toFixed(2)}</p>
-              <p className="mt-1 text-xs text-deliivo-gray">
-                Referral code: <span className="font-semibold text-gray-900">{wallet?.referralCode || '--'}</span>
-              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-orange-50 px-3 py-1.5 text-xs font-semibold text-deliivo-orange ring-1 ring-orange-100">
+                  Code {wallet?.referralCode || '--'}
+                </span>
+                <button
+                  type="button"
+                  onClick={copyReferralCode}
+                  disabled={!wallet?.referralCode}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {copiedCode ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copiedCode ? 'Copied' : 'Copy code'}
+                </button>
+                <button
+                  type="button"
+                  onClick={shareReferralCode}
+                  disabled={!wallet?.referralCode}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-deliivo-orange hover:bg-orange-100 disabled:opacity-50"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                  Share
+                </button>
+              </div>
             </div>
             <div className="text-right text-xs text-deliivo-gray">
               <p>Rider and driver rewards are shown here.</p>
@@ -125,6 +169,51 @@ function WalletContent() {
             </div>
           ) : null}
 
+          {wallet?.campaigns?.length ? (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium uppercase text-deliivo-gray">Active campaigns</p>
+                  <p className="mt-1 text-sm text-deliivo-gray">These offers apply automatically when you complete the action.</p>
+                </div>
+                <p className="text-xs text-deliivo-gray">{walletCampaignCount} live</p>
+              </div>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                {wallet.campaigns.map((campaign) => {
+                  const metadata = parseCampaignMetadata(campaign.metadataJson);
+                  const isDriver = campaign.audience === 'DRIVER';
+                  return (
+                    <div key={campaign.id} className="rounded-2xl border border-orange-100 bg-orange-50 px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900">{metadata.headline || campaign.name}</p>
+                          <p className="mt-1 text-xs text-deliivo-gray">{isDriver ? 'Driver offer' : 'Rider offer'}</p>
+                        </div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-deliivo-orange ring-1 ring-orange-100">
+                          +{campaign.currency} {campaign.rewardAmount.toFixed(2)}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-gray-900">
+                        {campaignActionText(campaign.triggerType, campaign.thresholdCount, campaign.audience)}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 ring-1 ring-gray-200">
+                          {campaign.triggerType.includes('REFERRAL') ? 'Referral' : 'Completion'}
+                        </span>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 ring-1 ring-gray-200">
+                          {campaign.thresholdCount === 1 ? 'Auto credit' : `After ${campaign.thresholdCount}`}
+                        </span>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 ring-1 ring-gray-200">
+                          {metadata.summary || 'In-wallet reward'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           {wallet?.history?.length ? (
             <div className="mt-4 space-y-2 border-t border-gray-100 pt-4">
               {wallet.history.slice(0, 5).map((entry) => (
@@ -139,57 +228,6 @@ function WalletContent() {
                   </div>
                 </div>
               ))}
-            </div>
-          ) : null}
-
-          {wallet?.campaigns?.length ? (
-            <div className="mt-4 border-t border-gray-100 pt-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-medium uppercase text-deliivo-gray">Active campaigns</p>
-                  <p className="mt-1 text-sm text-deliivo-gray">These offers apply automatically when you complete the configured action.</p>
-                </div>
-                <p className="text-xs text-deliivo-gray">{walletCampaignCount} live</p>
-              </div>
-              <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                {wallet.campaigns.map((campaign) => {
-                  const metadata = parseCampaignMetadata(campaign.metadataJson);
-                  return (
-                    <div key={campaign.id} className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-gray-900">{campaign.name}</p>
-                          <p className="mt-1 text-xs text-deliivo-gray">{campaign.code} - {campaign.audience}</p>
-                        </div>
-                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-deliivo-orange ring-1 ring-orange-100">
-                          {campaign.currency} {campaign.rewardAmount.toFixed(2)}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-sm text-gray-900">
-                        {metadata.headline || campaign.description || metadata.summary || 'Active reward campaign'}
-                      </p>
-                      <p className="mt-2 text-xs text-deliivo-gray">
-                        {campaignActionText(campaign.triggerType, campaign.thresholdCount, campaign.audience)}
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 ring-1 ring-gray-200">
-                          Threshold {campaign.thresholdCount}
-                        </span>
-                        {metadata.placement ? (
-                          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 ring-1 ring-gray-200">
-                            {metadata.placement}
-                          </span>
-                        ) : null}
-                        {metadata.ctaLabel ? (
-                          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 ring-1 ring-gray-200">
-                            {metadata.ctaLabel}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           ) : null}
         </section>
