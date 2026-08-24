@@ -73,6 +73,33 @@ const salutationLabels: Record<string, string> = {
   OTHER: 'Other',
 };
 
+// Detected from the site the user signed up on — never asked for, so it can be absent.
+const localeLabels: Record<string, string> = {
+  en: 'English',
+  et: 'Eesti',
+  lv: 'Latviešu',
+  lt: 'Lietuvių',
+  ru: 'Русский',
+}
+
+function localeLabel(locale: string | null | undefined) {
+  if (!locale) return 'Not detected'
+  return localeLabels[locale] || locale.toUpperCase()
+}
+
+// Derived from the IP the user connects from, so it is where the connection appears to come from
+// rather than where the person is — a VPN or a roaming carrier moves it.
+function countryLabel(code: string | null | undefined) {
+  if (!code) return 'Not detected'
+  const upper = code.toUpperCase()
+  try {
+    const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(upper)
+    return name && name !== upper ? `${name} (${upper})` : upper
+  } catch {
+    return upper
+  }
+}
+
 const genderLabels: Record<string, string> = {
   MALE: 'Male',
   FEMALE: 'Female',
@@ -463,6 +490,8 @@ export default function AdminUserDetailsPage() {
                 ['Salutation', formatProfileEnum(user.salutation, salutationLabels)],
                 ['Gender', formatProfileEnum(user.gender, genderLabels)],
                 ['DOB', formatDate(user.dob)],
+                ['Language', localeLabel(user.preferredLocale)],
+                ['Country', countryLabel(user.detectedCountry)],
                 ['Onboarding', user.onboardingStatus],
                 ['Email verified', user.emailVerified ? 'Yes' : 'No'],
                 ['Phone verified', user.phoneVerified ? 'Yes' : 'No'],

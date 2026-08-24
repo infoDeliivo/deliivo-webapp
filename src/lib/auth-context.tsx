@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
-import { getTokens, clearTokens, setTokens, userApi, UserProfile } from './api';
+import { ApiError, getTokens, clearTokens, setTokens, userApi, UserProfile } from './api';
 import { pushUserIdentified, pushUserLogout } from './analytics';
 
 interface AuthContextType {
@@ -46,7 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(res.data);
         }
       } catch (error) {
-        if (requestId === fetchRequestIdRef.current) {
+        // Only a genuine rejection of the session ends it. `apiFetch` throws ApiError with
+        // status 0 when the backend is unreachable and passes 5xx through the same path, so
+        // clearing tokens on every failure signed people out on one network blip — and a signed
+        // out session stops reporting anything, language included.
+        const rejected = error instanceof ApiError && (error.status === 401 || error.status === 403);
+        if (requestId === fetchRequestIdRef.current && rejected) {
           clearTokens();
           setUser(null);
         }
