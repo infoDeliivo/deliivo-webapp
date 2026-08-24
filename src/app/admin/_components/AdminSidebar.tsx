@@ -15,6 +15,7 @@ import {
   Activity,
   BadgeCheck,
   IdCard,
+  Gift,
   X,
 } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
@@ -29,6 +30,7 @@ const navItems = [
   { label: 'Disputes', href: '/admin/reports', icon: Flag },
   { label: 'Payouts', href: '/admin/payouts', icon: Banknote },
   { label: 'Revenue', href: '/admin/revenue', icon: Euro },
+  { label: 'Rewards', href: '/admin/rewards', icon: Gift },
   { label: 'Pricing', href: '/admin/pricing', icon: Euro },
   { label: 'Monitoring', href: '/admin/monitoring', icon: Activity },
   { label: 'Content', href: '/admin/content', icon: Newspaper },

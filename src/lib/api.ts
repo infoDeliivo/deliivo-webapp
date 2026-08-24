@@ -1,3 +1,5 @@
+import { getBrowserLocale } from './i18n';
+
 // Browser calls go through the Next.js server-side proxy (/api/proxy/*).
 // Server-side (proxy route, SSR) calls the backend directly.
 // Using a function avoids Next.js build-time inlining of process.env values.
@@ -58,8 +60,14 @@ async function refreshAccessToken(): Promise<TokenPair> {
 
   const res = await fetch(`${getApiBaseUrl()}/api/v1/auth/access-token`, {
     method: 'POST',
-    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      // A silent renewal may be the only request an idle session makes. Without this the backend
+      // has no way to tell what language the user is reading the site in at that moment.
+      'Accept-Language': getBrowserLocale(),
+    },
+    body: JSON.stringify({ refreshToken: tokens.refreshToken, locale: getBrowserLocale() }),
   });
 
   if (!res.ok) {
@@ -151,6 +159,7 @@ export async function apiFetch<T = unknown>(
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers as Record<string, string> || {}),
     'x-request-id': requestId,
+    'Accept-Language': getBrowserLocale(),
   };
 
   if (tokens?.accessToken) {
@@ -377,7 +386,7 @@ export const authApi = {
       };
     }>('/api/v1/auth/google', {
       method: 'POST',
-      body: JSON.stringify({ idToken }),
+      body: JSON.stringify({ idToken, locale: getBrowserLocale() }),
     });
   },
 
@@ -397,9 +406,11 @@ export const authApi = {
   },
 
   signup(method: 'email' | 'phone', identifier: string) {
+    // The language the visitor is reading the site in, detected by i18n — never asked for.
+    const locale = getBrowserLocale();
     const body = method === 'email'
-      ? { method, email: identifier }
-      : { method, phone: identifier };
+      ? { method, email: identifier, locale }
+      : { method, phone: identifier, locale };
     return apiFetch<{ message: string; data: { next: string; code?: string } }>(
       '/api/v1/auth/signup',
       { method: 'POST', body: JSON.stringify(body) }
@@ -483,6 +494,20 @@ export const userApi = {
   async uploadAvatar(file: File) {
     const data = await uploadViaPresign<{ avatarUrl: string }>('avatar', file);
     return { data };
+  },
+
+  /**
+   * Tell the backend the language the user just picked.
+   *
+   * Authenticated calls already carry Accept-Language, so the server learns a switch on the
+   * user's next request anyway. This is the explicit path: a user who switches and then goes
+   * idle (or logs out) would otherwise stay recorded under their old language.
+   */
+  setLocale(locale: string) {
+    return apiFetch<{ data: { preferredLocale: string } }>('/api/v1/users/me/locale', {
+      method: 'PATCH',
+      body: JSON.stringify({ locale }),
+    });
   },
 };
 
@@ -1400,6 +1425,100 @@ export const payoutsApi = {
   },
 };
 
+export interface RewardWalletSummary {
+  walletType: 'RIDER' | 'DRIVER';
+  currency: string;
+  balance: number;
+  credited: number;
+  debited: number;
+}
+
+export interface RewardWalletCampaign {
+  id: string;
+  code: string;
+  name: string;
+  audience: 'RIDER' | 'DRIVER';
+  triggerType: string;
+  thresholdCount: number;
+  rewardAmount: number;
+  currency: string;
+  active: boolean;
+  repeatable: boolean;
+  description: string | null;
+  terms: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  metadataJson: Record<string, unknown> | null;
+  createdById: string | null;
+  updatedById: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RewardWalletEntry {
+  id: string;
+  walletType: 'RIDER' | 'DRIVER';
+  entryType: string;
+  direction: 'CREDIT' | 'DEBIT';
+  amount: number;
+  currency: string;
+  sourceType: string;
+  sourceId: string;
+  description: string | null;
+  campaign: {
+    id: string;
+    code: string;
+    name: string;
+    triggerType: string;
+    audience: string;
+  } | null;
+  referral: {
+    id: string;
+    referrerUserId: string;
+    referredUserId: string;
+    status: string;
+  } | null;
+  previousHash?: string | null;
+  entryHash?: string | null;
+  reversalOfEntryId?: string | null;
+  createdAt: string;
+}
+
+export interface RewardWallet {
+  userId: string;
+  referralCode: string;
+  referredByUserId: string | null;
+  totals: RewardWalletSummary[];
+  campaigns?: RewardWalletCampaign[];
+  ledgerIntegrity?: { ok: boolean; brokenEntryId: string | null };
+  history: RewardWalletEntry[];
+}
+
+export const rewardsApi = {
+  getMyWallet() {
+    return apiFetch<{ data: RewardWallet }>('/api/v1/users/me/rewards');
+  },
+  listCampaigns() {
+    return apiFetch<{ data: RewardWalletCampaign[] }>('/api/v1/admin/rewards/campaigns');
+  },
+  saveCampaign(data: Partial<RewardWalletCampaign> & Pick<RewardWalletCampaign, 'code' | 'name' | 'audience' | 'triggerType' | 'rewardAmount'>) {
+    const isUpdate = Boolean(data.id);
+    return apiFetch<{ data: RewardWalletCampaign }>(`/api/v1/admin/rewards/campaigns${isUpdate ? `/${data.id}` : ''}`, {
+      method: isUpdate ? 'PUT' : 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  getUserWallet(userId: string) {
+    return apiFetch<{ data: RewardWallet }>(`/api/v1/admin/rewards/users/${encodeURIComponent(userId)}/rewards`);
+  },
+  grantUserReward(userId: string, data: { amount: number; currency?: string; walletType?: 'RIDER' | 'DRIVER'; reason: string; sourceType?: string; sourceId?: string; metadataJson?: Record<string, unknown> | null }) {
+    return apiFetch<{ data: { entry: RewardWalletEntry; created: boolean } }>(`/api/v1/admin/rewards/users/${encodeURIComponent(userId)}/rewards/manual-grant`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 // Payment Methods API
 export const paymentMethodsApi = {
   list() {
@@ -1480,6 +1599,9 @@ export const adminApi = {
   getUserDetails(id: string) {
     return apiFetch<{ data: AdminUserDetails }>(`/api/v1/admin/users/${encodeURIComponent(id)}`);
   },
+  getUserRewards(id: string) {
+    return apiFetch<{ data: RewardWallet }>(`/api/v1/admin/rewards/users/${encodeURIComponent(id)}/rewards`);
+  },
   getRides(params?: { page?: number; limit?: number; status?: string; search?: string; searchBy?: string }) {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
@@ -1546,6 +1668,12 @@ export const adminApi = {
     return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
       `/api/v1/admin/dl-verifications/${userId}/resubmit`,
       { method: 'POST', body: JSON.stringify({ reason }) },
+    );
+  },
+  grantUserReward(userId: string, data: { amount: number; currency?: string; walletType?: 'RIDER' | 'DRIVER'; reason: string; sourceType?: string; sourceId?: string; metadataJson?: Record<string, unknown> | null }) {
+    return apiFetch<{ data: { entry: RewardWalletEntry; created: boolean } }>(
+      `/api/v1/admin/rewards/users/${encodeURIComponent(userId)}/rewards/manual-grant`,
+      { method: 'POST', body: JSON.stringify(data) },
     );
   },
   // Vehicle review queue. Oldest-first server-side, so the list arrives in the order
@@ -1854,6 +1982,8 @@ export interface AdminUser {
   gender: string | null;
   email: string | null;
   phone: string | null;
+  /** Language the user was browsing the site in at signup. Null when it was never detected. */
+  preferredLocale: string | null;
   role: string;
   isBanned: boolean;
   isVerified: boolean;
@@ -1870,6 +2000,8 @@ export interface AdminUserDetails {
     dob: string | null;
     emailVerified: boolean;
     phoneVerified: boolean;
+    /** ISO-3166 alpha-2 country the user last connected from. Null when it was never detected. */
+    detectedCountry: string | null;
     avatarUrl: string | null;
     stripeAccountId: string | null;
     stripeOnboardingComplete: boolean;

@@ -127,7 +127,7 @@ function EarningsContent() {
         <Link href="/profile" className="flex items-center gap-1 text-sm text-gray-600 hover:text-deliivo-orange transition-colors">
           <ChevronLeft className="w-4 h-4" /> {t('profile.title')}
         </Link>
-        <h1 className="text-lg font-semibold text-gray-900 ml-2">{t('profile.earnings')}</h1>
+        <h1 className="text-lg font-semibold text-gray-900 ml-2">{t('profile.earningsPayouts')}</h1>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-6 flex flex-col gap-5">
