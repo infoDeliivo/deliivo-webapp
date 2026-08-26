@@ -196,7 +196,9 @@ export function useDlVerification({ onCompleted }: { onCompleted?: () => void } 
         const res = await dlVerificationApi.createSession({
           firstName,
           lastName,
-          email: user?.email,
+          // A phone-registered driver has no email. Sending the profile's null would fail
+          // validation for an account that is entirely valid, so the field is simply omitted.
+          email: user?.email || undefined,
           dateOfBirth: user?.dob?.slice(0, 10),
           gender: user?.gender === 'MALE' ? 'M' : user?.gender === 'FEMALE' ? 'F' : undefined,
           callback: `${window.location.origin}${window.location.pathname}`,
