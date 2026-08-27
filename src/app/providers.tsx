@@ -10,6 +10,7 @@ import RecoveryOutboxSync from '@/components/RecoveryOutboxSync';
 import HashScrollHandler from '@/components/HashScrollHandler';
 import CrispChat from '@/components/CrispChat';
 import ConsentBanner from '@/components/ConsentBanner';
+import MetaPixel from '@/components/MetaPixel';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -24,6 +25,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <NotificationToast />
         <ConsentBanner />
         <CrispChat />
+        <MetaPixel />
       </AuthProvider>
     </I18nProvider>
   );
