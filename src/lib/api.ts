@@ -2004,8 +2004,8 @@ export interface TrackerTicket {
   priority: TrackerTicketPriority;
   status: TrackerTicketStatus;
   assigneeId: string | null;
-  assignee: TrackerPerson | null;
   assigneeName: string | null;
+  assignee: TrackerPerson | null;
   dueDate: string | null;
   description: string | null;
   acceptanceCriteria: string | null;
@@ -2041,6 +2041,7 @@ export interface TrackerTicketWriteInput {
   priority?: TrackerTicketPriority;
   status?: TrackerTicketStatus;
   assigneeId?: string | null;
+  assigneeName?: string | null;
   dueDate?: string | null;
   description?: string | null;
   acceptanceCriteria?: string | null;

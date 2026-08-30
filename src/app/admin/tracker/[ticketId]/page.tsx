@@ -25,7 +25,7 @@ type DraftForm = {
   ticketType: TrackerTicketType;
   priority: TrackerTicketPriority;
   status: TrackerTicketStatus;
-  assigneeId: string;
+  assigneeName: string;
   dueDate: string;
   description: string;
   acceptanceCriteria: string;
@@ -44,7 +44,7 @@ const emptyDraft = (productArea: TrackerProductArea): DraftForm => ({
   ticketType: 'BUG',
   priority: 'MEDIUM',
   status: 'TODO',
-  assigneeId: '',
+  assigneeName: '',
   dueDate: '',
   description: '',
   acceptanceCriteria: '',
@@ -95,7 +95,6 @@ export default function TrackerTicketPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [ticket, setTicket] = useState<TrackerTicketDetails | null>(null);
-  const [assignees, setAssignees] = useState<TrackerPerson[]>([]);
   const [draft, setDraft] = useState<DraftForm>(emptyDraft(initialArea));
   const [commentBody, setCommentBody] = useState('');
   const [attachmentDraft, setAttachmentDraft] = useState({ label: '', url: '', mimeType: '', sizeBytes: '' });
@@ -115,18 +114,7 @@ export default function TrackerTicketPage() {
   async function loadInitialData() {
     setLoading(true);
     try {
-      const [usersResponse, ticketResponse] = await Promise.all([
-        adminApi.getUsers({ limit: 200 }),
-        isNew ? Promise.resolve(null) : adminApi.getTrackerTicket(ticketId),
-      ]);
-
-      setAssignees(usersResponse.data.users.map((user) => ({
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName ?? null,
-        email: user.email,
-        avatarUrl: null,
-      })));
+      const ticketResponse = isNew ? null : await adminApi.getTrackerTicket(ticketId);
 
       if (ticketResponse?.data) {
         setTicket(ticketResponse.data);
@@ -137,7 +125,7 @@ export default function TrackerTicketPage() {
           ticketType: ticketResponse.data.ticketType,
           priority: ticketResponse.data.priority,
           status: ticketResponse.data.status,
-          assigneeId: ticketResponse.data.assigneeId || '',
+          assigneeName: ticketResponse.data.assigneeName || '',
           dueDate: formatDateInput(ticketResponse.data.dueDate),
           description: ticketResponse.data.description || '',
           acceptanceCriteria: ticketResponse.data.acceptanceCriteria || '',
@@ -180,15 +168,15 @@ export default function TrackerTicketPage() {
         ticketType: draft.ticketType,
         priority: draft.priority,
         status: draft.status,
-        assigneeId: draft.assigneeId || null,
+        assigneeName: draft.assigneeName.trim() || null,
         dueDate: parseDateInput(draft.dueDate),
         description: draft.description.trim() || null,
         acceptanceCriteria: draft.acceptanceCriteria.trim() || null,
         notes: draft.notes.trim() || null,
         blockerReason: draft.blockerReason.trim() || null,
         releaseTarget: draft.releaseTarget.trim() || null,
-        externalLinksJson: parseJsonField(draft.externalLinksJson, 'External links'),
-        metadataJson: parseJsonField(draft.metadataJson, 'Metadata'),
+        externalLinksJson: isNew ? null : parseJsonField(draft.externalLinksJson, 'External links'),
+        metadataJson: isNew ? null : parseJsonField(draft.metadataJson, 'Metadata'),
         sortOrder: Number(draft.sortOrder || 0),
       };
 
@@ -213,7 +201,7 @@ export default function TrackerTicketPage() {
         ticketType: response.data.ticketType,
         priority: response.data.priority,
         status: response.data.status,
-        assigneeId: response.data.assigneeId || '',
+        assigneeName: response.data.assigneeName || '',
         dueDate: formatDateInput(response.data.dueDate),
         description: response.data.description || '',
         acceptanceCriteria: response.data.acceptanceCriteria || '',
@@ -415,23 +403,10 @@ export default function TrackerTicketPage() {
               </select>
             </Field>
             <Field label="Assignee">
-              <select value={draft.assigneeId} onChange={(e) => setDraft((prev) => ({ ...prev, assigneeId: e.target.value }))} className="input-field">
-                <option value="">Unassigned</option>
-                {assignees.map((assignee) => (
-                  <option key={assignee.id} value={assignee.id}>
-                    {personLabel(assignee)}
-                  </option>
-                ))}
-              </select>
+              <input value={draft.assigneeName} onChange={(e) => setDraft((prev) => ({ ...prev, assigneeName: e.target.value }))} className="input-field" placeholder="Enter any name" />
             </Field>
             <Field label="Due date">
               <input type="datetime-local" value={draft.dueDate} onChange={(e) => setDraft((prev) => ({ ...prev, dueDate: e.target.value }))} className="input-field" />
-            </Field>
-            <Field label="Release target">
-              <input value={draft.releaseTarget} onChange={(e) => setDraft((prev) => ({ ...prev, releaseTarget: e.target.value }))} className="input-field" placeholder="v1.12.0 / Sprint 14" />
-            </Field>
-            <Field label="Sort order">
-              <input type="number" min="0" value={draft.sortOrder} onChange={(e) => setDraft((prev) => ({ ...prev, sortOrder: e.target.value }))} className="input-field" />
             </Field>
           </div>
 
@@ -447,27 +422,39 @@ export default function TrackerTicketPage() {
             <textarea value={draft.description} onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))} rows={6} className="input-field" placeholder="Implementation notes, context, and scope." />
           </Field>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Acceptance criteria">
-              <textarea value={draft.acceptanceCriteria} onChange={(e) => setDraft((prev) => ({ ...prev, acceptanceCriteria: e.target.value }))} rows={6} className="input-field" placeholder="What must be true before this is done?" />
-            </Field>
-            <Field label="Notes">
-              <textarea value={draft.notes} onChange={(e) => setDraft((prev) => ({ ...prev, notes: e.target.value }))} rows={6} className="input-field" placeholder="Additional implementation notes or references." />
-            </Field>
-          </div>
+          {!isNew && (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Acceptance criteria">
+                  <textarea value={draft.acceptanceCriteria} onChange={(e) => setDraft((prev) => ({ ...prev, acceptanceCriteria: e.target.value }))} rows={6} className="input-field" placeholder="What must be true before this is done?" />
+                </Field>
+                <Field label="Notes">
+                  <textarea value={draft.notes} onChange={(e) => setDraft((prev) => ({ ...prev, notes: e.target.value }))} rows={6} className="input-field" placeholder="Additional implementation notes or references." />
+                </Field>
+              </div>
 
-          <Field label="Blocker reason">
-            <textarea value={draft.blockerReason} onChange={(e) => setDraft((prev) => ({ ...prev, blockerReason: e.target.value }))} rows={3} className="input-field" placeholder="If blocked, note the dependency or reason here." />
-          </Field>
+              <Field label="Blocker reason">
+                <textarea value={draft.blockerReason} onChange={(e) => setDraft((prev) => ({ ...prev, blockerReason: e.target.value }))} rows={3} className="input-field" placeholder="If blocked, note the dependency or reason here." />
+              </Field>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="External links JSON">
-              <textarea value={draft.externalLinksJson} onChange={(e) => setDraft((prev) => ({ ...prev, externalLinksJson: e.target.value }))} rows={5} className="input-field font-mono text-xs" placeholder='["https://figma.com/...","https://linear.app/..."]' />
-            </Field>
-            <Field label="Metadata JSON">
-              <textarea value={draft.metadataJson} onChange={(e) => setDraft((prev) => ({ ...prev, metadataJson: e.target.value }))} rows={5} className="input-field font-mono text-xs" placeholder='{"releaseWindow":"2026-09-02","epic":"checkout"}' />
-            </Field>
-          </div>
+              <Field label="Release target">
+                <input value={draft.releaseTarget} onChange={(e) => setDraft((prev) => ({ ...prev, releaseTarget: e.target.value }))} className="input-field" placeholder="v1.12.0 / Sprint 14" />
+              </Field>
+
+              <Field label="Sort order">
+                <input type="number" min="0" value={draft.sortOrder} onChange={(e) => setDraft((prev) => ({ ...prev, sortOrder: e.target.value }))} className="input-field" />
+              </Field>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="External links JSON">
+                  <textarea value={draft.externalLinksJson} onChange={(e) => setDraft((prev) => ({ ...prev, externalLinksJson: e.target.value }))} rows={5} className="input-field font-mono text-xs" placeholder='["https://figma.com/...","https://linear.app/..."]' />
+                </Field>
+                <Field label="Metadata JSON">
+                  <textarea value={draft.metadataJson} onChange={(e) => setDraft((prev) => ({ ...prev, metadataJson: e.target.value }))} rows={5} className="input-field font-mono text-xs" placeholder='{"releaseWindow":"2026-09-02","epic":"checkout"}' />
+                </Field>
+              </div>
+            </>
+          )}
         </section>
 
         <section className="space-y-6">
