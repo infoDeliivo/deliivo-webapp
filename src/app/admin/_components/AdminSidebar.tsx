@@ -16,6 +16,7 @@ import {
   BadgeCheck,
   IdCard,
   Gift,
+  ClipboardList,
   X,
 } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
@@ -33,6 +34,7 @@ const navItems = [
   { label: 'Rewards', href: '/admin/rewards', icon: Gift },
   { label: 'Pricing', href: '/admin/pricing', icon: Euro },
   { label: 'Monitoring', href: '/admin/monitoring', icon: Activity },
+  { label: 'Tracker', href: '/admin/tracker', icon: ClipboardList },
   { label: 'Content', href: '/admin/content', icon: Newspaper },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ]

@@ -1611,6 +1611,72 @@ export const adminApi = {
     if (params?.searchBy) query.set('searchBy', params.searchBy);
     return apiFetch<{ data: { rides: AdminRide[]; pagination: Pagination } }>(`/api/v1/admin/rides?${query}`);
   },
+  getTrackerTickets(params?: { productArea?: TrackerProductArea }) {
+    const query = new URLSearchParams();
+    if (params?.productArea) query.set('productArea', params.productArea);
+    const suffix = query.toString() ? `?${query}` : '';
+    return apiFetch<{ data: TrackerTicket[] }>(`/api/v1/admin/tracker/tickets${suffix}`);
+  },
+  getTrackerTicket(id: string) {
+    return apiFetch<{ data: TrackerTicketDetails }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(id)}`);
+  },
+  createTrackerTicket(data: TrackerTicketWriteInput) {
+    return apiFetch<{ data: TrackerTicketDetails }>('/api/v1/admin/tracker/tickets', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  updateTrackerTicket(id: string, data: Partial<TrackerTicketWriteInput>) {
+    return apiFetch<{ data: TrackerTicketDetails }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+  addTrackerComment(ticketId: string, body: string) {
+    return apiFetch<{ data: TrackerComment }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+  },
+  addTrackerAttachment(ticketId: string, data: TrackerAttachmentWriteInput) {
+    return apiFetch<{ data: TrackerAttachment }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/attachments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  addTrackerChecklistItem(ticketId: string, data: TrackerChecklistWriteInput) {
+    return apiFetch<{ data: TrackerChecklistItem }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/checklist-items`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  updateTrackerChecklistItem(ticketId: string, itemId: string, data: Partial<TrackerChecklistWriteInput>) {
+    return apiFetch<{ data: TrackerChecklistItem }>(
+      `/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/checklist-items/${encodeURIComponent(itemId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    );
+  },
+  deleteTrackerChecklistItem(ticketId: string, itemId: string) {
+    return apiFetch<{ data: { deleted: boolean } }>(
+      `/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/checklist-items/${encodeURIComponent(itemId)}`,
+      { method: 'DELETE' },
+    );
+  },
+  deleteTrackerComment(ticketId: string, commentId: string) {
+    return apiFetch<{ data: { deleted: boolean } }>(
+      `/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/comments/${encodeURIComponent(commentId)}`,
+      { method: 'DELETE' },
+    );
+  },
+  deleteTrackerAttachment(ticketId: string, attachmentId: string) {
+    return apiFetch<{ data: { deleted: boolean } }>(
+      `/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/attachments/${encodeURIComponent(attachmentId)}`,
+      { method: 'DELETE' },
+    );
+  },
   banUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/ban`, { method: 'POST' });
   },
@@ -1885,6 +1951,120 @@ export interface AdminOperationsSummary {
   };
 }
 
+export type TrackerProductArea = 'WEBAPP' | 'MOBILE_APP';
+export type TrackerTicketType = 'BUG' | 'STORY' | 'TASK' | 'CHORE' | 'IMPROVEMENT';
+export type TrackerTicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type TrackerTicketStatus = 'TODO' | 'IN_PROGRESS' | 'IN_TESTING' | 'DONE';
+
+export interface TrackerPerson {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+}
+
+export interface TrackerChecklistItem {
+  id: string;
+  label: string;
+  done: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrackerComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  authorId: string | null;
+  author: TrackerPerson | null;
+  authorName: string | null;
+}
+
+export interface TrackerAttachment {
+  id: string;
+  label: string;
+  url: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  createdAt: string;
+  uploadedById: string | null;
+  uploadedBy: TrackerPerson | null;
+  uploadedByName: string | null;
+}
+
+export interface TrackerTicket {
+  id: string;
+  productArea: TrackerProductArea;
+  title: string;
+  summary: string | null;
+  ticketType: TrackerTicketType;
+  priority: TrackerTicketPriority;
+  status: TrackerTicketStatus;
+  assigneeId: string | null;
+  assignee: TrackerPerson | null;
+  assigneeName: string | null;
+  dueDate: string | null;
+  description: string | null;
+  acceptanceCriteria: string | null;
+  notes: string | null;
+  blockerReason: string | null;
+  releaseTarget: string | null;
+  externalLinksJson: Record<string, unknown> | unknown[] | null;
+  metadataJson: Record<string, unknown> | unknown[] | null;
+  sortOrder: number;
+  commentsCount: number;
+  attachmentsCount: number;
+  checklistTotalCount: number;
+  checklistDoneCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrackerTicketDetails extends TrackerTicket {
+  createdById: string | null;
+  createdBy: TrackerPerson | null;
+  updatedById: string | null;
+  updatedBy: TrackerPerson | null;
+  comments: TrackerComment[];
+  attachments: TrackerAttachment[];
+  checklistItems: TrackerChecklistItem[];
+}
+
+export interface TrackerTicketWriteInput {
+  productArea: TrackerProductArea;
+  title: string;
+  summary?: string | null;
+  ticketType: TrackerTicketType;
+  priority?: TrackerTicketPriority;
+  status?: TrackerTicketStatus;
+  assigneeId?: string | null;
+  dueDate?: string | null;
+  description?: string | null;
+  acceptanceCriteria?: string | null;
+  notes?: string | null;
+  blockerReason?: string | null;
+  releaseTarget?: string | null;
+  externalLinksJson?: Record<string, unknown> | unknown[] | null;
+  metadataJson?: Record<string, unknown> | unknown[] | null;
+  sortOrder?: number;
+}
+
+export interface TrackerAttachmentWriteInput {
+  label: string;
+  url: string;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+}
+
+export interface TrackerChecklistWriteInput {
+  label: string;
+  sortOrder?: number;
+  done?: boolean;
+}
+
 export interface AdminPricingConfig {
   id: string;
   regionCode: string;
@@ -1984,6 +2164,7 @@ export interface AdminVerificationEmailDraft {
 export interface AdminUser {
   id: string;
   firstName: string | null;
+  lastName?: string | null;
   salutation: string | null;
   gender: string | null;
   email: string | null;
