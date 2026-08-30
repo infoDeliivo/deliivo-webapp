@@ -81,6 +81,7 @@ export function saveConsent(choice: Pick<ConsentChoice, 'analytics' | 'marketing
     // banner simply asks again next time.
   }
   applyConsent(stored);
+  window.dispatchEvent(new CustomEvent(CONSENT_UPDATED_EVENT, { detail: stored }));
   return stored;
 }
 
@@ -94,6 +95,7 @@ export function clearConsent(): void {
 
 /** Event the footer link dispatches to reopen the banner for withdrawal. */
 export const CONSENT_REOPEN_EVENT = 'deliivo:consent-reopen';
+export const CONSENT_UPDATED_EVENT = 'deliivo:consent-updated';
 
 export function openConsentSettings(): void {
   if (typeof window === 'undefined') return;
