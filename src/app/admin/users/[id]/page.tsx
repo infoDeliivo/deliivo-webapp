@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { ElementType, ReactNode } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   AlertCircle,
   ArrowLeft,
@@ -37,6 +37,7 @@ import {
 } from '@/lib/api';
 import type { RewardWallet } from '@/lib/api';
 import { showError, showSuccess } from '@/lib/app-feedback';
+import { featureFlags } from '@/lib/features';
 
 function shortId(id: string) {
   return id.slice(0, 8);
@@ -125,6 +126,7 @@ async function copyText(value: string, label: string) {
 }
 
 export default function AdminUserDetailsPage() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const userId = params.id;
   const [details, setDetails] = useState<AdminUserDetails | null>(null);
@@ -181,6 +183,40 @@ export default function AdminUserDetailsPage() {
       showSuccess(nextBanned ? 'User banned' : 'User unbanned', fullName(details.user));
     } catch (err: unknown) {
       showError('Action failed', getApiErrorMessage(err, 'Could not update ban status'));
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function deleteUser() {
+    if (!details || details.user.role === 'ADMIN') return;
+
+    const modePrompt = featureFlags.adminHardDeleteUsers
+      ? window.prompt('Type SOFT to anonymize the user, or HARD to permanently delete all user data.')
+      : window.prompt('Type SOFT to anonymize the user.');
+    const mode = modePrompt?.trim().toUpperCase();
+
+    if (mode !== 'SOFT' && mode !== 'HARD') return;
+    if (mode === 'HARD' && !featureFlags.adminHardDeleteUsers) {
+      showError('Hard delete disabled', 'Enable the hard delete feature flag first.');
+      return;
+    }
+
+    const confirmValue = window.prompt(
+      `Type DELETE to confirm ${mode.toLowerCase()} deletion for ${fullName(details.user)} (${details.user.email || details.user.id}).`,
+    );
+    if (confirmValue?.trim().toUpperCase() !== 'DELETE') return;
+
+    setActionLoading(true);
+    try {
+      await adminApi.deleteUser(details.user.id, { confirm: true, mode: mode.toLowerCase() as 'soft' | 'hard' });
+      showSuccess(
+        mode === 'HARD' ? 'User permanently deleted' : 'User soft-deleted',
+        fullName(details.user),
+      );
+      router.replace('/admin/users');
+    } catch (err: unknown) {
+      showError('Action failed', getApiErrorMessage(err, 'Could not delete user'));
     } finally {
       setActionLoading(false);
     }
@@ -496,14 +532,24 @@ export default function AdminUserDetailsPage() {
             </button>
           )}
           {user.role !== 'ADMIN' && (
-            <button
-              onClick={toggleBan}
-              disabled={actionLoading}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold disabled:opacity-50 ${user.isBanned ? 'border border-gray-200 bg-white text-gray-600 hover:text-[#F97316]' : 'border border-red-200 bg-red-50 text-red-600 hover:bg-red-100'}`}
-            >
-              {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
-              {user.isBanned ? 'Unban user' : 'Ban user'}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={toggleBan}
+                disabled={actionLoading}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold disabled:opacity-50 ${user.isBanned ? 'border border-gray-200 bg-white text-gray-600 hover:text-[#F97316]' : 'border border-red-200 bg-red-50 text-red-600 hover:bg-red-100'}`}
+              >
+                {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                {user.isBanned ? 'Unban user' : 'Ban user'}
+              </button>
+              <button
+                onClick={deleteUser}
+                disabled={actionLoading}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                Delete user
+              </button>
+            </div>
           )}
         </div>
       </div>

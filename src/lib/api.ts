@@ -1617,6 +1617,12 @@ export const adminApi = {
   unbanUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/unban`, { method: 'POST' });
   },
+  deleteUser(id: string, data: { confirm: true; mode: 'soft' | 'hard' }) {
+    return apiFetch<{ data: { deleted: boolean; hardDeleted?: boolean } }>(`/api/v1/admin/users/${id}/delete`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
   requireVeriff(id: string) {
     return apiFetch<{ data: { id: string; dlVerified: boolean; requiresVeriff: boolean } }>(
       `/api/v1/admin/users/${id}/require-veriff`,
