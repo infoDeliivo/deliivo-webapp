@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Car, Plus, Trash2, ArrowLeft, Upload, CheckCircle, Camera, Eye, Loader2 } from 'lucide-react';
-import { vehicleApi, dlVerificationApi, Vehicle, VehicleType, VehicleDocument, validateImageFile, UPLOAD_ACCEPT } from '@/lib/api';
+import { vehicleApi, dlVerificationApi, Vehicle, VehicleType, VehicleDocument, validateImageFile, UPLOAD_ACCEPT, ApiError, UploadStage } from '@/lib/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { useTranslation } from '@/lib/i18n-context';
@@ -53,6 +53,24 @@ const upsertDocument = (docs: DraftDocument[], doc: DraftDocument): DraftDocumen
   ...docs.filter((d) => d.documentType !== doc.documentType),
   doc,
 ];
+
+// Per-document upload state. One upload is four sequential network calls
+// (presign -> PUT to storage -> confirm -> attach to the draft), so it is slow enough
+// that the user will reach for the next document while it runs. Tracking each slot
+// separately is what keeps a slow or failed upload in one row from disabling, blocking
+// or silently discarding a click in another.
+type SlotStatus = 'queued' | 'uploading' | 'done' | 'error';
+type SlotState = {
+  status: SlotStatus;
+  error?: string;
+  stage?: UploadStage;
+  file?: File;
+  // Only an upload that actually started and then failed blocks Save. A file rejected
+  // by validateImageFile never left the browser, so it is no different from not having
+  // picked one — blocking on it would trap the user with no way to clear the error.
+  blocksSave?: boolean;
+};
+const isSlotBusy = (slot?: SlotState) => slot?.status === 'queued' || slot?.status === 'uploading';
 
 const DOC_TYPE_LABEL: Record<string, string> = {
   ...Object.fromEntries(VEHICLE_DOCUMENT_OPTIONS.map((o) => [o.key, o.label])),
@@ -119,8 +137,6 @@ function VehicleContent() {
   const [deleting, setDeleting] = useState<string | null>(null);
   // Existing-vehicle uploads (presigned flow)
   const [uploadingImageFor, setUploadingImageFor] = useState<string | null>(null);
-  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null); // `${vehicleId}:${type}`
-  const [uploadedDocs, setUploadedDocs] = useState<Record<string, string[]>>({}); // vehicleId -> documentTypes
 
   // Draft form state
   const [step, setStep] = useState(1);
@@ -195,7 +211,15 @@ function VehicleContent() {
   // Document upload state. Public docs (front/rear photo) carry an imageUrl;
   // private KYC docs are attached by key and have no public URL.
   const [documents, setDocuments] = useState<DraftDocument[]>([]);
-  const [uploading, setUploading] = useState(false);
+  // Keyed by documentType. Replaces a single shared `uploading` boolean, which disabled
+  // every file input at once: clicking a label wrapping a disabled input opens no file
+  // picker, so the click was swallowed with no feedback at all.
+  const [slots, setSlots] = useState<Record<string, SlotState>>({});
+  // Uploads run one at a time. The backend attaches each document by reading the draft
+  // out of Redis, mutating it and writing it back (addDocument in
+  // draft-vehicle.service.ts), so two concurrent attaches can lose one. Queueing keeps
+  // that serialization without disabling the other inputs.
+  const uploadQueue = useRef<Promise<void>>(Promise.resolve());
   const vehicleTypes: { value: VehicleType; label: string }[] = [
     { value: 'sedan', label: t('profile.vehicleTypeSedan') },
     { value: 'hatchback', label: t('profile.vehicleTypeHatchback') },
@@ -222,14 +246,11 @@ function VehicleContent() {
     }
   };
 
-  const handleDocUpload = async (file: File, documentType: string) => {
-    const invalid = validateImageFile(file);
-    if (invalid) {
-      setError(invalid);
-      return;
-    }
-    setUploading(true);
-    setError('');
+  const setSlot = (documentType: string, patch: SlotState) =>
+    setSlots((prev) => ({ ...prev, [documentType]: patch }));
+
+  const runDocUpload = async (file: File, documentType: string) => {
+    setSlot(documentType, { status: 'uploading', file });
     try {
       if (isPrivateDocType(documentType)) {
         // KYC (licence/insurance/registry): private target, attached by key. No
@@ -238,7 +259,9 @@ function VehicleContent() {
         setDocuments(prev => upsertDocument(prev, { documentType }));
 
         // A licence also enters the manual admin review queue. The vehicle draft and
-        // the review row point at the same private object.
+        // the review row point at the same private object. If this call fails the
+        // document is uploaded but not queued for review, so the slot stays in error
+        // and Save stays blocked.
         if (documentType === DL_DOC_TYPE) {
           await dlVerificationApi.submitDocument(uploaded.key);
           setDlOnFile(true);
@@ -249,12 +272,86 @@ function VehicleContent() {
         const res = await vehicleApi.uploadDraftDocument(file, documentType);
         setDocuments(prev => upsertDocument(prev, { documentType: res.data.documentType, imageUrl: res.data.imageUrl }));
       }
+      setSlot(documentType, { status: 'done' });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('profile.vehicleUploadFailed'));
-    } finally {
-      setUploading(false);
+      // `stage` says which of the four calls died, which decides where the file ended
+      // up: a failure at presign/put/confirm strands it under tmp/ (the bucket
+      // lifecycle rule deletes it within a day), while a failure at attach leaves it
+      // in permanent storage but unreferenced.
+      const stage = err instanceof ApiError ? err.stage : undefined;
+      pushEvent('vehicle_document_upload_failed', {
+        document_type: documentType,
+        stage: stage ?? 'unknown',
+        request_id: err instanceof ApiError ? err.requestId : undefined,
+        status: err instanceof ApiError ? err.status : undefined,
+      });
+      // Keep the File so Retry needs no second trip through the picker.
+      setSlot(documentType, {
+        status: 'error',
+        stage,
+        error: err instanceof Error ? err.message : t('profile.vehicleUploadFailed'),
+        file,
+        blocksSave: true,
+      });
     }
   };
+
+  const enqueueDocUpload = (file: File, documentType: string) => {
+    const invalid = validateImageFile(file);
+    if (invalid) {
+      setSlot(documentType, { status: 'error', error: invalid, file, blocksSave: false });
+      return;
+    }
+    setSlot(documentType, { status: 'queued', file });
+    uploadQueue.current = uploadQueue.current
+      .then(() => runDocUpload(file, documentType))
+      // runDocUpload already handles its own errors; this only stops one rejection
+      // from poisoning the chain for every upload queued behind it.
+      .catch(() => {});
+  };
+
+  // Slots still working or failed. These gate Save independently of the required-document
+  // check below, which is empty for plate countries that do not mandate documents — that
+  // is how a vehicle could previously be saved while an upload had silently failed.
+  const uploadsInFlight = Object.values(slots).some(isSlotBusy);
+  const failedDocTypes = VEHICLE_DOCUMENT_OPTIONS
+    .filter(({ key }) => slots[key]?.status === 'error' && slots[key]?.blocksSave)
+    .map(({ key }) => key);
+
+  // Give up on a document whose upload keeps failing: clears the slot so Save unblocks.
+  // Required documents stay blocked by missingRequiredDocs, which this does not touch.
+  const discardSlot = (documentType: string) =>
+    setSlots((prev) => {
+      const next = { ...prev };
+      delete next[documentType];
+      return next;
+    });
+
+  // An upload that is interrupted mid-flight leaves the file stranded and unrecoverable,
+  // so warn rather than let the tab close silently.
+  useEffect(() => {
+    if (!uploadsInFlight) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    // Backgrounding the tab is what mobile does when the native picker or camera opens,
+    // and it is when in-flight requests get torn down. Recording it separates that cause
+    // from an ordinary network failure in the analytics.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        pushEvent('vehicle_document_upload_backgrounded', {
+          in_flight: Object.values(slots).filter(isSlotBusy).length,
+        });
+      }
+    };
+    window.addEventListener('beforeunload', warn);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [uploadsInFlight, slots]);
 
   // Documents the current plate country makes mandatory, and which are still missing.
   const documentsRequired = requiresFullDocumentSet(licenseCountry);
@@ -266,6 +363,20 @@ function VehicleContent() {
   const dlMissing = documentsRequired && !dlSatisfied;
 
   const handleFinalizeDraft = async () => {
+    // Saving mid-upload persists a vehicle whose documents are still in flight, and
+    // saving over a failed upload persists one that points at storage holding nothing.
+    if (uploadsInFlight) {
+      setError('Wait for the documents still uploading to finish before saving.');
+      return;
+    }
+    if (failedDocTypes.length > 0) {
+      setError(
+        `These uploads failed and must be retried before saving: ${failedDocTypes
+          .map((type) => DOC_TYPE_LABEL[type] || type)
+          .join(', ')}`,
+      );
+      return;
+    }
     // The backend rejects an incomplete set with VEHICLE_DOCUMENTS_REQUIRED; name
     // the missing documents here instead of surfacing raw enum values.
     if (missingRequiredDocs.length > 0) {
@@ -290,6 +401,7 @@ function VehicleContent() {
       setStep(1);
       resetForm();
       setDocuments([]);
+      setSlots({});
       if (returnTo !== '/profile') router.push(returnTo);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('profile.vehicleSaveFailed'));
@@ -326,24 +438,6 @@ function VehicleContent() {
       setError(err instanceof Error ? err.message : t('profile.vehicleUploadFailed'));
     } finally {
       setUploadingImageFor(null);
-    }
-  };
-
-  const handleVehicleDocUpload = async (id: string, file: File, documentType: string) => {
-    const invalid = validateImageFile(file);
-    if (invalid) {
-      setError(invalid);
-      return;
-    }
-    setUploadingDoc(`${id}:${documentType}`);
-    setError('');
-    try {
-      await vehicleApi.uploadDocument(id, file, documentType);
-      setUploadedDocs((prev) => ({ ...prev, [id]: [...(prev[id] || []), documentType] }));
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('profile.vehicleUploadFailed'));
-    } finally {
-      setUploadingDoc(null);
     }
   };
 
@@ -615,15 +709,22 @@ function VehicleContent() {
                     ? !dlOnFile
                     : (REQUIRED_DOC_TYPES as readonly string[]).includes(key)
                 );
+                const slot = slots[key];
+                const busy = isSlotBusy(slot);
+                const failed = slot?.status === 'error';
                 return (
-                <div key={key} className="flex items-center gap-3">
-                  <label className={`flex-1 flex items-center gap-2 cursor-pointer rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm hover:border-deliivo-orange transition-colors ${uploaded ? 'border-green-400 bg-green-50' : required ? 'border-amber-300 bg-amber-50/40' : ''}`}>
-                    {uploaded ? (
+                <div key={key} className="space-y-1">
+                  <label className={`flex w-full items-center gap-2 cursor-pointer rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm hover:border-deliivo-orange transition-colors ${failed ? 'border-red-300 bg-red-50/50' : uploaded ? 'border-green-400 bg-green-50' : required ? 'border-amber-300 bg-amber-50/40' : ''}`}>
+                    {busy ? (
+                      <Loader2 size={16} className="shrink-0 animate-spin text-deliivo-orange" />
+                    ) : uploaded ? (
                       <CheckCircle size={16} className="text-green-500 shrink-0" />
                     ) : (
                       <Upload size={16} className="text-deliivo-gray shrink-0" />
                     )}
                     <span>{label}</span>
+                    {slot?.status === 'queued' && <span className="text-xs text-deliivo-gray">Waiting...</span>}
+                    {slot?.status === 'uploading' && <span className="text-xs text-deliivo-gray">Uploading...</span>}
                     {required && !uploaded && (
                       <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Required</span>
                     )}
@@ -631,18 +732,48 @@ function VehicleContent() {
                       type="file"
                       accept={UPLOAD_ACCEPT}
                       className="hidden"
-                      disabled={uploading}
+                      // Only this slot is disabled, and only while it is actually
+                      // working. Every other row stays clickable.
+                      disabled={busy}
                       onChange={(e) => {
                         const f = e.target.files?.[0];
-                        if (f) handleDocUpload(f, key);
+                        if (f) enqueueDocUpload(f, key);
+                        // Clearing the value is what makes re-picking the same file
+                        // fire another change event, so a retry after a failure works.
+                        e.target.value = '';
                       }}
                     />
                   </label>
+                  {failed && (
+                    <div className="flex flex-wrap items-center gap-2 pl-1">
+                      <p className="text-xs text-red-600">
+                        {slot?.error}
+                        {slot?.stage ? ` (failed at: ${slot.stage})` : ''}
+                      </p>
+                      {slot?.file && (
+                        <button
+                          type="button"
+                          onClick={() => enqueueDocUpload(slot.file!, key)}
+                          className="rounded-lg border border-red-200 px-2 py-0.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                        >
+                          Retry
+                        </button>
+                      )}
+                      {slot?.blocksSave && (
+                        <button
+                          type="button"
+                          onClick={() => discardSlot(key)}
+                          className="rounded-lg px-2 py-0.5 text-xs font-semibold text-deliivo-gray hover:bg-gray-100"
+                        >
+                          Discard
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 );
               })}
 
-              {uploading && <p className="text-xs text-deliivo-gray">Uploading...</p>}
               {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
               <div className="flex gap-3">
@@ -650,7 +781,7 @@ function VehicleContent() {
                 <button
                   type="button"
                   onClick={handleFinalizeDraft}
-                  disabled={saving || missingRequiredDocs.length > 0}
+                  disabled={saving || missingRequiredDocs.length > 0 || uploadsInFlight || failedDocTypes.length > 0}
                   className="btn-primary flex-1 py-2 text-sm disabled:opacity-50"
                 >
                   {saving ? 'Saving...' : 'Save Vehicle'}

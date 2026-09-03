@@ -238,17 +238,45 @@ export async function apiFetch<T = unknown>(
   return json as T;
 }
 
+/**
+ * Which step of the presigned upload sequence failed. An upload is four calls
+ * (presign -> PUT to storage -> confirm -> attach) and each one fails differently:
+ * a death at `put` or `confirm` strands the object in tmp/ where the lifecycle rule
+ * eventually deletes it, while a death at `attach` leaves an orphan in permanent
+ * storage. Without this the error message alone cannot tell the two apart.
+ */
+export type UploadStage = 'presign' | 'put' | 'confirm' | 'attach';
+
 export class ApiError extends Error {
   status: number;
   data: unknown;
   requestId?: string;
+  stage?: UploadStage;
 
-  constructor(message: string, status: number, data: unknown, requestId?: string) {
+  constructor(message: string, status: number, data: unknown, requestId?: string, stage?: UploadStage) {
     super(message);
     this.status = status;
     this.data = data;
     this.requestId = requestId;
+    this.stage = stage;
   }
+}
+
+/** Tag an error with the upload step it came from, preserving everything else. */
+export function withUploadStage<T>(stage: UploadStage, run: () => Promise<T>): Promise<T> {
+  return run().catch((error: unknown) => {
+    if (error instanceof ApiError) {
+      error.stage = error.stage ?? stage;
+      throw error;
+    }
+    throw new ApiError(
+      error instanceof Error ? error.message : 'Upload failed',
+      0,
+      error,
+      undefined,
+      stage,
+    );
+  });
 }
 
 export function getApiErrorMessage(error: unknown, fallback = 'Request failed') {
@@ -321,6 +349,42 @@ interface ConfirmExtra {
   documentType?: string;
 }
 
+// A stalled request is worse than a failed one: it holds the upload open until the tab
+// is backgrounded or evicted, and the request dies with no error anyone can see. Fail
+// fast instead so the retry below can act.
+const UPLOAD_PUT_TIMEOUT_MS = 60_000;
+// Backoff between attempts. Three attempts at a 60 s timeout plus these delays stays
+// well inside the backend's PRESIGN_TTL of 300 s, so the presigned URL cannot expire
+// mid-retry.
+const UPLOAD_RETRY_DELAYS_MS = [500, 1500];
+
+// Only network-class failures are retried: no HTTP response arrived, or a gateway said
+// it could not reach the origin. A 4xx is a real rejection and retrying it just burns
+// the presign.
+function isRetriableUploadError(error: unknown): boolean {
+  return error instanceof ApiError && [0, 502, 503, 504].includes(error.status);
+}
+
+/**
+ * Retry one upload step. Safe for all three: the PUT rewrites the same object at the
+ * same presigned key, and /uploads/confirm is idempotent server-side — it detects an
+ * object that is already promoted and returns the original result instead of failing
+ * with "Uploaded file not found".
+ */
+async function retryUploadStep<T>(run: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= UPLOAD_RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) await delay(UPLOAD_RETRY_DELAYS_MS[attempt - 1]);
+    try {
+      return await run();
+    } catch (error) {
+      lastError = error;
+      if (!isRetriableUploadError(error)) throw error;
+    }
+  }
+  throw lastError;
+}
+
 // Runs the full 3-step flow. presign + confirm go through apiFetch (auth +
 // refresh + retry); the middle PUT goes DIRECT to storage with a bare fetch —
 // it must not carry the auth header or hit the proxy (apiFetch also rejects the
@@ -336,26 +400,52 @@ async function uploadViaPresign<T>(
     fileExtension: fileExtension(file),
     ...extra,
   };
-  const presign = await apiFetch<{ data: PresignData }>('/api/v1/uploads/presign', {
-    method: 'POST',
-    body: JSON.stringify(presignBody),
-  });
+  const presign = await withUploadStage('presign', () =>
+    apiFetch<{ data: PresignData }>('/api/v1/uploads/presign', {
+      method: 'POST',
+      body: JSON.stringify(presignBody),
+    }),
+  );
   const { key, uploadUrl, method, headers } = presign.data;
 
-  let putRes: Response;
-  try {
-    putRes = await fetch(uploadUrl, { method, headers, body: file });
-  } catch (err) {
-    throw new ApiError('Upload failed — could not reach storage.', 0, err instanceof Error ? err.message : err);
-  }
-  if (!putRes.ok) {
-    throw new ApiError(`Upload failed (${putRes.status}).`, putRes.status, await putRes.text().catch(() => ''));
-  }
+  await withUploadStage('put', () =>
+    retryUploadStep(async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), UPLOAD_PUT_TIMEOUT_MS);
+      let putRes: Response;
+      try {
+        putRes = await fetch(uploadUrl, { method, headers, body: file, signal: controller.signal });
+      } catch (err) {
+        throw new ApiError(
+          'Upload failed — could not reach storage.',
+          0,
+          err instanceof Error ? err.message : err,
+          undefined,
+          'put',
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!putRes.ok) {
+        throw new ApiError(
+          `Upload failed (${putRes.status}).`,
+          putRes.status,
+          await putRes.text().catch(() => ''),
+          undefined,
+          'put',
+        );
+      }
+    }),
+  );
 
-  const confirm = await apiFetch<{ data: T }>('/api/v1/uploads/confirm', {
-    method: 'POST',
-    body: JSON.stringify({ target, key, ...extra }),
-  });
+  const confirm = await withUploadStage('confirm', () =>
+    retryUploadStep(() =>
+      apiFetch<{ data: T }>('/api/v1/uploads/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ target, key, ...extra }),
+      }),
+    ),
+  );
   return confirm.data;
 }
 
@@ -553,9 +643,13 @@ export const vehicleApi = {
   // /draft/upload-document (JSON, imageUrl branch).
   async uploadDraftDocument(file: File, documentType: string) {
     const uploaded = await uploadViaPresign<{ url: string; key: string }>('vehicle_draft_document', file);
-    const res = await apiFetch<{ data: { imageUrl: string; documentType: string } }>(
-      '/api/v1/vehicles/draft/upload-document',
-      { method: 'POST', body: JSON.stringify({ imageUrl: uploaded.url, documentType }) },
+    // The object is already in permanent storage at this point; failing here leaves it
+    // orphaned rather than lost, which is why the stage is worth recording separately.
+    const res = await withUploadStage('attach', () =>
+      apiFetch<{ data: { imageUrl: string; documentType: string } }>(
+        '/api/v1/vehicles/draft/upload-document',
+        { method: 'POST', body: JSON.stringify({ imageUrl: uploaded.url, documentType }) },
+      ),
     );
     return res;
   },
@@ -567,9 +661,11 @@ export const vehicleApi = {
   // also submitted to the manual review queue, which is keyed on that same object.
   async uploadDraftPrivateDocument(file: File, documentType: string) {
     const uploaded = await uploadViaPresign<{ key: string }>('vehicle_draft_document_private', file);
-    const res = await apiFetch<{ data: { documentType: string } }>(
-      '/api/v1/vehicles/draft/upload-document',
-      { method: 'POST', body: JSON.stringify({ imageKey: uploaded.key, documentType }) },
+    const res = await withUploadStage('attach', () =>
+      apiFetch<{ data: { documentType: string } }>(
+        '/api/v1/vehicles/draft/upload-document',
+        { method: 'POST', body: JSON.stringify({ imageKey: uploaded.key, documentType }) },
+      ),
     );
     return { ...res, key: uploaded.key };
   },
