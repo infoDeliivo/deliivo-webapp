@@ -54,6 +54,8 @@ type PlainEvent =
   | 'verification_failed'
   | 'vehicle_draft_start'
   | 'vehicle_document_uploaded'
+  | 'vehicle_document_upload_failed'
+  | 'vehicle_document_upload_backgrounded'
   | 'vehicle_complete'
   // engagement and post-purchase
   | 'generate_lead'

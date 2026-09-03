@@ -29,6 +29,11 @@ async function proxyRequest(req: NextRequest) {
     headers.set('x-forwarded-for', forwardedFor || clientIp);
     headers.set('x-real-ip', clientIp);
   }
+  // Correlation id minted by apiFetch. Without forwarding it the backend logs a
+  // different id than the browser saw, and a failed upload cannot be traced across
+  // the two systems.
+  const requestId = req.headers.get('x-request-id');
+  if (requestId) headers.set('x-request-id', requestId);
 
   const init: RequestInit = {
     method: req.method,
@@ -53,16 +58,21 @@ async function proxyRequest(req: NextRequest) {
           target,
           body: body.slice(0, 500),
         },
-        { status: res.status }
+        { status: res.status, headers: requestId ? { 'x-request-id': requestId } : undefined }
       );
     }
 
+    const responseHeaders: Record<string, string> = {
+      'content-type': contentType,
+      'cache-control': 'no-store',
+    };
+    // Echo the id back so the client can log the exact value the backend used.
+    const resRequestId = res.headers.get('x-request-id') || requestId;
+    if (resRequestId) responseHeaders['x-request-id'] = resRequestId;
+
     return new NextResponse(await res.arrayBuffer(), {
       status: res.status,
-      headers: {
-        'content-type': contentType,
-        'cache-control': 'no-store',
-      },
+      headers: responseHeaders,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
