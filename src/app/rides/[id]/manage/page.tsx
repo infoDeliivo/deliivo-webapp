@@ -109,15 +109,16 @@ const [error, setError] = useState('');
     setTracking(false);
   }, []);
 
-  // Auto-start tracking when ride is in progress
+  // Tracking is never started for the driver: watchPosition is what makes the browser ask for
+  // location, and asking on page load is a permission prompt nobody requested. It begins only from
+  // the "Start sharing location" button below, where the tap is the driver's own decision. Stopping
+  // stays automatic — a ride that is no longer in progress has nothing left to share.
   useEffect(() => {
-    if (phase === 'in_progress') {
-      startTracking();
-    } else {
+    if (phase !== 'in_progress') {
       stopTracking();
     }
     return () => stopTracking();
-  }, [phase, startTracking, stopTracking]);
+  }, [phase, stopTracking]);
 
   // Listen for location updates via socket (if viewing as passenger would)
   useEffect(() => {
