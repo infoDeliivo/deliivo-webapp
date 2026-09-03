@@ -92,15 +92,28 @@ function localeLabel(locale: string | null | undefined) {
 
 // Derived from the IP the user connects from, so it is where the connection appears to come from
 // rather than where the person is — a VPN or a roaming carrier moves it.
-function countryLabel(code: string | null | undefined) {
-  if (!code) return 'Not detected'
-  const upper = code.toUpperCase()
+//
+// The stored value carries city and country together, "New Delhi, IN", and falls back to a bare
+// "IN" wherever the lookup table names no city. The country is always the last segment, so it is
+// read from the end rather than by assuming a shape.
+function countryLabel(value: string | null | undefined) {
+  if (!value) return 'Not detected'
+
+  const segments = value.split(',').map((part) => part.trim()).filter(Boolean)
+  if (segments.length === 0) return 'Not detected'
+
+  const code = segments[segments.length - 1].toUpperCase()
+  const city = segments.slice(0, -1).join(', ')
+
+  let country = code
   try {
-    const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(upper)
-    return name && name !== upper ? `${name} (${upper})` : upper
+    const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(code)
+    if (name && name !== code) country = `${name} (${code})`
   } catch {
-    return upper
+    // Intl without region data: the code on its own is still the honest answer.
   }
+
+  return city ? `${city}, ${country}` : country
 }
 
 const genderLabels: Record<string, string> = {
