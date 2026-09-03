@@ -23,10 +23,15 @@ async function proxyRequest(req: NextRequest) {
   // The caller's address. This proxy runs server-side, so without forwarding it every request
   // reaches the backend from this container and every user looks like the same visitor — which
   // makes the country the backend derives from req.ip meaningless.
+  //
+  // Only the caller itself is forwarded, never the chain we received. Passing the chain on made
+  // the backend read a proxy for a user: it resolves req.ip by counting hops from the right, so
+  // every entry to the right of the client — and every hop a platform edge appends on the way in —
+  // shifted the answer, and the country it derived was a datacenter's rather than the visitor's.
   const forwardedFor = req.headers.get('x-forwarded-for');
   const clientIp = forwardedFor?.split(',')[0]?.trim() || req.headers.get('x-real-ip');
   if (clientIp) {
-    headers.set('x-forwarded-for', forwardedFor || clientIp);
+    headers.set('x-forwarded-for', clientIp);
     headers.set('x-real-ip', clientIp);
   }
   // Correlation id minted by apiFetch. Without forwarding it the backend logs a
