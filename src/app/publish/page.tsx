@@ -50,6 +50,7 @@ import {
   PublishRequirementKey,
 } from "@/lib/api";
 import { DlVerificationModal, useDlVerification } from "@/components/DlVerification";
+import { pushEvent } from '@/lib/analytics';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,6 +96,7 @@ interface WizardState {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const TOTAL_STEPS = 6;
+const PUBLISH_STEP_NAMES = ['route', 'stopovers', 'datetime', 'seats', 'price', 'confirm'] as const;
 const MAX_ROUTE_PICKUP_POINTS = 3;
 const MAX_ORIGIN_PICKUPS = 3;
 const MAX_DESTINATION_DROPOFFS = 3;
@@ -151,7 +153,7 @@ function getPublishGuide(step: number): { title: string; steps: FlowGuideStep[] 
         title: 'Use the suggested price unless you have a reason.',
         steps: [
           { title: 'Distance based', copy: 'The recommendation uses the active admin pricing rule.' },
-          { title: 'Allowed range', copy: 'Keep your price inside the min/max guidance.' },
+          { title: 'Suggested range', copy: 'You can price above the suggested range, but recommended pricing may attract more riders.' },
           { title: 'Per seat', copy: 'This is the amount one rider pays for the selected ride.' },
         ],
       };
@@ -1345,6 +1347,7 @@ function StepPrice({
   const estimatedRiderTotalPerSeat = state.basePricePerSeat + estimatedServiceFeePerSeat;
   const estimatedFullRideServiceFees = estimatedServiceFeePerSeat * state.seats;
   const estimatedFullRideRiderTotal = estimatedRiderTotalPerSeat * state.seats;
+  const priceAboveSuggestedRange = Boolean(rec && state.basePricePerSeat > rec.maxPrice);
   const recommendationAdjusted = Boolean(
     rec && Math.abs(rec.breakdown.estimatedRouteCost - rec.recommendedPrice) >= 0.01
   );
@@ -1432,6 +1435,11 @@ function StepPrice({
             <Plus className="h-4 w-4" />
           </button>
         </div>
+        {priceAboveSuggestedRange && (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {t('publish.highPriceGuidance')}
+          </p>
+        )}
         <div className="mt-4 grid gap-3 border-t border-gray-100 pt-4 text-sm sm:grid-cols-2">
           <div className="rounded-xl bg-gray-50 px-3 py-3">
             <p className="text-xs font-medium text-deliivo-gray">{t('publish.driverReceivesPerSeat')}</p>
@@ -1736,21 +1744,49 @@ function PublishEligibilityGate({
   const isAwaitingReview = (requirement: PublishRequirement) =>
     requirement.reason === 'VEHICLE_NOT_VERIFIED';
 
+  // A licence sits unverified from the moment the driver finishes uploading until Veriff's
+  // decision reaches the server. Without its own copy that window looks identical to never
+  // having started, so the driver is asked to verify work they already did — and starting a
+  // second session for the same document is exactly what they must not do.
+  const isLicenceUnderReview = (requirement: PublishRequirement) =>
+    requirement.reason === 'DL_VERIFICATION_PENDING';
+
+  // The licence itself passed, but the identity on it disagrees with the profile. Re-running
+  // verification cannot resolve that — the same document produces the same reading — so the
+  // driver is sent to support rather than back into the flow.
+  const isLicenceMismatch = (requirement: PublishRequirement) =>
+    requirement.reason === 'DL_IDENTITY_MISMATCH';
+
   const titleFor = (requirement: PublishRequirement) => {
     if (isRejected(requirement)) return t('publish.reqVehicleRejectedTitle');
     if (isAwaitingReview(requirement)) return t('publish.reqVehicleReviewTitle');
+    if (isLicenceUnderReview(requirement)) return t('publish.reqDlReviewTitle');
+    if (isLicenceMismatch(requirement)) return t('publish.reqDlMismatchTitle');
     return copy[requirement.key].title;
   };
 
   const bodyFor = (requirement: PublishRequirement) => {
     if (isRejected(requirement)) return t('publish.reqVehicleRejectedCopy');
     if (isAwaitingReview(requirement)) return t('publish.reqVehicleReviewCopy');
+    if (isLicenceUnderReview(requirement)) return t('publish.reqDlReviewCopy');
+    if (isLicenceMismatch(requirement)) return t('publish.reqDlMismatchCopy');
     return copy[requirement.key].body;
   };
 
   const action = (requirement: PublishRequirement) => {
     switch (requirement.key) {
       case 'DL_VERIFICATION':
+        // Under review there is nothing for the driver to do: the card re-polls on its own and
+        // the page's own "check again" button already forces a re-read. A third control that
+        // repeats that action only implies the wait is theirs to end.
+        if (isLicenceUnderReview(requirement)) return null;
+        if (isLicenceMismatch(requirement)) {
+          return (
+            <Link href="/contact" className="btn-primary px-4 py-2 text-sm">
+              {t('publish.reqDlMismatchAction')}
+            </Link>
+          );
+        }
         return (
           <button type="button" onClick={onStartDlVerification} disabled={dlLoading} className="btn-primary px-4 py-2 text-sm disabled:opacity-50">
             {dlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('publish.reqDlAction')}
@@ -1803,10 +1839,27 @@ function PublishEligibilityGate({
         {requirements.map((requirement) => (
           <li key={requirement.key} className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-deliivo-cream/40 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex gap-3">
-              <span className="mt-0.5 shrink-0 text-deliivo-orange">{copy[requirement.key].icon}</span>
+              <span className="mt-0.5 shrink-0 text-deliivo-orange">
+                {/* A clock, not a spinner: the wait is measured in minutes and depends on Veriff,
+                    not on anything this page is doing. A spinner promises activity in the UI. */}
+                {isLicenceUnderReview(requirement) ? <Clock className="h-5 w-5" /> : copy[requirement.key].icon}
+              </span>
               <div>
                 <p className="text-sm font-semibold text-deliivo-dark">{titleFor(requirement)}</p>
                 <p className="mt-0.5 text-xs leading-5 text-deliivo-gray">{bodyFor(requirement)}</p>
+                {/* A decision can be lost or a session can expire unanswered. The primary action
+                    is to wait, but the driver must never be stuck waiting on one that will
+                    never arrive, so starting over stays reachable. */}
+                {isLicenceUnderReview(requirement) && (
+                  <button
+                    type="button"
+                    onClick={onStartDlVerification}
+                    disabled={dlLoading}
+                    className="mt-2 text-xs font-semibold text-deliivo-orange underline underline-offset-2 disabled:opacity-50"
+                  >
+                    {t('publish.reqDlReviewRestart')}
+                  </button>
+                )}
                 {/* Admin free text: interpolated as a value, never used as a key. */}
                 {isRejected(requirement) && requirement.vehicle?.rejectionReason && (
                   <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
@@ -1866,13 +1919,24 @@ function PublishRideWizard() {
   // One call replaces the separate vehicle/payout probes: the backend evaluates
   // licence, identity, bank account and vehicle in the same place it enforces them
   // at publish time, so the checklist can never drift from the actual gate.
-  const checkEligibility = useCallback(async () => {
-    setEligibilityStatus('loading');
+  const eligibilityReportedRef = useRef<'pending' | 'done'>('pending');
+  const checkEligibility = useCallback(async (options?: { silent?: boolean }) => {
+    // A background re-read must not throw the page back to its loading state — the driver is
+    // looking at the checklist while it happens.
+    if (!options?.silent) setEligibilityStatus('loading');
     setGateError('');
     try {
       const res = await publishRideApi.eligibility();
       setEligibility(res.data);
-      setEligibilityStatus(getBlockingRequirements(res.data).length > 0 ? 'blocked' : 'ready');
+      const blocking = getBlockingRequirements(res.data);
+      setEligibilityStatus(blocking.length > 0 ? 'blocked' : 'ready');
+      // Reported once per mount: the gate is re-polled on window focus and after
+      // verification completes, and every re-poll would otherwise repeat the event.
+      if (eligibilityReportedRef.current !== 'done') {
+        eligibilityReportedRef.current = 'done';
+        if (blocking.length > 0) pushEvent('publish_blocked', { reason: blocking.join(',') });
+        else pushEvent('publish_start');
+      }
     } catch {
       setEligibilityStatus('error');
     }
@@ -1894,6 +1958,23 @@ function PublishRideWizard() {
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [checkEligibility, eligibilityStatus]);
+
+  // Veriff's decision reaches the server as a webhook — nothing pushes it to an open page. A
+  // driver watching the checklist would otherwise sit on a stale "under review" until they
+  // reloaded, so the gate is re-read until the licence resolves either way.
+  const licenceUnderReview = (eligibility?.requirements || []).some(
+    (requirement) => requirement.reason === 'DL_VERIFICATION_PENDING',
+  );
+
+  useEffect(() => {
+    if (eligibilityStatus !== 'blocked' || !licenceUnderReview) return;
+
+    const intervalId = window.setInterval(() => {
+      void checkEligibility({ silent: true });
+    }, 15000);
+
+    return () => window.clearInterval(intervalId);
+  }, [checkEligibility, eligibilityStatus, licenceUnderReview]);
 
   useEffect(() => {
     if (!published) return;
@@ -1993,6 +2074,7 @@ function PublishRideWizard() {
 
   async function handleContinue() {
     if (step >= TOTAL_STEPS) return;
+    pushEvent('publish_step', { step_number: step, step_name: PUBLISH_STEP_NAMES[step - 1] });
     setLoading(true);
     setError('');
 
@@ -2023,6 +2105,7 @@ function PublishRideWizard() {
         try {
           const priceRes = await publishRideApi.getRecommendedPrice();
           const rec = priceRes.data;
+          pushEvent('price_recommendation_viewed', { recommended_price: rec.recommendedPrice });
           setState(prev => ({
             ...prev,
             recommendation: rec,
@@ -2110,6 +2193,12 @@ function PublishRideWizard() {
 
       // Publish
       await publishRideApi.publish();
+      pushEvent('publish_ride', {
+        origin: state.origin?.address,
+        destination: state.destination?.address,
+        seats: state.seats,
+        price_per_seat: state.basePricePerSeat,
+      });
       vehicleDetourState = null;
       setPublished(true);
     } catch (err: unknown) {

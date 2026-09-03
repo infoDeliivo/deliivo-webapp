@@ -16,6 +16,19 @@ async function proxyRequest(req: NextRequest) {
   if (contentType) headers.set('content-type', contentType);
   const accept = req.headers.get('accept');
   headers.set('accept', accept || 'application/json');
+  // The site's language. The backend reads it to remember what language a user signed up in,
+  // so dropping it here would silently lose that for every request that has no explicit locale.
+  const acceptLanguage = req.headers.get('accept-language');
+  if (acceptLanguage) headers.set('accept-language', acceptLanguage);
+  // The caller's address. This proxy runs server-side, so without forwarding it every request
+  // reaches the backend from this container and every user looks like the same visitor — which
+  // makes the country the backend derives from req.ip meaningless.
+  const forwardedFor = req.headers.get('x-forwarded-for');
+  const clientIp = forwardedFor?.split(',')[0]?.trim() || req.headers.get('x-real-ip');
+  if (clientIp) {
+    headers.set('x-forwarded-for', forwardedFor || clientIp);
+    headers.set('x-real-ip', clientIp);
+  }
   // Correlation id minted by apiFetch. Without forwarding it the backend logs a
   // different id than the browser saw, and a failed upload cannot be traced across
   // the two systems.

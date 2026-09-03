@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { getSafeReturnTo, resolvePostLoginPath } from '@/lib/auth-redirect';
+import { pushEvent } from '@/lib/analytics';
 
 type GoogleCredentialResponse = { credential: string };
 type GoogleIdentity = {
@@ -56,6 +57,9 @@ export default function GoogleSignInButton({ returnTo }: { returnTo?: string | n
     try {
       const result = await authApi.google(response.credential);
       await login(result.data.accessToken, result.data.refreshToken);
+      // The only place a Google sign-in reveals whether the account is new: an
+      // account still headed for onboarding has just been created.
+      pushEvent(result.data.next === 'onboarding' ? 'sign_up' : 'login', { method: 'google' });
       const destination = returnTo || getSafeReturnTo();
       router.replace(resolvePostLoginPath(
         { role: result.data.user.role === 'ADMIN' ? 'ADMIN' : 'USER' },

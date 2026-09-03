@@ -12,6 +12,7 @@ import { getSafeReturnTo, resolvePostLoginPath, withReturnTo } from "@/lib/auth-
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { isOnboardingComplete } from "@/lib/onboarding";
 import { featureFlags } from "@/lib/features";
+import { pushEvent } from '@/lib/analytics';
 
 type Step = 'identifier' | 'otp';
 type Method = 'email' | 'phone';
@@ -28,7 +29,6 @@ export default function SignInPage() {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const normalizedIdentifier = method === 'email' ? identifier.trim() : buildE164PhoneNumber(phoneCountryCode, phone);
   const emailPhoneAuthEnabled = featureFlags.emailPhoneAuth;
@@ -59,7 +59,9 @@ export default function SignInPage() {
     setLoading(true);
     try {
       const res = await authApi.login(method, normalizedIdentifier);
-      if (res.data?.code) setDevCode(res.data.code);
+      if (res.data.code) {
+        setOtp(res.data.code);
+      }
       setStep('otp');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Login failed';
@@ -80,6 +82,7 @@ export default function SignInPage() {
     try {
       const res = await authApi.verifyOtp(normalizedIdentifier, otp, 'login', method);
       await login(res.data.accessToken, res.data.refreshToken);
+      pushEvent('login', { method });
       redirectAfterLogin(res.data.next);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Verification failed';
@@ -97,7 +100,10 @@ export default function SignInPage() {
     }
     try {
       const res = await authApi.resendOtp(normalizedIdentifier, 'login', method);
-      if (res.data?.code) setDevCode(res.data.code);
+      if (res.data.code) {
+        setOtp(res.data.code);
+      }
+      pushEvent('otp_resend', { method, context: 'login' });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to resend';
       setError(msg);
@@ -186,6 +192,7 @@ export default function SignInPage() {
                             inputMode="numeric"
                             required
                             placeholder="51234567"
+                            maxLength={PHONE_COUNTRY_OPTIONS.find(o => o.code === phoneCountryCode)?.maxLength || 15}
                             value={phone}
                             onChange={(e) => setPhone(sanitizePhoneLocalNumber(e.target.value))}
                             className="input-field"
@@ -247,11 +254,12 @@ export default function SignInPage() {
               <p className="mb-2 text-sm text-deliivo-gray">
                 We sent a 4-digit code to <strong>{normalizedIdentifier}</strong>
               </p>
-
-              {devCode && (
-                <p className="mb-4 text-xs bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-yellow-800">
-                  Dev mode — OTP: <strong>{devCode}</strong>
-                </p>
+              {/* Staging-only helper banner; the backend returns the OTP code in debug mode. */}
+              {otp && (
+                <div className="mb-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-deliivo-dark">
+                  <p className="font-semibold text-deliivo-orange">Staging OTP</p>
+                  <p className="mt-1 font-mono text-lg tracking-[0.35em]">{otp}</p>
+                </div>
               )}
 
               <form className="space-y-4" onSubmit={handleVerifyOtp}>
@@ -284,7 +292,7 @@ export default function SignInPage() {
               <div className="mt-4 flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={() => { setStep('identifier'); setOtp(''); setError(''); setDevCode(null); }}
+                  onClick={() => { setStep('identifier'); setOtp(''); setError(''); }}
                   className="text-sm text-deliivo-gray hover:text-deliivo-dark"
                 >
                   &larr; Change {method}

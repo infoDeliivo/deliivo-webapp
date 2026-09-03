@@ -15,6 +15,8 @@ import {
   Activity,
   BadgeCheck,
   IdCard,
+  Gift,
+  ClipboardList,
   X,
 } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
@@ -29,8 +31,10 @@ const navItems = [
   { label: 'Disputes', href: '/admin/reports', icon: Flag },
   { label: 'Payouts', href: '/admin/payouts', icon: Banknote },
   { label: 'Revenue', href: '/admin/revenue', icon: Euro },
+  { label: 'Rewards', href: '/admin/rewards', icon: Gift },
   { label: 'Pricing', href: '/admin/pricing', icon: Euro },
   { label: 'Monitoring', href: '/admin/monitoring', icon: Activity },
+  { label: 'Tracker', href: '/admin/tracker', icon: ClipboardList },
   { label: 'Content', href: '/admin/content', icon: Newspaper },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ]
@@ -79,7 +83,6 @@ export default function AdminSidebar({
             <Link
               key={href}
               href={href}
-              onClick={onClose}
               className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
                 isActive
                   ? 'bg-[#F97316] text-white'

@@ -9,6 +9,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { localeToUrlCode } from '@/lib/i18n';
 import { publicConfig } from '@/lib/public-config';
+import { pushEvent } from '@/lib/analytics';
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 type Category = ContentPost['category'];
@@ -93,6 +94,7 @@ export default function BlogPage() {
     setNewsletterStatus('saving');
     try {
       await contentApi.subscribeNewsletter(newsletterEmail, locale);
+      pushEvent('generate_lead', { lead_source: 'newsletter', locale });
       setNewsletterStatus('saved');
       setNewsletterEmail('');
     } catch {

@@ -11,6 +11,7 @@ import { getSafeReturnTo, resolvePostLoginPath, withReturnTo } from "@/lib/auth-
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { isOnboardingComplete } from "@/lib/onboarding";
 import { featureFlags } from "@/lib/features";
+import { pushEvent } from '@/lib/analytics';
 
 type Step = 'form' | 'otp';
 type Method = 'email' | 'phone';
@@ -27,7 +28,6 @@ export default function SignUpPage() {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [returnTo, setReturnTo] = useState<string | null>(null);
 
   const identifier = method === 'email' ? email.trim() : buildE164PhoneNumber(phoneCountryCode, phone);
@@ -54,7 +54,10 @@ export default function SignUpPage() {
     setLoading(true);
     try {
       const res = await authApi.signup(method, identifier);
-      if (res.data?.code) setDevCode(res.data.code);
+      if (res.data.code) {
+        setOtp(res.data.code);
+      }
+      pushEvent('sign_up_start', { method });
       setStep('otp');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Signup failed';
@@ -75,6 +78,7 @@ export default function SignUpPage() {
     try {
       const res = await authApi.verifyOtp(identifier, otp, 'signup', method);
       await login(res.data.accessToken, res.data.refreshToken);
+      pushEvent('sign_up', { method });
       router.replace(withReturnTo('/onboarding', returnTo || getSafeReturnTo()));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Verification failed';
@@ -92,7 +96,10 @@ export default function SignUpPage() {
     }
     try {
       const res = await authApi.resendOtp(identifier, 'signup', method);
-      if (res.data?.code) setDevCode(res.data.code);
+      if (res.data.code) {
+        setOtp(res.data.code);
+      }
+      pushEvent('otp_resend', { method, context: 'signup' });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to resend';
       setError(msg);
@@ -198,6 +205,7 @@ export default function SignUpPage() {
                             inputMode="numeric"
                             required
                             placeholder="51234567"
+                            maxLength={PHONE_COUNTRY_OPTIONS.find(o => o.code === phoneCountryCode)?.maxLength || 15}
                             value={phone}
                             onChange={(e) => setPhone(sanitizePhoneLocalNumber(e.target.value))}
                             className="input-field"
@@ -242,11 +250,11 @@ export default function SignUpPage() {
               <p className="mb-2 text-sm text-deliivo-gray">
                 We sent a 4-digit code to <strong>{identifier}</strong>
               </p>
-
-              {devCode && (
-                <p className="mb-4 text-xs bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-yellow-800">
-                  Dev mode — OTP: <strong>{devCode}</strong>
-                </p>
+              {otp && (
+                <div className="mb-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-deliivo-dark">
+                  <p className="font-semibold text-deliivo-orange">Staging OTP</p>
+                  <p className="mt-1 font-mono text-lg tracking-[0.35em]">{otp}</p>
+                </div>
               )}
 
               <form className="space-y-4" onSubmit={handleVerifyOtp}>
@@ -279,7 +287,7 @@ export default function SignUpPage() {
               <div className="mt-4 flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={() => { setStep('form'); setOtp(''); setError(''); setDevCode(null); }}
+                  onClick={() => { setStep('form'); setOtp(''); setError(''); }}
                   className="text-sm text-deliivo-gray hover:text-deliivo-dark"
                 >
                   &larr; Back

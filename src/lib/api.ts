@@ -1,3 +1,5 @@
+import { getBrowserLocale } from './i18n';
+
 // Browser calls go through the Next.js server-side proxy (/api/proxy/*).
 // Server-side (proxy route, SSR) calls the backend directly.
 // Using a function avoids Next.js build-time inlining of process.env values.
@@ -58,8 +60,14 @@ async function refreshAccessToken(): Promise<TokenPair> {
 
   const res = await fetch(`${getApiBaseUrl()}/api/v1/auth/access-token`, {
     method: 'POST',
-    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      // A silent renewal may be the only request an idle session makes. Without this the backend
+      // has no way to tell what language the user is reading the site in at that moment.
+      'Accept-Language': getBrowserLocale(),
+    },
+    body: JSON.stringify({ refreshToken: tokens.refreshToken, locale: getBrowserLocale() }),
   });
 
   if (!res.ok) {
@@ -151,6 +159,7 @@ export async function apiFetch<T = unknown>(
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers as Record<string, string> || {}),
     'x-request-id': requestId,
+    'Accept-Language': getBrowserLocale(),
   };
 
   if (tokens?.accessToken) {
@@ -467,7 +476,7 @@ export const authApi = {
       };
     }>('/api/v1/auth/google', {
       method: 'POST',
-      body: JSON.stringify({ idToken }),
+      body: JSON.stringify({ idToken, locale: getBrowserLocale() }),
     });
   },
 
@@ -487,9 +496,11 @@ export const authApi = {
   },
 
   signup(method: 'email' | 'phone', identifier: string) {
+    // The language the visitor is reading the site in, detected by i18n — never asked for.
+    const locale = getBrowserLocale();
     const body = method === 'email'
-      ? { method, email: identifier }
-      : { method, phone: identifier };
+      ? { method, email: identifier, locale }
+      : { method, phone: identifier, locale };
     return apiFetch<{ message: string; data: { next: string; code?: string } }>(
       '/api/v1/auth/signup',
       { method: 'POST', body: JSON.stringify(body) }
@@ -573,6 +584,20 @@ export const userApi = {
   async uploadAvatar(file: File) {
     const data = await uploadViaPresign<{ avatarUrl: string }>('avatar', file);
     return { data };
+  },
+
+  /**
+   * Tell the backend the language the user just picked.
+   *
+   * Authenticated calls already carry Accept-Language, so the server learns a switch on the
+   * user's next request anyway. This is the explicit path: a user who switches and then goes
+   * idle (or logs out) would otherwise stay recorded under their old language.
+   */
+  setLocale(locale: string) {
+    return apiFetch<{ data: { preferredLocale: string } }>('/api/v1/users/me/locale', {
+      method: 'PATCH',
+      body: JSON.stringify({ locale }),
+    });
   },
 };
 
@@ -1496,6 +1521,100 @@ export const payoutsApi = {
   },
 };
 
+export interface RewardWalletSummary {
+  walletType: 'RIDER' | 'DRIVER';
+  currency: string;
+  balance: number;
+  credited: number;
+  debited: number;
+}
+
+export interface RewardWalletCampaign {
+  id: string;
+  code: string;
+  name: string;
+  audience: 'RIDER' | 'DRIVER';
+  triggerType: string;
+  thresholdCount: number;
+  rewardAmount: number;
+  currency: string;
+  active: boolean;
+  repeatable: boolean;
+  description: string | null;
+  terms: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  metadataJson: Record<string, unknown> | null;
+  createdById: string | null;
+  updatedById: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RewardWalletEntry {
+  id: string;
+  walletType: 'RIDER' | 'DRIVER';
+  entryType: string;
+  direction: 'CREDIT' | 'DEBIT';
+  amount: number;
+  currency: string;
+  sourceType: string;
+  sourceId: string;
+  description: string | null;
+  campaign: {
+    id: string;
+    code: string;
+    name: string;
+    triggerType: string;
+    audience: string;
+  } | null;
+  referral: {
+    id: string;
+    referrerUserId: string;
+    referredUserId: string;
+    status: string;
+  } | null;
+  previousHash?: string | null;
+  entryHash?: string | null;
+  reversalOfEntryId?: string | null;
+  createdAt: string;
+}
+
+export interface RewardWallet {
+  userId: string;
+  referralCode: string;
+  referredByUserId: string | null;
+  totals: RewardWalletSummary[];
+  campaigns?: RewardWalletCampaign[];
+  ledgerIntegrity?: { ok: boolean; brokenEntryId: string | null };
+  history: RewardWalletEntry[];
+}
+
+export const rewardsApi = {
+  getMyWallet() {
+    return apiFetch<{ data: RewardWallet }>('/api/v1/users/me/rewards');
+  },
+  listCampaigns() {
+    return apiFetch<{ data: RewardWalletCampaign[] }>('/api/v1/admin/rewards/campaigns');
+  },
+  saveCampaign(data: Partial<RewardWalletCampaign> & Pick<RewardWalletCampaign, 'code' | 'name' | 'audience' | 'triggerType' | 'rewardAmount'>) {
+    const isUpdate = Boolean(data.id);
+    return apiFetch<{ data: RewardWalletCampaign }>(`/api/v1/admin/rewards/campaigns${isUpdate ? `/${data.id}` : ''}`, {
+      method: isUpdate ? 'PUT' : 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  getUserWallet(userId: string) {
+    return apiFetch<{ data: RewardWallet }>(`/api/v1/admin/rewards/users/${encodeURIComponent(userId)}/rewards`);
+  },
+  grantUserReward(userId: string, data: { amount: number; currency?: string; walletType?: 'RIDER' | 'DRIVER'; reason: string; sourceType?: string; sourceId?: string; metadataJson?: Record<string, unknown> | null }) {
+    return apiFetch<{ data: { entry: RewardWalletEntry; created: boolean } }>(`/api/v1/admin/rewards/users/${encodeURIComponent(userId)}/rewards/manual-grant`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 // Payment Methods API
 export const paymentMethodsApi = {
   list() {
@@ -1576,6 +1695,9 @@ export const adminApi = {
   getUserDetails(id: string) {
     return apiFetch<{ data: AdminUserDetails }>(`/api/v1/admin/users/${encodeURIComponent(id)}`);
   },
+  getUserRewards(id: string) {
+    return apiFetch<{ data: RewardWallet }>(`/api/v1/admin/rewards/users/${encodeURIComponent(id)}/rewards`);
+  },
   getRides(params?: { page?: number; limit?: number; status?: string; search?: string; searchBy?: string }) {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
@@ -1585,14 +1707,109 @@ export const adminApi = {
     if (params?.searchBy) query.set('searchBy', params.searchBy);
     return apiFetch<{ data: { rides: AdminRide[]; pagination: Pagination } }>(`/api/v1/admin/rides?${query}`);
   },
+  getTrackerTickets(params?: { productArea?: TrackerProductArea }) {
+    const query = new URLSearchParams();
+    if (params?.productArea) query.set('productArea', params.productArea);
+    const suffix = query.toString() ? `?${query}` : '';
+    return apiFetch<{ data: TrackerTicket[] }>(`/api/v1/admin/tracker/tickets${suffix}`);
+  },
+  getTrackerTicket(id: string) {
+    return apiFetch<{ data: TrackerTicketDetails }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(id)}`);
+  },
+  createTrackerTicket(data: TrackerTicketWriteInput) {
+    return apiFetch<{ data: TrackerTicketDetails }>('/api/v1/admin/tracker/tickets', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  updateTrackerTicket(id: string, data: Partial<TrackerTicketWriteInput>) {
+    return apiFetch<{ data: TrackerTicketDetails }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+  addTrackerComment(ticketId: string, body: string) {
+    return apiFetch<{ data: TrackerComment }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+  },
+  addTrackerAttachment(ticketId: string, data: TrackerAttachmentWriteInput) {
+    return apiFetch<{ data: TrackerAttachment }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/attachments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  addTrackerChecklistItem(ticketId: string, data: TrackerChecklistWriteInput) {
+    return apiFetch<{ data: TrackerChecklistItem }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/checklist-items`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  updateTrackerChecklistItem(ticketId: string, itemId: string, data: Partial<TrackerChecklistWriteInput>) {
+    return apiFetch<{ data: TrackerChecklistItem }>(
+      `/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/checklist-items/${encodeURIComponent(itemId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    );
+  },
+  deleteTrackerChecklistItem(ticketId: string, itemId: string) {
+    return apiFetch<{ data: { deleted: boolean } }>(
+      `/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/checklist-items/${encodeURIComponent(itemId)}`,
+      { method: 'DELETE' },
+    );
+  },
+  deleteTrackerComment(ticketId: string, commentId: string) {
+    return apiFetch<{ data: { deleted: boolean } }>(
+      `/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/comments/${encodeURIComponent(commentId)}`,
+      { method: 'DELETE' },
+    );
+  },
+  deleteTrackerAttachment(ticketId: string, attachmentId: string) {
+    return apiFetch<{ data: { deleted: boolean } }>(
+      `/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/attachments/${encodeURIComponent(attachmentId)}`,
+      { method: 'DELETE' },
+    );
+  },
   banUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/ban`, { method: 'POST' });
   },
   unbanUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/unban`, { method: 'POST' });
   },
+  deleteUser(id: string, data: { confirm: true; mode: 'soft' | 'hard' }) {
+    return apiFetch<{ data: { deleted: boolean; hardDeleted?: boolean } }>(`/api/v1/admin/users/${id}/delete`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  requireVeriff(id: string) {
+    return apiFetch<{ data: { id: string; dlVerified: boolean; requiresVeriff: boolean } }>(
+      `/api/v1/admin/users/${id}/require-veriff`,
+      { method: 'POST' },
+    );
+  },
+  syncUserVeriff(id: string) {
+    return apiFetch<{ data: { scanned: number; updated: number; skipped: number } }>(
+      `/api/v1/admin/users/${id}/sync-veriff`,
+      { method: 'POST' },
+    );
+  },
   // Driving-licence review queue. The licence photo comes back as `previewKey` —
   // a private S3 key exchanged for a short-lived signed URL via getDocumentReadUrl.
+  getVerificationEmailDraft(id: string) {
+    return apiFetch<{ data: AdminVerificationEmailDraft }>(
+      `/api/v1/admin/users/${id}/verification-email/draft`,
+    );
+  },
+  sendVerificationEmail(id: string, data: { subject: string; text: string }) {
+    return apiFetch<{ data: { to: string; subject: string; missingItems: string[]; sentBy: string | null } }>(
+      `/api/v1/admin/users/${id}/verification-email/send`,
+      { method: 'POST', body: JSON.stringify(data) },
+    );
+  },
   listDlSubmissions(params?: { status?: string; page?: number; limit?: number }) {
     const query = new URLSearchParams();
     // 'ALL' is the absence of a filter, not a value the backend understands.
@@ -1613,6 +1830,18 @@ export const adminApi = {
     return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
       `/api/v1/admin/dl-verifications/${userId}/decline`,
       { method: 'POST', body: JSON.stringify({ reason }) },
+    );
+  },
+  requestDlResubmission(userId: string, reason: string) {
+    return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
+      `/api/v1/admin/dl-verifications/${userId}/resubmit`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    );
+  },
+  grantUserReward(userId: string, data: { amount: number; currency?: string; walletType?: 'RIDER' | 'DRIVER'; reason: string; sourceType?: string; sourceId?: string; metadataJson?: Record<string, unknown> | null }) {
+    return apiFetch<{ data: { entry: RewardWalletEntry; created: boolean } }>(
+      `/api/v1/admin/rewards/users/${encodeURIComponent(userId)}/rewards/manual-grant`,
+      { method: 'POST', body: JSON.stringify(data) },
     );
   },
   // Vehicle review queue. Oldest-first server-side, so the list arrives in the order
@@ -1818,6 +2047,121 @@ export interface AdminOperationsSummary {
   };
 }
 
+export type TrackerProductArea = 'WEBAPP' | 'MOBILE_APP';
+export type TrackerTicketType = 'BUG' | 'STORY' | 'TASK' | 'CHORE' | 'IMPROVEMENT';
+export type TrackerTicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type TrackerTicketStatus = 'TODO' | 'IN_PROGRESS' | 'IN_TESTING' | 'DONE';
+
+export interface TrackerPerson {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+}
+
+export interface TrackerChecklistItem {
+  id: string;
+  label: string;
+  done: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrackerComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  authorId: string | null;
+  author: TrackerPerson | null;
+  authorName: string | null;
+}
+
+export interface TrackerAttachment {
+  id: string;
+  label: string;
+  url: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  createdAt: string;
+  uploadedById: string | null;
+  uploadedBy: TrackerPerson | null;
+  uploadedByName: string | null;
+}
+
+export interface TrackerTicket {
+  id: string;
+  productArea: TrackerProductArea;
+  title: string;
+  summary: string | null;
+  ticketType: TrackerTicketType;
+  priority: TrackerTicketPriority;
+  status: TrackerTicketStatus;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  assignee: TrackerPerson | null;
+  dueDate: string | null;
+  description: string | null;
+  acceptanceCriteria: string | null;
+  notes: string | null;
+  blockerReason: string | null;
+  releaseTarget: string | null;
+  externalLinksJson: Record<string, unknown> | unknown[] | null;
+  metadataJson: Record<string, unknown> | unknown[] | null;
+  sortOrder: number;
+  commentsCount: number;
+  attachmentsCount: number;
+  checklistTotalCount: number;
+  checklistDoneCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrackerTicketDetails extends TrackerTicket {
+  createdById: string | null;
+  createdBy: TrackerPerson | null;
+  updatedById: string | null;
+  updatedBy: TrackerPerson | null;
+  comments: TrackerComment[];
+  attachments: TrackerAttachment[];
+  checklistItems: TrackerChecklistItem[];
+}
+
+export interface TrackerTicketWriteInput {
+  productArea: TrackerProductArea;
+  title: string;
+  summary?: string | null;
+  ticketType: TrackerTicketType;
+  priority?: TrackerTicketPriority;
+  status?: TrackerTicketStatus;
+  assigneeId?: string | null;
+  assigneeName?: string | null;
+  dueDate?: string | null;
+  description?: string | null;
+  acceptanceCriteria?: string | null;
+  notes?: string | null;
+  blockerReason?: string | null;
+  releaseTarget?: string | null;
+  externalLinksJson?: Record<string, unknown> | unknown[] | null;
+  metadataJson?: Record<string, unknown> | unknown[] | null;
+  sortOrder?: number;
+}
+
+export interface TrackerAttachmentWriteInput {
+  label: string;
+  url: string;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+}
+
+export interface TrackerChecklistWriteInput {
+  label: string;
+  sortOrder?: number;
+  done?: boolean;
+}
+
 export interface AdminPricingConfig {
   id: string;
   regionCode: string;
@@ -1906,13 +2250,24 @@ export interface AdminDlRecord {
   updatedAt: string;
 }
 
+export interface AdminVerificationEmailDraft {
+  to: string;
+  subject: string;
+  text: string;
+  missingItems: string[];
+  isDriverCandidate: boolean;
+}
+
 export interface AdminUser {
   id: string;
   firstName: string | null;
+  lastName?: string | null;
   salutation: string | null;
   gender: string | null;
   email: string | null;
   phone: string | null;
+  /** Language the user was browsing the site in at signup. Null when it was never detected. */
+  preferredLocale: string | null;
   role: string;
   isBanned: boolean;
   isVerified: boolean;
@@ -1929,6 +2284,8 @@ export interface AdminUserDetails {
     dob: string | null;
     emailVerified: boolean;
     phoneVerified: boolean;
+    /** ISO-3166 alpha-2 country the user last connected from. Null when it was never detected. */
+    detectedCountry: string | null;
     avatarUrl: string | null;
     stripeAccountId: string | null;
     stripeOnboardingComplete: boolean;
@@ -1940,6 +2297,14 @@ export interface AdminUserDetails {
     privacyAcceptedAt: string | null;
     privacyVersion: string | null;
     updatedAt: string;
+    verificationFlags: {
+      completeOnboardingVerified: boolean;
+      veriffVerified: boolean;
+      manualLicenseApproved: boolean;
+      licenseVerified: boolean;
+      vehicleVerified: boolean;
+      canRequireVeriff: boolean;
+    };
     travelPreference?: { chattiness: string | null; pets: string | null } | null;
     ratingStats?: { totalRatings: number; totalStars: number; averageRating: number } | null;
   };

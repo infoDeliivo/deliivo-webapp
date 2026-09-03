@@ -6,6 +6,7 @@ import { dlVerificationApi, getApiErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from '@/lib/i18n-context';
 import type { SupportedLocale } from '@/lib/i18n';
+import { pushEvent } from '@/lib/analytics';
 
 /**
  * Driving licence verification, shared by the publish gate and onboarding.
@@ -83,6 +84,7 @@ export function useDlVerification({ onCompleted }: { onCompleted?: () => void } 
     setSessionUrl('');
     setStatus('failed');
     setError(message);
+    pushEvent('verification_failed', { error_message: message });
   }, []);
 
   // RELOAD_REQUEST has to rebuild the frame from inside the frame's own event handler,
@@ -109,6 +111,7 @@ export function useDlVerification({ onCompleted }: { onCompleted?: () => void } 
           switch (message) {
             case MESSAGES.STARTED:
               setStatus('in-flight');
+              pushEvent('verification_in_flight');
               break;
             case MESSAGES.SUBMITTED:
             case MESSAGES.FINISHED:
@@ -116,12 +119,16 @@ export function useDlVerification({ onCompleted }: { onCompleted?: () => void } 
               closeFrame();
               setSessionUrl('');
               setStatus('submitted');
+              // Submitted, never approved - approval only arrives by webhook, so no
+              // conversion may be derived from this.
+              pushEvent('verification_submitted');
               onCompletedRef.current?.();
               break;
             case MESSAGES.CANCELED:
               closeFrame();
               setSessionUrl('');
               setStatus('canceled');
+              pushEvent('verification_canceled');
               break;
             case MESSAGES.RELOAD_REQUEST:
               // Sent after a camera-permission recovery, mostly on iOS Safari. Left
@@ -183,12 +190,15 @@ export function useDlVerification({ onCompleted }: { onCompleted?: () => void } 
     }
 
     setStatus('starting');
+    pushEvent('verification_start', { provider: 'veriff' });
     void (async () => {
       try {
         const res = await dlVerificationApi.createSession({
           firstName,
           lastName,
-          email: user?.email,
+          // A phone-registered driver has no email. Sending the profile's null would fail
+          // validation for an account that is entirely valid, so the field is simply omitted.
+          email: user?.email || undefined,
           dateOfBirth: user?.dob?.slice(0, 10),
           gender: user?.gender === 'MALE' ? 'M' : user?.gender === 'FEMALE' ? 'F' : undefined,
           callback: `${window.location.origin}${window.location.pathname}`,

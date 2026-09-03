@@ -8,6 +8,7 @@ import { vehicleApi, dlVerificationApi, Vehicle, VehicleType, VehicleDocument, v
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { useTranslation } from '@/lib/i18n-context';
+import { pushEvent } from '@/lib/analytics';
 
 export default function VehiclePage() {
   return (
@@ -30,7 +31,7 @@ const VEHICLE_DOCUMENT_OPTIONS = [
 // full set below before /vehicles/draft/save accepts the vehicle. Keep in sync
 // with DOCUMENT_REQUIRED_COUNTRIES / REQUIRED_DOCUMENT_TYPES in vehicle.constants.ts.
 const DOCUMENT_REQUIRED_COUNTRIES = new Set(['EE']);
-const REQUIRED_DOC_TYPES = ['VEHICLE_IMAGE_FRONT', 'VEHICLE_IMAGE_BACK', 'VEHICLE_DOCUMENT'] as const;
+const REQUIRED_DOC_TYPES = ['VEHICLE_IMAGE_FRONT', 'VEHICLE_IMAGE_BACK', 'VEHICLE_DOCUMENT', 'INSURANCE_DOCUMENT'] as const;
 const requiresFullDocumentSet = (licenseCountry: string) =>
   DOCUMENT_REQUIRED_COUNTRIES.has(licenseCountry.trim().toUpperCase());
 
@@ -200,6 +201,7 @@ function VehicleContent() {
     setSaving(true);
     try {
       await vehicleApi.createDraft(licenseCountry, licenseNumber);
+      pushEvent('vehicle_draft_start', { license_country: licenseCountry });
       setStep(2);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('profile.vehicleDraftFailed'));
@@ -256,6 +258,7 @@ function VehicleContent() {
         // KYC (licence/insurance/registry): private target, attached by key. No
         // public URL, so track completion by the known documentType.
         const uploaded = await vehicleApi.uploadDraftPrivateDocument(file, documentType);
+        pushEvent('vehicle_document_uploaded', { document_type: documentType });
         setDocuments(prev => upsertDocument(prev, { documentType }));
 
         // A licence also enters the manual admin review queue. The vehicle draft and
@@ -396,6 +399,7 @@ function VehicleContent() {
     setError('');
     try {
       await vehicleApi.saveDraft();
+      pushEvent('vehicle_complete');
       await fetchVehicles();
       setShowAddForm(false);
       setStep(1);
@@ -684,7 +688,7 @@ function VehicleContent() {
             <div className="space-y-4">
               <p className="text-sm text-deliivo-gray">
                 {documentsRequired
-                  ? `Vehicles with a ${licenseCountry.toUpperCase()} plate need the front photo, rear photo, registration document and your driving licence. The rest are optional.`
+                  ? `Vehicles with a ${licenseCountry.toUpperCase()} plate need the front photo, rear photo, registration document, insurance document and your driving licence.`
                   : 'Upload documents if available. This is optional, and you can still save the vehicle without them.'}
               </p>
 

@@ -37,6 +37,7 @@ import { useTranslation } from '@/lib/i18n-context';
 import { withReturnTo } from '@/lib/auth-redirect';
 import { getBookingStatusBadgeClass, getRideStatusLabel } from '@/lib/ride-status';
 import { enqueueRecoveryAction, isRecoverableServerFailure } from '@/lib/recovery-outbox';
+import { pushEvent, pushEcommerceEvent, EcommerceItem } from '@/lib/analytics';
 
 const TOS_VERSION = '1.0';
 const PRIVACY_VERSION = '1.0';
@@ -252,6 +253,21 @@ function areTrackingLinksEqual(previous: TrackingLink[], next: TrackingLink[]) {
   });
 }
 
+// Ads needs a stable order id to deduplicate payment retries and to key later
+// conversion adjustments; bookingReference is optional, so fall back to the id.
+function bookingTransactionId(booking: Booking): string {
+  return booking.bookingReference || booking.id;
+}
+
+function bookingItems(booking: Booking, ride: RideDetails | null): EcommerceItem[] {
+  return [{
+    item_id: booking.rideId,
+    item_name: ride ? `${ride.originAddress} -> ${ride.destinationAddress}` : undefined,
+    price: booking.priceBreakdown?.basePricePerSeat,
+    quantity: booking.seatsBooked,
+  }];
+}
+
 function RideDetailContent() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -269,6 +285,9 @@ function RideDetailContent() {
   const [seats, setSeats] = useState(1);
   const [preview, setPreview] = useState<PricePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const lastQuotedTotalRef = useRef<number | null>(null);
+  const viewedRideRef = useRef<string | null>(null);
+  const purchasedBookingRef = useRef<string | null>(null);
   const [booking, setBooking] = useState(false);
   const [bookError, setBookError] = useState('');
   const [paymentMessage, setPaymentMessage] = useState('');
@@ -572,6 +591,7 @@ function RideDetailContent() {
         return areTrackingLinksEqual(previous, nextLinks) ? previous : nextLinks;
       });
       const url = trackingUrlFor(res.data);
+      pushEvent('share', { method: 'tracking_link', content_type: 'booking' });
       await navigator.clipboard?.writeText(url);
       setTrackingMessage(t('rideDetail.liveLinkCopied'));
       showSuccess(t('rideDetail.liveLinkReady'), t('rideDetail.liveLinkCopiedCopy'));
@@ -602,6 +622,7 @@ function RideDetailContent() {
     setBookError('');
     try {
       await rideOpsApi.riderConfirmDropoff(myBooking.id);
+      pushEvent('ride_completed', { booking_id: myBooking.id });
       setDropoffMessage(t('rideDetail.dropoffConfirmedCopy'));
       await loadMyBooking();
       await loadRide();
@@ -704,6 +725,7 @@ function RideDetailContent() {
     setRatingLoading(true);
     try {
       const res = await ratingsApi.submitRating(myBooking.id, ratingStars, ratingText || undefined);
+      pushEvent('submit_rating', { stars: ratingStars, has_text: Boolean(ratingText) });
       setRatingSubmitted(true);
       setMyBooking((prev) => prev && prev.id === myBooking.id
         ? { ...prev, ratingByViewer: res.data }
@@ -733,6 +755,7 @@ function RideDetailContent() {
         reason: reasonOverride || disputeReason,
         description: descriptionOverride?.trim() || disputeDescription.trim() || undefined,
       });
+      pushEvent('create_dispute', { reason: reasonOverride || disputeReason });
       setDisputeMessage(t('rideDetail.reportSubmittedCopy'));
       setDisputeDescription('');
       await loadMyDisputes(myBooking.id);
@@ -792,6 +815,19 @@ function RideDetailContent() {
     try {
       const res = await searchRidesApi.getDetails(id, segmentId);
       setRide(res.data);
+      if (viewedRideRef.current !== res.data.id) {
+        viewedRideRef.current = res.data.id;
+        pushEcommerceEvent('view_item', {
+          currency: res.data.currency,
+          value: res.data.segment?.segmentFare ?? res.data.basePricePerSeat,
+          items: [{
+            item_id: res.data.id,
+            item_name: `${res.data.originAddress} -> ${res.data.destinationAddress}`,
+            price: res.data.segment?.segmentFare ?? res.data.basePricePerSeat,
+            quantity: 1,
+          }],
+        });
+      }
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, t('rideDetail.failedLoadRide')));
     } finally {
@@ -814,6 +850,19 @@ function RideDetailContent() {
         dropoffWaypointId,
       });
       setPreview(res.data);
+      const breakdown = res.data.priceBreakdown;
+      if (breakdown && breakdown.totalPrice !== lastQuotedTotalRef.current) {
+        // The preview re-runs on every seat, child-seat and waypoint change, so an
+        // unguarded push would inflate this event many times over per session.
+        lastQuotedTotalRef.current = breakdown.totalPrice;
+        pushEvent('view_price_quote', {
+          value: breakdown.totalPrice,
+          currency: breakdown.currency,
+          seats: breakdown.seatsBooked,
+          service_fee: breakdown.serviceFee,
+          luggage_fee: breakdown.luggageFee,
+        });
+      }
     } catch {
       // Preview optional
     } finally {
@@ -824,6 +873,23 @@ function RideDetailContent() {
   useEffect(() => {
     if (ride) loadPricePreview();
   }, [ride, seats, travelingWithChildUnderTwo, bringingOwnChildSeat, selectedPickupValue, selectedDropoffValue, childSeatControlsEnabled]);
+
+  function pushPurchase(booking: Booking) {
+    // A retry confirms the same PaymentIntent again; without this guard the same
+    // booking would be counted twice.
+    if (purchasedBookingRef.current === booking.id) return;
+    purchasedBookingRef.current = booking.id;
+    pushEcommerceEvent(
+      'purchase',
+      {
+        transaction_id: bookingTransactionId(booking),
+        value: booking.totalPrice,
+        currency: booking.priceBreakdown?.currency,
+        items: bookingItems(booking, ride),
+      },
+      { seats: booking.seatsBooked },
+    );
+  }
 
   async function confirmStripeBookingPayment(targetBooking: Booking) {
     if (!targetBooking.payment?.clientSecret) return targetBooking;
@@ -844,11 +910,19 @@ function RideDetailContent() {
     );
 
     if (stripeError) {
+      pushEvent('payment_failed', { error_message: stripeError.message, stage: 'book' });
       throw new Error(stripeError.message || t('rideDetail.cardPaymentFailed'));
     }
 
     if (paymentIntent && ['succeeded', 'processing', 'requires_capture'].includes(paymentIntent.status)) {
       setPaymentMessage(t('rideDetail.paymentConfirmedWaitingDriver'));
+      // 'processing' can still fail, so it is reported separately and never counted
+      // as a purchase.
+      if (paymentIntent.status === 'processing') {
+        pushEvent('payment_pending', { transaction_id: bookingTransactionId(targetBooking) });
+      } else {
+        pushPurchase(targetBooking);
+      }
       try {
         const refreshed = await bookingsApi.confirmPayment(targetBooking.id);
         return refreshed.data || targetBooking;
@@ -907,6 +981,16 @@ function RideDetailContent() {
       });
       const createdBooking = res.data;
       setMyBooking(createdBooking);
+      pushEcommerceEvent(
+        'booking_request',
+        {
+          transaction_id: bookingTransactionId(createdBooking),
+          value: createdBooking.totalPrice,
+          currency: createdBooking.priceBreakdown?.currency,
+          items: bookingItems(createdBooking, ride),
+        },
+        { seats: createdBooking.seatsBooked, paid: Boolean(createdBooking.payment?.clientSecret) },
+      );
 
       if (createdBooking.payment?.clientSecret) {
         const confirmedBooking = await confirmStripeBookingPayment(createdBooking);
@@ -922,6 +1006,7 @@ function RideDetailContent() {
         ? t('rideDetail.mustAcceptTerms')
         : message);
       setPaymentMessage('');
+      pushEvent('payment_failed', { error_message: message, stage: 'book' });
       showError(t('rideDetail.bookingFailed'), message);
     } finally {
       setBooking(false);
@@ -936,11 +1021,14 @@ function RideDetailContent() {
     try {
       const confirmedBooking = await confirmStripeBookingPayment(myBooking);
       setMyBooking(confirmedBooking);
+      pushEvent('payment_retry', { outcome: 'success' });
       showSuccess(t('rideDetail.paymentConfirmed'), t('rideDetail.requestWaitingDriverConfirmation'));
     } catch (err: unknown) {
       const message = getApiErrorMessage(err, t('rideDetail.paymentFailed'));
       setBookError(message);
       setPaymentMessage('');
+      pushEvent('payment_retry', { outcome: 'failure' });
+      pushEvent('payment_failed', { error_message: message, stage: 'retry' });
       showError(t('rideDetail.paymentFailed'), message);
     } finally {
       setBooking(false);
@@ -952,6 +1040,11 @@ function RideDetailContent() {
     setRiderActionLoading(true);
     try {
       await bookingsApi.cancel(myBooking.id, withdrawReason.trim() || undefined);
+      pushEcommerceEvent('refund', {
+        transaction_id: bookingTransactionId(myBooking),
+        value: myBooking.totalPrice,
+        currency: myBooking.priceBreakdown?.currency,
+      }, { reason: 'withdraw' });
       await loadMyBooking();
       showSuccess(t('rideDetail.requestCancelled'), t('rideDetail.requestCancelledCopy'));
     } catch (err: unknown) {
@@ -968,6 +1061,11 @@ function RideDetailContent() {
     setRiderActionLoading(true);
     try {
       await bookingsApi.cancel(myBooking.id);
+      pushEcommerceEvent('refund', {
+        transaction_id: bookingTransactionId(myBooking),
+        value: myBooking.totalPrice,
+        currency: myBooking.priceBreakdown?.currency,
+      }, { reason: 'cancel' });
       await loadMyBooking();
       showSuccess(t('rideDetail.bookingCancelled'), t('rideDetail.bookingCancelledCopy'));
     } catch (err: unknown) {
@@ -1019,8 +1117,9 @@ function RideDetailContent() {
   const dateLabel = new Date(ride.departureDate).toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const durationLabel = formatDurationHhMm(ride.routeDurationSeconds);
   const distanceKm = ride.routeDistanceMeters ? (ride.routeDistanceMeters / 1000).toFixed(1) : null;
-  const price = ride.segment?.segmentFare ?? ride.basePricePerSeat;
   const previewBreakdown = preview?.priceBreakdown;
+  const displaySeatPrice = previewBreakdown?.basePricePerSeat ?? ride.segment?.segmentFare ?? ride.basePricePerSeat;
+  const displaySeatCurrency = previewBreakdown?.currency ?? ride.currency;
   const bookedBreakdown = myBooking?.priceBreakdown;
   const previewSeatFareLabel = previewBreakdown
     ? `${previewBreakdown.currency} ${previewBreakdown.basePricePerSeat.toFixed(2)}${t('rideDetail.perSeatShort')}`
@@ -1117,9 +1216,9 @@ function RideDetailContent() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start">
-          <main className="space-y-5">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_440px] lg:items-start">
+          <main className="order-2 space-y-5 lg:order-none">
         {/* Route card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
           <div className="bg-gradient-to-r from-deliivo-orange to-primary-600 px-5 py-4">
@@ -1227,7 +1326,7 @@ function RideDetailContent() {
             </div>
             <div className="rounded-xl bg-gray-50 px-4 py-2.5">
               <p className="text-xs font-semibold uppercase text-deliivo-gray">Price</p>
-              <p className="mt-1"><span className="text-lg font-bold text-primary-500">{ride.currency} {price.toFixed(2)}</span><span className="ml-1 text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></p>
+              <p className="mt-1"><span className="text-lg font-bold text-primary-500">{displaySeatCurrency} {displaySeatPrice.toFixed(2)}</span><span className="ml-1 text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></p>
             </div>
           </div>
           {ride.notes && (
@@ -1272,6 +1371,159 @@ function RideDetailContent() {
           </div>
         )}
       </div>
+
+        {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm lg:hidden">
+            <h3 className="text-sm font-semibold text-amber-950">Booking closed for this departure</h3>
+            <p className="mt-2 text-sm text-amber-800">Same-day rides must be booked at least 1 hour before departure.</p>
+          </div>
+        )}
+
+        {!user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed && (
+          <div className="space-y-4 lg:hidden">
+            <FlowGuide
+              storageKey="deliivo.booking.quick-guide.v1"
+              eyebrow="Booking guide"
+              title={bookingGuide.title}
+              steps={bookingGuide.steps}
+            />
+            <div className="rounded-2xl border border-primary-100 bg-primary-50 p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.bookThisRide')}</h3>
+              <p className="mt-2 text-sm text-deliivo-gray">{t('rideDetail.signInToChoosePickup')}</p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Link href={withReturnTo('/auth/signin', rideReturnTo)} className="btn-primary px-5 py-2.5 text-sm">
+                  {t('nav.signIn')}
+                </Link>
+                <Link href={withReturnTo('/auth/signup', rideReturnTo)} className="btn-outline px-5 py-2.5 text-sm">
+                  {t('nav.signUp')}
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {canStartBooking && (
+          <section className="space-y-4 rounded-2xl bg-white p-5 shadow-sm lg:hidden">
+            <FlowGuide
+              storageKey="deliivo.booking.quick-guide.v1"
+              eyebrow="Booking guide"
+              title={bookingGuide.title}
+              steps={bookingGuide.steps}
+            />
+            <div className="space-y-4">
+              <div className="flex flex-col gap-2">
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-deliivo-dark">{t('rideDetail.yourTripOnThisRide')}</p>
+                  <p className="mt-1 text-sm text-deliivo-gray">{t('rideDetail.choosePickupDropoffCopy')}</p>
+                </div>
+                <span className="w-fit rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium text-deliivo-gray">
+                  {selectablePickupOptions.length} pickup · {selectableDropoffOptions.length} drop-off choices
+                </span>
+              </div>
+
+              <div className="grid gap-3">
+                <div className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                  <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-100 text-deliivo-orange">
+                      <MapPin className="h-3.5 w-3.5" />
+                    </span>
+                    {t('rideDetail.pickupChoice')}
+                  </span>
+                  <div className="mt-3 grid gap-2" role="radiogroup" aria-label={t('rideDetail.pickupChoice')}>
+                    {filteredPickupOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handlePickupChange(option.value)}
+                        className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          selectedPickupValue === option.value
+                            ? 'border-deliivo-orange bg-white shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-deliivo-orange/50'
+                        }`}
+                        aria-checked={selectedPickupValue === option.value}
+                        role="radio"
+                      >
+                        <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                          selectedPickupValue === option.value ? 'border-deliivo-orange bg-deliivo-orange' : 'border-gray-300'
+                        }`}>
+                          {selectedPickupValue === option.value && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                            {pointKindLabel(option.kind)}
+                          </span>
+                          <span className="mt-0.5 block break-words text-sm font-semibold text-deliivo-dark">
+                            {option.address}
+                          </span>
+                          <span className="mt-1 block text-xs text-deliivo-gray">
+                            {t('rideDetail.estimatedPickup')}: {option.estimatedArrivalTime || ride.departureTime}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                  <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-red-600">
+                      <MapPin className="h-3.5 w-3.5" />
+                    </span>
+                    {t('rideDetail.dropoffChoice')}
+                  </span>
+                  <div className="mt-3 grid gap-2" role="radiogroup" aria-label={t('rideDetail.dropoffChoice')}>
+                    {filteredDropoffOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleDropoffChange(option.value)}
+                        className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          selectedDropoffValue === option.value
+                            ? 'border-deliivo-orange bg-white shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-deliivo-orange/50'
+                        }`}
+                        aria-checked={selectedDropoffValue === option.value}
+                        role="radio"
+                      >
+                        <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                          selectedDropoffValue === option.value ? 'border-deliivo-orange bg-deliivo-orange' : 'border-gray-300'
+                        }`}>
+                          {selectedDropoffValue === option.value && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+                            {pointKindLabel(option.kind)}
+                          </span>
+                          <span className="mt-0.5 block break-words text-sm font-semibold text-deliivo-dark">
+                            {option.address}
+                          </span>
+                          <span className="mt-1 block text-xs text-deliivo-gray">
+                            {t('rideDetail.estimatedDropoff')}: {option.estimatedArrivalTime || t('rideDetail.atDestination')}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-orange-50/70 px-4 py-3">
+                <div className="flex items-center gap-1.5" aria-hidden="true">
+                  <span className="h-2.5 w-2.5 rounded-full border-2 border-deliivo-orange bg-white" />
+                  <span className="h-0.5 w-8 bg-orange-200" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-deliivo-orange" />
+                </div>
+                <div className="mt-3 space-y-2">
+                  <p className="break-words text-sm font-medium text-deliivo-dark">{selectedPickupOption.address}</p>
+                  <p className="break-words text-sm text-deliivo-gray">to {selectedDropoffOption.address}</p>
+                  {previewBreakdown && (
+                    <p className="pt-1 text-sm font-bold text-deliivo-orange">{previewSeatFareLabel}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {canStartBooking && (
           <section className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
@@ -1454,7 +1706,7 @@ function RideDetailContent() {
               ) : preview && previewBreakdown ? (
                 <div className="overflow-hidden rounded-xl border border-primary-100 bg-primary-50">
                   <div className="border-b border-primary-100 px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.priceBreakdown')}</p>
                       <span className="shrink-0 text-sm font-bold text-primary-500">
                         {previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}
@@ -1465,7 +1717,7 @@ function RideDetailContent() {
                     </p>
                   </div>
                   <div className="space-y-2 px-4 py-3">
-                    <div className="flex justify-between gap-4 text-sm">
+                    <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <span className="text-deliivo-gray">
                         {t('rideDetail.seatCalculation', {
                           currency: previewBreakdown.currency,
@@ -1476,11 +1728,11 @@ function RideDetailContent() {
                       </span>
                       <span className="font-medium text-deliivo-dark">{previewBreakdown.currency} {previewBreakdown.subtotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between gap-4 text-sm">
+                    <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <span className="text-deliivo-gray">{t('rideDetail.serviceFee')}</span>
                       <span className="font-medium text-deliivo-dark">{previewBreakdown.currency} {previewBreakdown.serviceFee.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between gap-4 border-t border-primary-200 pt-3 text-base font-bold">
+                    <div className="flex flex-col gap-1 border-t border-primary-200 pt-3 text-base font-bold sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <span>{t('rideDetail.totalToPay')}</span>
                       <span className="text-primary-500">{previewBreakdown.currency} {previewBreakdown.totalPrice.toFixed(2)}</span>
                     </div>
@@ -1506,7 +1758,14 @@ function RideDetailContent() {
 
                 <button
                   type="button"
-                  onClick={handleBook}
+                  onClick={() => {
+                    pushEcommerceEvent('begin_checkout', {
+                      currency: previewBreakdown?.currency,
+                      value: previewBreakdown?.totalPrice,
+                      items: ride ? [{ item_id: ride.id, price: previewBreakdown?.basePricePerSeat, quantity: seats }] : undefined,
+                    }, { seats });
+                    void handleBook();
+                  }}
                   disabled={booking || paymentMethodsLoading || (isStripeConfigured() && (!selectedPaymentMethodId || showAddPaymentMethod)) || (needsTosAcceptance && !tosAcceptedForBooking) || (childSeatControlsEnabled && travelingWithChildUnderTwo && !bringingOwnChildSeat)}
                   className="btn-primary w-full py-3.5 text-base gap-2 disabled:opacity-60"
                 >
@@ -1610,18 +1869,18 @@ function RideDetailContent() {
 
           </main>
 
-          <aside className="space-y-5 lg:contents">
+          <aside className="order-2 space-y-5 lg:order-none lg:contents">
 
         {/* Booking section */}
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
+          <div className="hidden rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm lg:block lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <h3 className="text-sm font-semibold text-amber-950">Booking closed for this departure</h3>
             <p className="mt-2 text-sm text-amber-800">Same-day rides must be booked at least 1 hour before departure.</p>
           </div>
         )}
 
         {!user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed && (
-          <div className="space-y-4 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
+          <div className="hidden space-y-4 lg:block lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <FlowGuide
               storageKey="deliivo.booking.quick-guide.v1"
               eyebrow="Booking guide"
@@ -1644,7 +1903,7 @@ function RideDetailContent() {
         )}
 
         {canStartBooking && (
-          <div className="space-y-4 rounded-2xl bg-white p-5 shadow-sm lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
+          <div className="hidden space-y-4 rounded-2xl bg-white p-5 shadow-sm lg:block lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <FlowGuide
               storageKey="deliivo.booking.quick-guide.v1"
               eyebrow="Booking guide"
@@ -1752,21 +2011,19 @@ function RideDetailContent() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 rounded-xl bg-orange-50/70 px-4 py-3">
-                <div className="flex shrink-0 items-center gap-1.5" aria-hidden="true">
+              <div className="rounded-xl bg-orange-50/70 px-4 py-3">
+                <div className="flex items-center gap-1.5" aria-hidden="true">
                   <span className="h-2.5 w-2.5 rounded-full border-2 border-deliivo-orange bg-white" />
                   <span className="h-0.5 w-8 bg-orange-200" />
                   <span className="h-2.5 w-2.5 rounded-full bg-deliivo-orange" />
                 </div>
-                <p className="min-w-0 text-sm font-medium text-deliivo-dark">
-                  <span className="block break-words">{selectedPickupOption.address}</span>
-                  <span className="block break-words text-deliivo-gray">to {selectedDropoffOption.address}</span>
-                </p>
-                {previewBreakdown && (
-                  <span className="ml-auto shrink-0 text-sm font-bold text-deliivo-orange">
-                    {previewSeatFareLabel}
-                  </span>
-                )}
+                <div className="mt-3 space-y-2">
+                  <p className="break-words text-sm font-medium text-deliivo-dark">{selectedPickupOption.address}</p>
+                  <p className="break-words text-sm text-deliivo-gray">to {selectedDropoffOption.address}</p>
+                  {previewBreakdown && (
+                    <p className="pt-1 text-sm font-bold text-deliivo-orange">{previewSeatFareLabel}</p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -2207,6 +2464,7 @@ function RideAddPaymentMethodForm({ onSaved }: { onSaved: (method: PaymentMethod
         ? setupIntent.payment_method
         : setupIntent.payment_method?.id;
       if (!stripePaymentMethodId) throw new Error(t('rideDetail.stripeNoPaymentMethod'));
+      pushEcommerceEvent('add_payment_info', {}, { payment_type: 'card', context: 'checkout' });
 
       const saved = await paymentMethodsApi.save(stripePaymentMethodId, customerId);
       showSuccess(t('rideDetail.cardSaved'), t('rideDetail.cardSavedCopy'));

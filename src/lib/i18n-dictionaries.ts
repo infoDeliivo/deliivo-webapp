@@ -1,6 +1,6 @@
 ﻿import type { SupportedLocale } from './i18n';
 
-const blogAndCommonAdditions: Record<SupportedLocale, Record<string, string>> = {
+const blogAndCommonAdditions: Record<string, Record<string, string>> = {
   en: {
     'common.remove': 'Remove',
     'common.retry': 'Try again',
@@ -141,7 +141,7 @@ const blogAndCommonAdditions: Record<SupportedLocale, Record<string, string>> = 
   },
 };
 
-const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
+const publishTranslations: Record<string, Record<string, string>> = {
   en: {
     'publish.routePointsCopy': 'Search and add up to 3 origin pickup points, up to 3 stopover points, and up to 3 destination drop-off points.',
     'publish.routePointFlowCopy': 'Add starting pickup points first. If you want stops along the route, choose suggested stopover cities and then add one exact point inside each selected stopover. Finish by adding destination drop-off points.',
@@ -186,6 +186,12 @@ const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
     'publish.reqDlTitle': 'Verify your driving licence',
     'publish.reqDlCopy': 'Riders only travel with verified drivers. Verification takes a few minutes and the result arrives shortly after you finish.',
     'publish.reqDlAction': 'Verify licence',
+    'publish.reqDlReviewTitle': 'Licence submitted — under review',
+    'publish.reqDlReviewCopy': 'We have your licence and are waiting for the result. This usually takes a few minutes, and this page updates on its own.',
+    'publish.reqDlReviewRestart': 'Taking too long? Start verification again',
+    'publish.reqDlMismatchTitle': 'Licence details do not match your profile',
+    'publish.reqDlMismatchCopy': 'The name or date of birth on your driving licence does not match your profile, so it could not be verified. Please contact our support team to resolve this.',
+    'publish.reqDlMismatchAction': 'Contact support',
     'publish.reqBankTitle': 'Add your payout details',
     'publish.reqBankCopy': 'Rider payments are sent to your bank account, so payouts must be set up before a ride can go live.',
     'publish.reqBankAction': 'Set up payouts',
@@ -317,6 +323,7 @@ const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
     'publish.distanceEstimate': 'Vahemaa hinnang',
     'publish.pricingAdjustmentApplied': 'Lõplik soovitus sisaldab seadistatud miinimumhinda või ümardamisreeglit.',
     'publish.guidanceRange': 'Soovituslik vahemik ühe koha kohta',
+    'publish.highPriceGuidance': 'Võid selle hinna jätta, kuid soovituslikus vahemikus hind võib meelitada rohkem reisijaid.',
     'publish.fallbackPricing': 'Kasutatakse vaikimisi Baltikumi hinnastust, sest aktiivne admini hinnareegel ei olnud saadaval.',
     'publish.yourFarePerRider': 'Sinu hind ühe reisija kohta',
     'publish.riderServiceFeeEstimate': 'Hinnanguline reisija teenustasu',
@@ -400,6 +407,12 @@ const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
     'publish.reqDlTitle': 'Kinnita oma juhiluba',
     'publish.reqDlCopy': 'Reisijad sõidavad ainult kinnitatud juhtidega. Kontroll võtab paar minutit ja tulemus saabub varsti pärast lõpetamist.',
     'publish.reqDlAction': 'Kinnita juhiluba',
+    'publish.reqDlReviewTitle': 'Juhiluba esitatud — kontrollimisel',
+    'publish.reqDlReviewCopy': 'Sinu juhiluba on meil olemas ja ootame tulemust. Tavaliselt võtab see paar minutit ning leht uueneb ise.',
+    'publish.reqDlReviewRestart': 'Võtab liiga kaua? Alusta kontrolli uuesti',
+    'publish.reqDlMismatchTitle': 'Juhiloa andmed ei ühti sinu profiiliga',
+    'publish.reqDlMismatchCopy': 'Juhiloal olev nimi või sünnikuupäev ei ühti sinu profiiliga, seetõttu ei saanud seda kinnitada. Palun võta ühendust meie klienditoega.',
+    'publish.reqDlMismatchAction': 'Võta klienditoega ühendust',
     'publish.reqBankTitle': 'Lisa oma väljamakse andmed',
     'publish.reqBankCopy': 'Reisijate maksed laekuvad sinu pangakontole, seega tuleb väljamaksed enne sõidu avaldamist seadistada.',
     'publish.reqBankAction': 'Seadista väljamaksed',
@@ -531,6 +544,7 @@ const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
     'publish.distanceEstimate': 'Оценка расстояния',
     'publish.pricingAdjustmentApplied': 'Итоговая рекомендация включает настроенную минимальную цену или правило округления.',
     'publish.guidanceRange': 'Рекомендуемый диапазон за место',
+    'publish.highPriceGuidance': 'Вы можете оставить эту цену, но цена в рекомендуемом диапазоне может привлечь больше пассажиров.',
     'publish.fallbackPricing': 'Используется стандартное балтийское ценообразование, потому что активное правило цены от администратора недоступно.',
     'publish.yourFarePerRider': 'Ваша цена за пассажира',
     'publish.riderServiceFeeEstimate': 'Ориентировочная сервисная комиссия пассажира',
@@ -614,6 +628,12 @@ const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
     'publish.reqDlTitle': 'Подтвердите водительское удостоверение',
     'publish.reqDlCopy': 'Пассажиры ездят только с проверенными водителями. Проверка занимает несколько минут, результат приходит вскоре после завершения.',
     'publish.reqDlAction': 'Подтвердить права',
+    'publish.reqDlReviewTitle': 'Права отправлены — на проверке',
+    'publish.reqDlReviewCopy': 'Мы получили ваше удостоверение и ждём результат. Обычно это занимает несколько минут, страница обновится сама.',
+    'publish.reqDlReviewRestart': 'Слишком долго? Начните проверку заново',
+    'publish.reqDlMismatchTitle': 'Данные прав не совпадают с профилем',
+    'publish.reqDlMismatchCopy': 'Имя или дата рождения в водительском удостоверении не совпадают с вашим профилем, поэтому его не удалось подтвердить. Пожалуйста, свяжитесь со службой поддержки.',
+    'publish.reqDlMismatchAction': 'Связаться с поддержкой',
     'publish.reqBankTitle': 'Добавьте данные для выплат',
     'publish.reqBankCopy': 'Платежи пассажиров поступают на ваш банковский счет, поэтому выплаты нужно настроить до публикации поездки.',
     'publish.reqBankAction': 'Настроить выплаты',
@@ -641,8 +661,23 @@ const publishTranslations: Record<SupportedLocale, Record<string, string>> = {
   },
 };
 
-export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
+export const dictionaries: Record<string, Record<string, string>> = {
   en: {
+    "consent.title": "Cookies on Deliivo",
+    "consent.copy": "We use necessary cookies to run the site. With your permission we also measure how the site is used and how our ads perform. You can change this at any time.",
+    "consent.privacyLink": "Privacy policy",
+    "consent.necessaryTitle": "Necessary",
+    "consent.necessaryCopy": "Sign-in, security and core features. These cannot be switched off.",
+    "consent.analyticsTitle": "Analytics",
+    "consent.analyticsCopy": "Helps us see which pages and steps people struggle with, so we can fix them.",
+    "consent.marketingTitle": "Advertising",
+    "consent.marketingCopy": "Lets us measure our ads and show more relevant ones.",
+    "consent.acceptAll": "Accept all",
+    "consent.rejectAll": "Reject all",
+    "consent.customise": "Customise",
+    "consent.saveChoices": "Save choices",
+    "consent.close": "Close",
+    "consent.manage": "Cookie settings",
     "payout.testModeTitle": "Test mode.",
     "payout.testModeCopy": "Fill the form with Stripe's test values to complete setup without real details.",
     "payout.testFill": "Use test account",
@@ -1083,6 +1118,8 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     "publish.pricingAdjustmentApplied":
       "The final recommendation includes the configured minimum-price or rounding rule.",
     "publish.guidanceRange": "Suggested range per seat",
+    "publish.highPriceGuidance":
+      "You can keep this price, but pricing within the suggested range may attract more riders.",
     "publish.fallbackPricing":
       "Using the default Baltic pricing because an active admin pricing rule was unavailable.",
     "publish.yourFarePerRider": "Your fare per rider",
@@ -1881,6 +1918,21 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     ...publishTranslations.en,
   },
   et: {
+    "consent.title": "Kupsised Deliivos",
+    "consent.copy": "Kasutame saidi toimimiseks vajalikke kupsiseid. Sinu loal moodame ka seda, kuidas saiti kasutatakse ja kuidas meie reklaamid toimivad. Saad seda igal ajal muuta.",
+    "consent.privacyLink": "Privaatsuspoliitika",
+    "consent.necessaryTitle": "Vajalikud",
+    "consent.necessaryCopy": "Sisselogimine, turvalisus ja pohifunktsioonid. Neid ei saa valja lulitada.",
+    "consent.analyticsTitle": "Analuutika",
+    "consent.analyticsCopy": "Aitab naha, millised lehed ja sammud on kasutajatele rasked, et saaksime need parandada.",
+    "consent.marketingTitle": "Reklaam",
+    "consent.marketingCopy": "Voimaldab moota meie reklaamide tulemusi ja naidata asjakohasemaid reklaame.",
+    "consent.acceptAll": "Noustu koigiga",
+    "consent.rejectAll": "Keeldu koigist",
+    "consent.customise": "Kohanda",
+    "consent.saveChoices": "Salvesta valikud",
+    "consent.close": "Sulge",
+    "consent.manage": "Kupsiste seaded",
     "payout.testModeTitle": "Testrežiim.",
     "payout.testModeCopy": "Täida vorm Stripe'i testväärtustega, et seadistus päris andmeteta lõpetada.",
     "payout.testFill": "Kasuta testkontot",
@@ -2830,6 +2882,21 @@ export const dictionaries: Record<SupportedLocale, Record<string, string>> = {
     ...publishTranslations.et,
   },
   ru: {
+    "consent.title": "Файлы cookie на Deliivo",
+    "consent.copy": "Мы используем необходимые файлы cookie для работы сайта. С вашего разрешения мы также измеряем, как используется сайт и как работает наша реклама. Вы можете изменить это в любой момент.",
+    "consent.privacyLink": "Политика конфиденциальности",
+    "consent.necessaryTitle": "Необходимые",
+    "consent.necessaryCopy": "Вход, безопасность и основные функции. Их нельзя отключить.",
+    "consent.analyticsTitle": "Аналитика",
+    "consent.analyticsCopy": "Помогает увидеть, какие страницы и шаги вызывают сложности, чтобы мы могли их исправить.",
+    "consent.marketingTitle": "Реклама",
+    "consent.marketingCopy": "Позволяет измерять результаты нашей рекламы и показывать более подходящую.",
+    "consent.acceptAll": "Принять все",
+    "consent.rejectAll": "Отклонить все",
+    "consent.customise": "Настроить",
+    "consent.saveChoices": "Сохранить выбор",
+    "consent.close": "Закрыть",
+    "consent.manage": "Настройки cookie",
     "payout.testModeTitle": "Тестовый режим.",
     "payout.testModeCopy": "Заполнить форму тестовыми данными Stripe, чтобы завершить настройку без реальных реквизитов.",
     "payout.testFill": "Тестовый счёт",
