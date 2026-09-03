@@ -20,17 +20,22 @@ async function proxyRequest(req: NextRequest) {
   // so dropping it here would silently lose that for every request that has no explicit locale.
   const acceptLanguage = req.headers.get('accept-language');
   if (acceptLanguage) headers.set('accept-language', acceptLanguage);
-  // The caller's address. This proxy runs server-side, so without forwarding it every request
-  // reaches the backend from this container and every user looks like the same visitor — which
-  // makes the country the backend derives from req.ip meaningless.
+  // The visitor's address, named so that no infrastructure between here and the backend rewrites
+  // it. This proxy runs server-side, so the backend's own view of the connection is us, not the
+  // visitor — and the standard headers cannot carry the difference: Railway's edge replaces
+  // `x-forwarded-for` and `x-real-ip` with the address that connected to it, which is this
+  // deployment's egress. Measured on staging, the backend saw AWS us-east-1 for every request and
+  // never a single browser address, so it recorded Ashburn as the home of every user.
   //
-  // Only the caller itself is forwarded, never the chain we received. Passing the chain on made
-  // the backend read a proxy for a user: it resolves req.ip by counting hops from the right, so
-  // every entry to the right of the client — and every hop a platform edge appends on the way in —
-  // shifted the answer, and the country it derived was a datacenter's rather than the visitor's.
+  // A custom name survives that rewriting, and only requests that pass through here carry it —
+  // which is what makes it meaningful. The backend's own server-to-server calls set nothing and
+  // are correctly treated as placing nobody.
   const forwardedFor = req.headers.get('x-forwarded-for');
   const clientIp = forwardedFor?.split(',')[0]?.trim() || req.headers.get('x-real-ip');
   if (clientIp) {
+    headers.set('x-deliivo-client-ip', clientIp);
+    // Kept for anything downstream that reads the conventional headers; the backend's country
+    // lookup deliberately does not, because their values do not survive the trip.
     headers.set('x-forwarded-for', clientIp);
     headers.set('x-real-ip', clientIp);
   }
