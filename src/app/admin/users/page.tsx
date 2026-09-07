@@ -18,6 +18,20 @@ const roleStyle: Record<string, string> = {
   ADMIN: 'bg-purple-50 text-purple-600',
 }
 
+// Detected from the site the user signed up on — never asked for, so it can be absent.
+const LOCALE_LABELS: Record<string, string> = {
+  en: 'English',
+  et: 'Eesti',
+  lv: 'Latviešu',
+  lt: 'Lietuvių',
+  ru: 'Русский',
+}
+
+function localeLabel(locale: string | null) {
+  if (!locale) return null
+  return LOCALE_LABELS[locale] || locale.toUpperCase()
+}
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [pagination, setPagination] = useState<Pagination | null>(null)
@@ -144,6 +158,7 @@ export default function AdminUsersPage() {
                   <tr className="text-xs text-gray-400 border-b border-gray-100">
                     <th className="text-left px-6 py-3 font-medium">User</th>
                     <th className="text-left px-4 py-3 font-medium">Phone</th>
+                    <th className="text-left px-4 py-3 font-medium">Language</th>
                     <th className="text-left px-4 py-3 font-medium">Status</th>
                     <th className="text-left px-4 py-3 font-medium">Verified</th>
                     <th className="text-left px-4 py-3 font-medium">DL</th>
@@ -169,6 +184,15 @@ export default function AdminUsersPage() {
                           </Link>
                         </td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{u.phone || '-'}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {localeLabel(u.preferredLocale) ? (
+                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                              {localeLabel(u.preferredLocale)}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-300" title="Not detected at signup">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs font-medium px-2 py-1 rounded-full ${u.isBanned ? statusStyle.banned : statusStyle.active}`}>
                             {u.isBanned ? 'Banned' : 'Active'}

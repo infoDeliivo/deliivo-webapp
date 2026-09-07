@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { dictionaries } from './i18n-dictionaries';
 import { getLocaleTranslation } from './locale-overrides';
+import { getTokens, userApi } from './api';
 import {
   DEFAULT_LOCALE,
   getBrowserLocale,
@@ -23,6 +24,31 @@ type I18nContextValue = {
 };
 
 const I18nContext = createContext<I18nContextValue | null>(null);
+
+/**
+ * Last language reported to the backend this page load, so repeated navigation inside one
+ * language does not repeat the call. The server is idempotent either way.
+ */
+let reportedLocale: SupportedLocale | null = null;
+
+/**
+ * Record the language change on the user's account.
+ *
+ * Signed-out visitors have nothing to record — the language they picked is sent with signup and
+ * with every later request's Accept-Language header. Failures are deliberately swallowed:
+ * switching language must never surface an error, and the passive sync in the API's auth
+ * middleware picks the change up on the next request regardless.
+ */
+function reportLocaleToBackend(locale: SupportedLocale) {
+  if (typeof window === 'undefined') return;
+  if (locale === reportedLocale) return;
+  if (!getTokens()) return;
+
+  reportedLocale = locale;
+  void userApi.setLocale(locale).catch(() => {
+    reportedLocale = null;
+  });
+}
 
 function interpolate(value: string, params?: TranslationParams) {
   if (!params) return value;
@@ -55,6 +81,10 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     if (pathLocale && pathLocale !== locale) {
       persistLocale(pathLocale);
       setLocaleState(pathLocale);
+      // Deliberately not reported to the backend. Navigation is not a language choice: an
+      // internal link without a locale prefix is redirected to /en by src/proxy.ts, and telling
+      // the API about that would overwrite the language the user actually picked. Only the
+      // switcher, below, speaks for the user.
     }
   }, [locale, pathname]);
 
@@ -63,6 +93,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     setLocale(nextLocale) {
       persistLocale(nextLocale);
       setLocaleState(nextLocale);
+      reportLocaleToBackend(nextLocale);
     },
     t(key, params) {
       const translated = getLocaleTranslation(locale, key)

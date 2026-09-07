@@ -73,6 +73,46 @@ const salutationLabels: Record<string, string> = {
   OTHER: 'Other',
 };
 
+// Detected from the site the user signed up on — never asked for, so it can be absent.
+const localeLabels: Record<string, string> = {
+  en: 'English',
+  et: 'Eesti',
+  lv: 'Latviešu',
+  lt: 'Lietuvių',
+  ru: 'Русский',
+}
+
+function localeLabel(locale: string | null | undefined) {
+  if (!locale) return 'Not detected'
+  return localeLabels[locale] || locale.toUpperCase()
+}
+
+// Derived from the IP the user connects from, so it is where the connection appears to come from
+// rather than where the person is — a VPN or a roaming carrier moves it.
+//
+// The stored value carries city and country together, "New Delhi, IN", and falls back to a bare
+// "IN" wherever the lookup table names no city. The country is always the last segment, so it is
+// read from the end rather than by assuming a shape.
+function countryLabel(value: string | null | undefined) {
+  if (!value) return 'Not detected'
+
+  const segments = value.split(',').map((part) => part.trim()).filter(Boolean)
+  if (segments.length === 0) return 'Not detected'
+
+  const code = segments[segments.length - 1].toUpperCase()
+  const city = segments.slice(0, -1).join(', ')
+
+  let country = code
+  try {
+    const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(code)
+    if (name && name !== code) country = `${name} (${code})`
+  } catch {
+    // Intl without region data: the code on its own is still the honest answer.
+  }
+
+  return city ? `${city}, ${country}` : country
+}
+
 const genderLabels: Record<string, string> = {
   MALE: 'Male',
   FEMALE: 'Female',
@@ -463,6 +503,8 @@ export default function AdminUserDetailsPage() {
                 ['Salutation', formatProfileEnum(user.salutation, salutationLabels)],
                 ['Gender', formatProfileEnum(user.gender, genderLabels)],
                 ['DOB', formatDate(user.dob)],
+                ['Language', localeLabel(user.preferredLocale)],
+                ['Country', countryLabel(user.detectedCountry)],
                 ['Onboarding', user.onboardingStatus],
                 ['Email verified', user.emailVerified ? 'Yes' : 'No'],
                 ['Phone verified', user.phoneVerified ? 'Yes' : 'No'],
