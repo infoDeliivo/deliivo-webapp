@@ -569,6 +569,30 @@ function VehicleContent() {
                 </div>
               )}
 
+              {/* The upload finished on this device but the file never reached the backend, so
+                  there is nothing to re-verify or re-review — the vehicle has to be added again. */}
+              {v.hasMissingDocuments && (
+                <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
+                  <p className="text-sm font-semibold text-red-700">
+                    {t('profile.vehicleDocumentMissing')}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-red-700">
+                    {t('profile.vehicleDocumentMissingBody', {
+                      documents: (v.missingDocumentTypes || [])
+                        .map((type) => DOC_TYPE_LABEL[type] || type)
+                        .join(', '),
+                    })}
+                  </p>
+                  <button
+                    onClick={() => handleDelete(v.id)}
+                    disabled={deleting === v.id}
+                    className="mt-3 rounded-full bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {t('profile.vehicleDocumentMissingDelete')}
+                  </button>
+                </div>
+              )}
+
               <div className="mt-4 border-t border-gray-100 pt-4">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">Documents</p>
          

@@ -3082,6 +3082,8 @@ export interface VehicleDocument {
   documentType: string;
   previewKey: string | null;
   image: string | null;
+  /** The nightly audit found no object behind this row — the upload never completed. */
+  storageMissing?: boolean;
   createdAt?: string;
 }
 
@@ -3100,6 +3102,10 @@ export interface Vehicle {
   rejectionReason: string | null;
   licenseCountry?: string;
   licenseNumber?: string;
+  /** At least one document on this vehicle has no file behind it. The vehicle must be re-added. */
+  hasMissingDocuments?: boolean;
+  /** Which document types are affected. Empty unless `hasMissingDocuments`. */
+  missingDocumentTypes?: string[];
   documents?: VehicleDocument[];
 }
 

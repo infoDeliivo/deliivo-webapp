@@ -29,6 +29,12 @@ function getNotificationLink(item: NotificationRecord): string | null {
     return rideId ? `/rides/${rideId}/manage${bookingId ? `?bookingId=${bookingId}` : ''}` : null;
   }
 
+  // Vehicle notices (e.g. a document that never reached storage) land on the vehicle
+  // screen, where the affected vehicle carries the banner and the delete action.
+  if (deepLink?.startsWith('app://vehicle/')) {
+    return '/profile/vehicle';
+  }
+
   if (liveTrackingUrl) {
     return liveTrackingUrl.startsWith('http') ? liveTrackingUrl : liveTrackingUrl;
   }

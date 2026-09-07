@@ -57,6 +57,8 @@ export default function NotificationToast() {
     const rideId = data?.rideId;
     const bookingId = data?.bookingId;
     const deepLink = data?.deepLink || '';
+    // Checked before the rideId guard: a vehicle notice carries no ride.
+    if (deepLink.startsWith('app://vehicle/')) return '/profile/vehicle';
     if (!rideId) return '/profile/notifications';
     if (deepLink.startsWith('app://driver/booking-request/')) {
       return `/rides/${rideId}/manage${bookingId ? `?bookingId=${bookingId}` : ''}`;
