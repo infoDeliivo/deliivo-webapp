@@ -20,6 +20,7 @@ import {
   Loader2,
   Pencil,
   Route,
+  Files,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { getApiErrorMessage, userApi, travelPreferencesApi, TravelPreference, UserFullProfile, validateImageFile, UPLOAD_ACCEPT } from '@/lib/api';
@@ -155,6 +156,7 @@ function ProfileContent() {
   const activityLinks = [
     { label: t('rides.myRides'), href: '/rides', icon: Route },
     { label: t('profile.vehicle'), href: '/profile/vehicle', icon: Car },
+    { label: 'My documents', href: '/profile/documents', icon: Files },
     { label: t('nav.notifications'), href: '/profile/notifications', icon: Bell },
     { label: t('profile.paymentsHistory'), href: '/profile/payment-methods', icon: CreditCard },
     { label: t('profile.earningsPayouts'), href: '/profile/earnings', icon: Wallet },

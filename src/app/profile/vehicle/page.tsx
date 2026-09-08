@@ -49,7 +49,7 @@ const isPrivateDocType = (documentType: string) => PRIVATE_DOC_TYPES.has(documen
 
 // Re-uploading a type replaces the earlier entry — the draft keeps one document
 // per type, so appending would leave a stale duplicate in the checklist.
-type DraftDocument = { documentType: string; imageUrl?: string };
+type DraftDocument = { documentType: string; imageUrl?: string; imageKey?: string };
 const upsertDocument = (docs: DraftDocument[], doc: DraftDocument): DraftDocument[] => [
   ...docs.filter((d) => d.documentType !== doc.documentType),
   doc,
@@ -173,10 +173,26 @@ function VehicleContent() {
 
   const fetchVehicles = async () => {
     try {
-      const res = await vehicleApi.list();
+      const [res, draftRes] = await Promise.all([vehicleApi.list(), vehicleApi.getDraft()]);
       const savedVehicles = res.data?.vehicles || [];
       setVehicles(savedVehicles);
-      if (savedVehicles.length === 0) setShowAddForm(true);
+      const draft = draftRes.data;
+      if (draft) {
+        // Resume the same Redis draft so a document retry never loses earlier uploads.
+        setLicenseCountry(draft.licenseCountry || 'EE');
+        setLicenseNumber(draft.licenseNumber || '');
+        setBrand(draft.brand || '');
+        setModelNum(draft.model_num || '');
+        setModelName(draft.model_name || '');
+        setType(draft.type || 'sedan');
+        setColor(draft.color || '');
+        setYear(draft.year || new Date().getFullYear());
+        setDocuments(draft.documents || []);
+        setStep(draft.next === 'vehicle-details' ? 2 : 3);
+        setShowAddForm(true);
+      } else if (savedVehicles.length === 0) {
+        setShowAddForm(true);
+      }
     } catch {
       // ignore
     } finally {

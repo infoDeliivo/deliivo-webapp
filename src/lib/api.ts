@@ -639,6 +639,10 @@ export const vehicleApi = {
     });
   },
 
+  getDraft() {
+    return apiFetch<{ data: VehicleDraft | null }>('/api/v1/vehicles/draft');
+  },
+
   updateDraftDetails(details: VehicleDetails) {
     return apiFetch<{ data: VehicleDraft }>('/api/v1/vehicles/draft/vehicle-details', {
       method: 'PUT',
@@ -3118,7 +3122,8 @@ export interface VehicleDraft {
   type: VehicleType | null;
   color: string | null;
   year: number | null;
-  documents: Array<{ imageUrl: string; documentType: string }>;
+  documents: Array<{ imageUrl?: string; imageKey?: string; documentType: string }>;
+  next?: 'vehicle-details' | 'upload-document' | 'save' | null;
 }
 
 export interface VehicleDetails {
