@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle, FileWarning, Files, Loader2, Upload } from 'lucide-react';
-import { vehicleApi, Vehicle, VehicleDraft } from '@/lib/api';
+import { getApiErrorMessage, UPLOAD_ACCEPT, validateImageFile, vehicleApi, Vehicle, VehicleDraft } from '@/lib/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 
@@ -22,6 +22,10 @@ const REQUIRED_FOR_EE = new Set([
   'INSURANCE_DOCUMENT',
 ]);
 
+// A driving licence is a user-level verification document, not a vehicle document.
+// It is displayed while completing a draft but is not uploaded to a saved vehicle.
+const VEHICLE_DOCUMENTS = DOCUMENTS.filter(({ type }) => type !== 'DRIVING_LICENSE');
+
 export default function DocumentsPage() {
   return (
     <ProtectedRoute>
@@ -35,15 +39,44 @@ function DocumentsContent() {
   const [draft, setDraft] = useState<VehicleDraft | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
+  const loadDocuments = async () => {
+    const [draftResult, vehicleResult] = await Promise.all([vehicleApi.getDraft(), vehicleApi.list()]);
+    setDraft(draftResult.data);
+    setVehicles(vehicleResult.data?.vehicles || []);
+  };
 
   useEffect(() => {
-    Promise.all([vehicleApi.getDraft(), vehicleApi.list()])
-      .then(([draftResult, vehicleResult]) => {
-        setDraft(draftResult.data);
-        setVehicles(vehicleResult.data?.vehicles || []);
-      })
+    loadDocuments()
       .finally(() => setLoading(false));
   }, []);
+
+  const uploadSavedDocument = async (vehicleId: string, documentType: string, file: File) => {
+    const invalid = validateImageFile(file);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+    const key = `${vehicleId}:${documentType}`;
+    setUploading(key);
+    setError('');
+    try {
+      // The front vehicle photo is the rider-visible Vehicle.imageUrl. All supporting
+      // documents use the private vehicle_document upload target.
+      if (documentType === 'VEHICLE_IMAGE_FRONT') {
+        await vehicleApi.uploadImage(vehicleId, file);
+      } else {
+        await vehicleApi.uploadDocument(vehicleId, file, documentType);
+      }
+      await loadDocuments();
+    } catch (uploadError: unknown) {
+      setError(getApiErrorMessage(uploadError, 'Could not upload the document. Please try again.'));
+    } finally {
+      setUploading(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -55,12 +88,6 @@ function DocumentsContent() {
 
   const requiresFullSet = draft?.licenseCountry?.trim().toUpperCase() === 'EE';
   const uploadedTypes = new Set(draft?.documents.map((document) => document.documentType) || []);
-  const savedTypes = new Set<string>();
-  for (const vehicle of vehicles) {
-    if (vehicle.imageUrl) savedTypes.add('VEHICLE_IMAGE_FRONT');
-    for (const document of vehicle.documents || []) savedTypes.add(document.documentType);
-  }
-
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <div className="mb-6 flex items-start gap-3">
@@ -111,12 +138,58 @@ function DocumentsContent() {
       )}
 
       {vehicles.length > 0 && (
-        <section className="mt-6 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-          <h2 className="font-bold text-deliivo-dark">Saved vehicle documents</h2>
-          <p className="mt-1 text-sm text-deliivo-gray">
-            {savedTypes.size ? `${savedTypes.size} document type${savedTypes.size === 1 ? '' : 's'} saved for your vehicle.` : 'No saved vehicle documents yet.'}
-          </p>
-          <Link href="/profile/vehicle" className="mt-4 inline-flex text-sm font-semibold text-deliivo-orange hover:underline">View vehicle details</Link>
+        <section className="mt-6 space-y-4">
+          <div>
+            <h2 className="font-bold text-deliivo-dark">Saved vehicle documents</h2>
+            <p className="mt-1 text-sm text-deliivo-gray">Upload a missing file or replace a document for the specific vehicle.</p>
+          </div>
+          {vehicles.map((vehicle) => {
+            const requiredForVehicle = vehicle.licenseCountry?.trim().toUpperCase() === 'EE';
+            const storedDocs = new Map((vehicle.documents || []).map((document) => [document.documentType, document]));
+            return (
+              <div key={vehicle.id} className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+                <h3 className="font-semibold text-deliivo-dark">
+                  {[vehicle.brand, vehicle.model_name || vehicle.model_num].filter(Boolean).join(' ') || 'Vehicle'}
+                </h3>
+                {vehicle.licenseNumber && <p className="mt-1 text-xs text-deliivo-gray">{vehicle.licenseCountry} {vehicle.licenseNumber}</p>}
+                <div className="mt-4 space-y-2">
+                  {VEHICLE_DOCUMENTS.map(({ type, label }) => {
+                    const document = storedDocs.get(type);
+                    const uploaded = type === 'VEHICLE_IMAGE_FRONT' ? Boolean(vehicle.imageUrl) : Boolean(document && !document.storageMissing);
+                    const missingFromStorage = Boolean(document?.storageMissing);
+                    const required = requiredForVehicle && REQUIRED_FOR_EE.has(type);
+                    const uploadKey = `${vehicle.id}:${type}`;
+                    const busy = uploading === uploadKey;
+                    return (
+                      <div key={type} className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${missingFromStorage ? 'border-red-200 bg-red-50' : uploaded ? 'border-green-100 bg-green-50/50' : 'border-gray-100'}`}>
+                        {uploaded ? <CheckCircle size={18} className="shrink-0 text-green-600" /> : <Files size={18} className="shrink-0 text-deliivo-gray" />}
+                        <span className="text-sm font-medium text-deliivo-dark">{label}</span>
+                        <span className={`ml-auto text-xs font-semibold ${uploaded ? 'text-green-700' : missingFromStorage ? 'text-red-700' : required ? 'text-amber-700' : 'text-deliivo-gray'}`}>
+                          {uploaded ? 'Uploaded' : missingFromStorage ? 'File missing' : required ? 'Required' : 'Not uploaded'}
+                        </span>
+                        <label className="ml-auto inline-flex cursor-pointer items-center gap-1 rounded-lg border border-deliivo-orange px-2.5 py-1.5 text-xs font-semibold text-deliivo-orange hover:bg-deliivo-orange-light">
+                          {busy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                          {uploaded ? 'Replace' : 'Upload'}
+                          <input
+                            type="file"
+                            accept={UPLOAD_ACCEPT}
+                            className="hidden"
+                            disabled={busy}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              if (file) void uploadSavedDocument(vehicle.id, type, file);
+                              event.target.value = '';
+                            }}
+                          />
+                        </label>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+          {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
         </section>
       )}
     </main>
