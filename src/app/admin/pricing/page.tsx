@@ -28,7 +28,7 @@ const emptyForm = (regionCode = 'BALTIC'): PricingForm => ({
   maxRatePerKm: '0.60',
   minimumSeatPrice: '3.00',
   roundingStrategy: 'NEAREST_EURO',
-  serviceFeePercent: '2',
+  serviceFeePercent: '20',
   serviceFeeFlat: '0',
   active: true,
   validFrom: '',

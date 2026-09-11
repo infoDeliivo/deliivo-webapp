@@ -165,6 +165,9 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
 
   const canWithdraw = ['PAYMENT_PENDING', 'DRIVER_PENDING'].includes(booking.status);
   const canCancel = booking.status === 'CONFIRMED';
+  // Only the rider's own cancellation reopens booking. A driver's cancellation or rejection leaves
+  // the booking CANCELLED too, and re-requesting a seat there would just loop.
+  const canRebook = booking.status === 'CANCELLED' && booking.cancelledByRole === 'PASSENGER';
 
   async function handleWithdraw(e: React.MouseEvent) {
     e.preventDefault();
@@ -270,6 +273,15 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
           {t('rides.openDetails')}
           <ArrowRight className="w-3.5 h-3.5" />
         </Link>
+
+        {canRebook && (
+          <Link
+            href={`/rides/${booking.rideId}?rebook=1`}
+            className="inline-flex flex-1 items-center justify-center rounded-xl border border-deliivo-orange px-4 py-2 text-xs font-semibold text-deliivo-orange hover:bg-orange-50 transition-colors"
+          >
+            {t('rides.bookAgain')}
+          </Link>
+        )}
 
         {(canWithdraw || canCancel) && (
           <>

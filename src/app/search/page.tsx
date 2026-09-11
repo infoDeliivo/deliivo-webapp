@@ -20,6 +20,7 @@ import {
   CheckCircle,
   History,
   ShieldCheck,
+  Route,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -188,6 +189,13 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
             <span>{dateLabel}</span>
             {ride.femaleOnly && (
               <span className="ml-1 rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-600">{t('ride.womenOnly')}</span>
+            )}
+            {/* The rider only travels part of this driver's route, so the times, distance and
+                price on this card describe their leg rather than the whole trip. */}
+            {ride.isSegmentView && (
+              <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                <Route size={12} /> {t('search.partOfLongerRide')}
+              </span>
             )}
           </div>
           {(ride.noSmoking || ride.alcoholFreeRide || ride.noBicycles || ride.childSeatAvailable) && (

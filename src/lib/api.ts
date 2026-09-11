@@ -3103,6 +3103,12 @@ export interface Booking {
   };
   status: string;
   displayStatus?: string;
+  cancelledAt?: string | null;
+  /**
+   * Who ended the booking: 'PASSENGER' | 'DRIVER' | 'ADMIN' | 'SYSTEM'. A CANCELLED booking can be
+   * any of these, and only the rider's own cancellation reopens booking on that ride.
+   */
+  cancelledByRole?: string | null;
   pickupWaypointId: string | null;
   dropoffWaypointId: string | null;
   notes?: string;
@@ -3280,6 +3286,26 @@ export interface PriceRecommendation {
   };
   /** Every money figure the publish screen shows, computed by the backend. */
   quote: PriceQuote;
+  /**
+   * Backend-computed fare for each stopover the draft already has, sorted by distance from origin.
+   * Absent when the draft has no stopovers. Render as-is — the split is distance-based and derived
+   * from the same pricing config that prices the real booking, so recomputing it here would drift.
+   */
+  stopoverPricing?: StopoverRecommendedPrice[];
+}
+
+/** One stopover's backend-computed fare and allowed range, from the recommended-price endpoint. */
+export interface StopoverRecommendedPrice {
+  placeId: string;
+  address: string;
+  distanceFromOriginKm: number;
+  /** Distance-derived fare at the base price currently being quoted. */
+  recommendedPrice: number;
+  minPrice: number;
+  maxPrice: number;
+  /** The driver's own fare for this stop, when they have already set one. */
+  driverPricePerSeat?: number;
+  estimatedArrivalTime?: string;
 }
 
 /**

@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   ExternalLink,
   Info,
+  Route,
 } from 'lucide-react';
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import EmergencySosButton from '@/components/EmergencySosButton';
@@ -106,6 +107,30 @@ function buildRiderPointOptions(ride: RideDetails): RiderPointOption[] {
       estimatedArrivalTime: null,
     },
   ];
+}
+
+/** Statuses a booking never leaves. A booking in one of these is history, not a live seat. */
+const TERMINAL_BOOKING_STATUSES = ['CANCELLED', 'PAYMENT_FAILED', 'RIDE_FULL_REFUNDED', 'REJECTED', 'EXPIRED'];
+
+/**
+ * A rider may book a ride again after cancelling it themselves.
+ *
+ * Deliberately narrow: a driver's cancellation or rejection, and the automated ones, leave the
+ * booking CANCELLED too, and re-requesting a seat from a driver who just turned you down is a loop,
+ * not a feature. The role comes from the backend — the webapp cannot infer it from the status.
+ */
+function isRiderCancelledBooking(booking: Booking | null) {
+  return Boolean(booking && booking.status === 'CANCELLED' && booking.cancelledByRole === 'PASSENGER');
+}
+
+/**
+ * Seats to start a re-booking from: what the rider had, capped at what is left on the ride.
+ *
+ * Clamped so the prefilled form is always one they can submit — seats may have gone to other
+ * riders between the cancellation and the re-book.
+ */
+function rebookSeats(ride: RideDetails, booking: Booking) {
+  return Math.max(1, Math.min(booking.seatsBooked, ride.availableSeats));
 }
 
 function waypointForId(ride: RideDetails, waypointId?: string | null) {
@@ -272,6 +297,9 @@ function RideDetailContent() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const segmentId = searchParams.get('segmentId') || undefined;
+  // Set by the Book again link on the trips list, so arriving from there opens the booking form
+  // straight away instead of landing the rider back on the cancelled-booking panel.
+  const rebookFromLink = searchParams.get('rebook') === '1';
   const rideReturnTo = `/rides/${id}${segmentId ? `?segmentId=${encodeURIComponent(segmentId)}` : ''}`;
   const { user, refreshUser } = useAuth();
   const { t, locale } = useTranslation();
@@ -301,6 +329,9 @@ function RideDetailContent() {
   const [bringingOwnChildSeat, setBringingOwnChildSeat] = useState(false);
   const [selectedPickupValue, setSelectedPickupValue] = useState('origin');
   const [selectedDropoffValue, setSelectedDropoffValue] = useState('destination');
+  // Set when the rider asks to book a ride they cancelled. Until then the cancelled booking panel
+  // stays put, so the page does not silently look as if the cancellation never happened.
+  const [rebookRequested, setRebookRequested] = useState(false);
 
   // Rider's existing booking for this ride
   const [myBooking, setMyBooking] = useState<Booking | null>(null);
@@ -360,6 +391,18 @@ function RideDetailContent() {
   useEffect(() => {
     setRatingSubmitted(Boolean(myBooking?.ratingByViewer));
   }, [myBooking?.id, myBooking?.ratingByViewer?.id]);
+
+  // Arriving from the trips list's Book again link. Runs once both the ride and the rider's
+  // booking are loaded, and only for the rider's own cancellation — the link is not a bypass for
+  // a driver's cancellation, and anyone can type the query parameter. The pickup and drop-off are
+  // restored by the effect above, which already seeds the selects from myBooking.
+  useEffect(() => {
+    if (!rebookFromLink || rebookRequested) return;
+    if (!ride || !isRiderCancelledBooking(myBooking) || ride.availableSeats <= 0) return;
+
+    setSeats(rebookSeats(ride, myBooking!));
+    setRebookRequested(true);
+  }, [rebookFromLink, rebookRequested, ride, myBooking]);
 
   useEffect(() => {
     if (!id) return;
@@ -522,7 +565,13 @@ function RideDetailContent() {
         'DRIVER_MISSED_PICKUP',
         'DISPUTED',
       ], 1, 50);
-      const match = (res.data.bookings || []).find((b: Booking) => b.rideId === id);
+      // A rider can hold several bookings on one ride over time — cancel, then book again — so
+      // picking the first row that matches the id can hand the page a dead booking and hide the
+      // live one. Newest first, and a live booking always wins over a finished one.
+      const mine = (res.data.bookings || [])
+        .filter((b: Booking) => b.rideId === id)
+        .sort((a: Booking, b: Booking) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const match = mine.find((b: Booking) => !TERMINAL_BOOKING_STATUSES.includes(b.status)) ?? mine[0];
       if (!match) {
         setMyBooking(null);
         return;
@@ -1209,7 +1258,17 @@ function RideDetailContent() {
   const canUseRideChat = Boolean(myBooking && ride.status === 'IN_PROGRESS' && ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'].includes(myBooking.status));
   const cancellationWindowClosed = isWithinConfirmedCancellationWindow(ride, myBooking);
   const bookingWindowClosed = isBookingWindowClosed(ride);
-  const canStartBooking = Boolean(user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed);
+  // A booking the rider cancelled themselves no longer counts as "already booked" — once they ask
+  // to rebook, the ordinary booking form comes back with every other condition unchanged.
+  const isRebookable = isRiderCancelledBooking(myBooking);
+  const canRebook = Boolean(isRebookable && ride.availableSeats > 0 && !bookingWindowClosed);
+  const canStartBooking = Boolean(
+    user
+    && !isOwnRide
+    && (!myBooking || (isRebookable && rebookRequested))
+    && ride.availableSeats > 0
+    && !bookingWindowClosed
+  );
 
   function pointKindLabel(kind: RiderPointKind) {
     if (kind === 'origin') return t('rideDetail.mainDeparture');
@@ -1245,6 +1304,19 @@ function RideDetailContent() {
     }
   }
 
+  /**
+   * Reopen the booking form for a ride the rider cancelled.
+   *
+   * Their old pickup and drop-off are already in the selects — the effect that seeds them reads
+   * myBooking, cancelled or not — so only the seat count has to be carried over here.
+   */
+  function handleRebook() {
+    if (!ride || !myBooking) return;
+
+    setSeats(rebookSeats(ride, myBooking));
+    setRebookRequested(true);
+  }
+
   return (
     <div className="min-h-screen min-w-0 overflow-x-clip bg-deliivo-cream">
       {/* Header */}
@@ -1267,6 +1339,14 @@ function RideDetailContent() {
             <p className="text-lg font-bold text-white mt-0.5">
               {ride.originAddress.split(',')[0]} → {ride.destinationAddress.split(',')[0]}
             </p>
+            {/* Everything on this page — the stops, the meta row, the price — describes the
+                rider's leg, not the driver's whole route. Say so rather than let the shorter
+                distance read as a mistake. */}
+            {ride.isSegmentView && (
+              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-xs font-medium text-white">
+                <Route size={12} /> {t('rideDetail.partOfLongerRide')}
+              </span>
+            )}
           </div>
 
           <div className="p-5 space-y-4">
@@ -1296,6 +1376,9 @@ function RideDetailContent() {
               {durationLabel && <span className="flex items-center gap-1"><Clock size={13} /> {durationLabel}</span>}
               {distanceKm && <span className="flex items-center gap-1"><MapPin size={13} /> {distanceKm} km</span>}
             </div>
+            {ride.isSegmentView && (
+              <p className="text-xs leading-5 text-deliivo-gray">{t('rideDetail.partOfLongerRideCopy')}</p>
+            )}
           </div>
         </div>
 
@@ -2350,6 +2433,26 @@ function RideDetailContent() {
                 >
                   {riderActionLoading ? t('common.working') : t('rideDetail.cancelBooking')}
                 </button>
+              </div>
+            )}
+
+            {/* Book again after the rider's own cancellation */}
+            {isRebookable && !rebookRequested && (
+              <div className="space-y-2">
+                <p className="text-xs leading-5 text-deliivo-gray">{t('rideDetail.bookAgainCopy')}</p>
+                {canRebook ? (
+                  <button
+                    type="button"
+                    onClick={handleRebook}
+                    className="w-full rounded-xl bg-deliivo-orange px-4 py-2.5 text-sm font-semibold text-white hover:bg-deliivo-orange-dark"
+                  >
+                    {t('rideDetail.bookAgain')}
+                  </button>
+                ) : (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    {ride.availableSeats > 0 ? t('rideDetail.bookAgainClosed') : t('rideDetail.bookAgainNoSeats')}
+                  </p>
+                )}
               </div>
             )}
 
