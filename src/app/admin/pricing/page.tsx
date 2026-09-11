@@ -13,6 +13,8 @@ type PricingForm = {
   maxRatePerKm: string;
   minimumSeatPrice: string;
   roundingStrategy: string;
+  serviceFeePercent: string;
+  serviceFeeFlat: string;
   active: boolean;
   validFrom: string;
   validTo: string;
@@ -26,6 +28,8 @@ const emptyForm = (regionCode = 'BALTIC'): PricingForm => ({
   maxRatePerKm: '0.60',
   minimumSeatPrice: '3.00',
   roundingStrategy: 'NEAREST_EURO',
+  serviceFeePercent: '2',
+  serviceFeeFlat: '0',
   active: true,
   validFrom: '',
   validTo: '',
@@ -34,6 +38,14 @@ const emptyForm = (regionCode = 'BALTIC'): PricingForm => ({
 const formatInputDate = (value?: string | null) => {
   if (!value) return '';
   return value.slice(0, 16);
+};
+
+const parseFeeValue = (label: string, value: string, max: number) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > max) {
+    throw new Error(`${label} must be between 0 and ${max}`);
+  }
+  return parsed;
 };
 
 const parsePositiveAmount = (label: string, value: string) => {
@@ -92,6 +104,8 @@ export default function AdminPricingPage() {
       recommendedRatePerKm: String(config.recommendedRatePerKm),
       maxRatePerKm: String(config.maxRatePerKm),
       minimumSeatPrice: String(config.minimumSeatPrice),
+      serviceFeePercent: String(config.serviceFeePercent ?? 0),
+      serviceFeeFlat: String(config.serviceFeeFlat ?? 0),
       roundingStrategy: config.roundingStrategy,
       active: config.active,
       validFrom: formatInputDate(config.validFrom),
@@ -117,6 +131,8 @@ export default function AdminPricingPage() {
       const recommendedRatePerKm = parsePositiveAmount('Recommended rate / km', form.recommendedRatePerKm);
       const maxRatePerKm = parsePositiveAmount('Max rate / km', form.maxRatePerKm);
       const minimumSeatPrice = parsePositiveAmount('Minimum seat price', form.minimumSeatPrice);
+      const serviceFeePercent = parseFeeValue('Service fee %', form.serviceFeePercent, 50);
+      const serviceFeeFlat = parseFeeValue('Service fee flat', form.serviceFeeFlat, 10);
 
       if (minRatePerKm > recommendedRatePerKm || recommendedRatePerKm > maxRatePerKm) {
         throw new Error('Pricing rates must be ordered as min <= recommended <= max');
@@ -130,6 +146,8 @@ export default function AdminPricingPage() {
         maxRatePerKm,
         minimumSeatPrice,
         roundingStrategy: form.roundingStrategy,
+        serviceFeePercent,
+        serviceFeeFlat,
         active: form.active,
         ...(form.validFrom ? { validFrom: new Date(form.validFrom).toISOString() } : {}),
         ...(form.validTo ? { validTo: new Date(form.validTo).toISOString() } : { validTo: null }),
@@ -238,6 +256,7 @@ export default function AdminPricingPage() {
                   <div className="flex flex-col items-end gap-1 text-xs text-gray-500">
                     <span>{config.roundingStrategy}</span>
                     <span>Seat floor {config.minimumSeatPrice}</span>
+                    <span>Service fee {config.serviceFeePercent ?? 0}%</span>
                   </div>
                 </div>
               </button>
@@ -265,6 +284,8 @@ export default function AdminPricingPage() {
             <Field label="Recommended rate / km" type="number" step="0.01" value={form.recommendedRatePerKm} onChange={(value) => setForm((prev) => ({ ...prev, recommendedRatePerKm: value }))} />
             <Field label="Max rate / km" type="number" step="0.01" value={form.maxRatePerKm} onChange={(value) => setForm((prev) => ({ ...prev, maxRatePerKm: value }))} />
             <Field label="Minimum seat price" type="number" step="0.01" value={form.minimumSeatPrice} onChange={(value) => setForm((prev) => ({ ...prev, minimumSeatPrice: value }))} />
+            <Field label="Service fee % (charged to rider on top)" type="number" step="0.5" value={form.serviceFeePercent} onChange={(value) => setForm((prev) => ({ ...prev, serviceFeePercent: value }))} />
+            <Field label="Service fee flat (per booking)" type="number" step="0.05" value={form.serviceFeeFlat} onChange={(value) => setForm((prev) => ({ ...prev, serviceFeeFlat: value }))} />
             <label className="block">
               <span className="text-xs font-medium text-gray-500">Rounding strategy</span>
               <select

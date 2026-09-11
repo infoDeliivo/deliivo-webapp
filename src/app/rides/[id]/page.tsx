@@ -1118,8 +1118,11 @@ function RideDetailContent() {
   const durationLabel = formatDurationHhMm(ride.routeDurationSeconds);
   const distanceKm = ride.routeDistanceMeters ? (ride.routeDistanceMeters / 1000).toFixed(1) : null;
   const previewBreakdown = preview?.priceBreakdown;
-  const displaySeatPrice = previewBreakdown?.basePricePerSeat ?? ride.segment?.segmentFare ?? ride.basePricePerSeat;
+  // Header price is the all-in figure the rider pays, matching what search advertised. The itemised
+  // breakdown below still shows fare and fee separately. Backend-supplied; never derived here.
+  const displaySeatPrice = ride.riderTotalPerSeat ?? ride.segment?.segmentFare ?? ride.basePricePerSeat;
   const displaySeatCurrency = previewBreakdown?.currency ?? ride.currency;
+  const displaySeatServiceFee = ride.serviceFeePerSeat ?? 0;
   const bookedBreakdown = myBooking?.priceBreakdown;
   const previewSeatFareLabel = previewBreakdown
     ? `${previewBreakdown.currency} ${previewBreakdown.basePricePerSeat.toFixed(2)}${t('rideDetail.perSeatShort')}`
@@ -1327,6 +1330,11 @@ function RideDetailContent() {
             <div className="rounded-xl bg-gray-50 px-4 py-2.5">
               <p className="text-xs font-semibold uppercase text-deliivo-gray">Price</p>
               <p className="mt-1"><span className="text-lg font-bold text-primary-500">{displaySeatCurrency} {displaySeatPrice.toFixed(2)}</span><span className="ml-1 text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></p>
+              {displaySeatServiceFee > 0 && (
+                <p className="text-[11px] text-deliivo-gray">
+                  {t('search.includesServiceFee', { amount: `${displaySeatCurrency} ${displaySeatServiceFee.toFixed(2)}` })}
+                </p>
+              )}
             </div>
           </div>
           {ride.notes && (
@@ -2231,7 +2239,7 @@ function RideDetailContent() {
             )}
 
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm">
-              <p className="mb-3 text-xs font-bold uppercase text-deliivo-gray">Fare summary</p>
+              <p className="mb-3 text-xs font-bold uppercase text-deliivo-gray">{t('rideDetail.fareSummary')}</p>
               <div className="space-y-2">
               {bookedBreakdown && (
                 <>

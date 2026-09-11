@@ -922,8 +922,15 @@ export const publishRideApi = {
   },
 
   // Step 9: Get recommended price
-  getRecommendedPrice() {
-    return apiFetch<{ data: PriceRecommendation }>('/api/v1/publish-ride/draft/pricing/recommended');
+  getRecommendedPrice(params?: { basePricePerSeat?: number }, init?: RequestInit) {
+    const query =
+      params?.basePricePerSeat !== undefined
+        ? `?basePricePerSeat=${encodeURIComponent(params.basePricePerSeat)}`
+        : '';
+    return apiFetch<{ data: PriceRecommendation }>(
+      `/api/v1/publish-ride/draft/pricing/recommended${query}`,
+      init
+    );
   },
 
   // Step 10: Set pricing
@@ -2171,6 +2178,9 @@ export interface AdminPricingConfig {
   maxRatePerKm: number;
   minimumSeatPrice: number;
   roundingStrategy: string;
+  /** Rider-paid service fee, charged on top of the driver's fare. */
+  serviceFeePercent: number;
+  serviceFeeFlat: number;
   active: boolean;
   validFrom: string;
   validTo?: string | null;
@@ -2187,6 +2197,9 @@ export interface AdminPricingConfigWriteInput {
   maxRatePerKm: number;
   minimumSeatPrice: number;
   roundingStrategy: string;
+  /** Rider-paid service fee, charged on top of the driver's fare. */
+  serviceFeePercent: number;
+  serviceFeeFlat: number;
   active: boolean;
   validFrom?: string;
   validTo?: string | null;
@@ -2950,7 +2963,11 @@ export interface SearchRideResult {
   departureDate: string;
   departureTime: string;
   availableSeats: number;
+  /** The driver's fare. Riders are shown riderTotalPerSeat. */
   basePricePerSeat: number;
+  /** What the rider pays per seat, service fee included. Backend-computed. */
+  riderTotalPerSeat?: number;
+  serviceFeePerSeat?: number;
   currency: string;
   status: string;
   femaleOnly?: boolean;
@@ -3016,6 +3033,9 @@ export interface PricePreview {
     serviceFee: number;
     totalPrice: number;
     currency: string;
+    /** Rate the backend used, for display copy only — never multiply with it. */
+    serviceFeePercent: number;
+    serviceFeeFlat: number;
   };
   ride: {
     id: string;
@@ -3065,6 +3085,9 @@ export interface Booking {
     serviceFee: number;
     totalPrice: number;
     currency: string;
+    /** Rate the backend used, for display copy only — never multiply with it. */
+    serviceFeePercent: number;
+    serviceFeeFlat: number;
   };
   status: string;
   displayStatus?: string;
@@ -3241,6 +3264,33 @@ export interface PriceRecommendation {
     maxRatePerKm?: number;
     pricingConfigFallback?: boolean;
   };
+  /** Every money figure the publish screen shows, computed by the backend. */
+  quote: PriceQuote;
+}
+
+/**
+ * Backend-computed amounts for the publish price step.
+ *
+ * The frontend must render these as-is. It previously multiplied a hardcoded 20% client-side, which
+ * drifted from what the backend charged. `perSeat` and `fullRide` are computed independently — the
+ * fee is charged once per booking, so per-seat times seats can differ by a cent from the real
+ * charge. Never derive one from the other.
+ */
+export interface PriceQuote {
+  basePricePerSeat: number;
+  seats: number;
+  currency: string;
+  serviceFeePercent: number;
+  serviceFeeFlat: number;
+  perSeat: PriceQuoteAmounts;
+  fullRide: PriceQuoteAmounts;
+}
+
+export interface PriceQuoteAmounts {
+  /** What the driver receives. The fee is added on top of this, never taken out of it. */
+  driverNet: number;
+  serviceFee: number;
+  riderTotal: number;
 }
 
 export interface PublishedRide {
@@ -3292,6 +3342,15 @@ export interface DriverRideBooking {
   pickupLocation?: { address: string; placeId: string; lat?: number; lng?: number; estimatedArrivalTime?: string | null };
   dropoffLocation?: { address: string; placeId: string; lat?: number; lng?: number; estimatedArrivalTime?: string | null };
   createdAt?: string;
+  /** Currency of the amounts below — do not assume EUR. */
+  currency?: string;
+  /** What the rider paid, fee included. */
+  riderTotalAmount?: number;
+  /** The rider's service fee. Not deducted from the driver. */
+  serviceFeeAmount?: number;
+  /** What the driver earns. Already net — do not subtract the fee from it. */
+  driverNetAmount?: number;
+  serviceFeePercent?: number | null;
 }
 
 export interface DriverPublishedRide extends PublishedRide {

@@ -29,6 +29,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import EmergencySosButton from '@/components/EmergencySosButton';
 import SupportOverrideCard from '@/components/SupportOverrideCard';
 import { driverBookingApi, rideOpsApi, publishRideApi, disputesApi, ratingsApi, trackingApi, DriverPublishedRide, DriverRideBooking, TrackingLink, formatBookingReference, getApiErrorMessage } from '@/lib/api';
+import { formatMoney } from '@/lib/money';
 import { getSocket, emitSocketEvent, onSocketEvent, LocationUpdate, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
 import { useAuth } from '@/lib/auth-context';
 import { showError, showSuccess } from '@/lib/app-feedback';
@@ -1228,8 +1229,22 @@ function BookingRequestCard({
           </p>
           <p className="text-xs text-deliivo-gray">
             {t('manageRide.seatsRequested', { count: booking.seatsBooked, plural: booking.seatsBooked > 1 ? 's' : '' })}
-            {booking.totalPrice ? ` • ${booking.totalPrice.toFixed(2)}` : ''}
           </p>
+          {booking.driverNetAmount !== undefined && (
+            <p className="text-xs text-deliivo-gray">
+              {t('manageRide.yourNetFare', {
+                amount: formatMoney(booking.driverNetAmount, booking.currency),
+              })}
+              {booking.serviceFeeAmount ? (
+                <>
+                  {' • '}
+                  {t('manageRide.riderPaysTotal', {
+                    amount: formatMoney(booking.riderTotalAmount, booking.currency),
+                  })}
+                </>
+              ) : null}
+            </p>
+          )}
           <p className="text-[11px] text-deliivo-gray">{t('manageRide.bookingNumber', { id: formatBookingReference(booking) })} • {statusLabel}</p>
         </div>
         <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
@@ -1349,8 +1364,23 @@ function PassengerCard({
               </span>
             </div>
             <p className="mt-1 text-xs text-deliivo-gray">
-              {t('ride.seatsCount', { count: booking.seatsBooked, plural: booking.seatsBooked > 1 ? 's' : '' })} &middot; {t('manageRide.bookingNumber', { id: formatBookingReference(booking) })} &middot; EUR {booking.totalPrice.toFixed(2)}
+              {t('ride.seatsCount', { count: booking.seatsBooked, plural: booking.seatsBooked > 1 ? 's' : '' })} &middot; {t('manageRide.bookingNumber', { id: formatBookingReference(booking) })}
             </p>
+            {booking.driverNetAmount !== undefined && (
+              <p className="mt-1 text-xs text-deliivo-gray">
+                {t('manageRide.yourNetFare', {
+                  amount: formatMoney(booking.driverNetAmount, booking.currency),
+                })}
+                {booking.serviceFeeAmount ? (
+                  <>
+                    {' • '}
+                    {t('manageRide.riderServiceFee', {
+                      amount: formatMoney(booking.serviceFeeAmount, booking.currency),
+                    })}
+                  </>
+                ) : null}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2 lg:justify-end">

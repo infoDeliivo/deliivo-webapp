@@ -41,6 +41,7 @@ import {
   PlacePrediction,
   RouteOption,
   PriceRecommendation,
+  PriceQuote,
   LocationInput,
   StopoverSuggestion,
   Vehicle,
@@ -89,6 +90,8 @@ interface WizardState {
   // Step 4 — Price
   basePricePerSeat: number;
   recommendation: PriceRecommendation | null;
+  /** Backend-computed amounts for the current candidate price. Never derived locally. */
+  quote: PriceQuote | null;
   // Step 5 — Notes
   notes: string;
 }
@@ -104,9 +107,6 @@ const MAX_STOPOVERS = 3;
 const CITY_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_CITY_POINT_RADIUS_KM || '15');
 const STOPOVER_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_STOPOVER_POINT_RADIUS_KM || '5');
 const ROUTE_POINT_RADIUS_KM = Number(process.env.NEXT_PUBLIC_PUBLISH_ROUTE_POINT_RADIUS_KM || '10');
-const DEFAULT_PLATFORM_FEE_PERCENT = 20;
-const PLATFORM_FEE_PERCENT_RAW = Number(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT || String(DEFAULT_PLATFORM_FEE_PERCENT));
-const PLATFORM_FEE_PERCENT = Number.isFinite(PLATFORM_FEE_PERCENT_RAW) ? Math.max(0, PLATFORM_FEE_PERCENT_RAW) : 0;
 const ESTONIA_MAP_CENTER = { lat: 58.5953, lng: 25.0136 };
 const MINIMUM_PUBLISH_LEAD_MS = 3 * 60 * 60 * 1000;
 
@@ -1340,14 +1340,40 @@ function StepPrice({
 }) {
   const { t } = useTranslation();
   const rec = state.recommendation;
-  const currency = rec?.currency || 'EUR';
-  const grossFullRideFare = state.basePricePerSeat * state.seats;
-  const platformFeeRate = PLATFORM_FEE_PERCENT / 100;
-  const estimatedServiceFeePerSeat = Math.round(state.basePricePerSeat * platformFeeRate * 100) / 100;
-  const estimatedRiderTotalPerSeat = state.basePricePerSeat + estimatedServiceFeePerSeat;
-  const estimatedFullRideServiceFees = estimatedServiceFeePerSeat * state.seats;
-  const estimatedFullRideRiderTotal = estimatedRiderTotalPerSeat * state.seats;
+  // Every amount below comes from the backend. Deriving any of them here is what caused the old
+  // drift: this screen multiplied a hardcoded 20% while the backend charged something else.
+  const quote = state.quote;
+  const currency = quote?.currency || rec?.currency || 'EUR';
   const priceAboveSuggestedRange = Boolean(rec && state.basePricePerSeat > rec.maxPrice);
+
+  // Re-quote from the backend whenever the driver changes the price. The frontend cannot compute
+  // the fee itself, so the amounts have to be fetched. Debounced, and the in-flight request is
+  // aborted so a slow earlier response cannot overwrite a newer one.
+  const quotedPrice = state.quote?.basePricePerSeat;
+  useEffect(() => {
+    const price = state.basePricePerSeat;
+    if (!price || price <= 0) return;
+    if (quotedPrice !== undefined && Math.abs(quotedPrice - price) < 0.005) return;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      publishRideApi
+        .getRecommendedPrice({ basePricePerSeat: price }, { signal: controller.signal })
+        .then(res => {
+          if (controller.signal.aborted) return;
+          // Keep the previous quote on screen rather than blanking the tiles mid-edit.
+          if (res.data?.quote) onChange({ quote: res.data.quote });
+        })
+        .catch(() => {
+          // Leave the last good quote in place; never substitute a locally computed estimate.
+        });
+    }, 400);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [state.basePricePerSeat, quotedPrice, onChange]);
   const recommendationAdjusted = Boolean(
     rec && Math.abs(rec.breakdown.estimatedRouteCost - rec.recommendedPrice) >= 0.01
   );
@@ -1443,25 +1469,43 @@ function StepPrice({
         <div className="mt-4 grid gap-3 border-t border-gray-100 pt-4 text-sm sm:grid-cols-2">
           <div className="rounded-xl bg-gray-50 px-3 py-3">
             <p className="text-xs font-medium text-deliivo-gray">{t('publish.driverReceivesPerSeat')}</p>
-            <p className="mt-1 text-base font-semibold text-deliivo-dark">{currency} {state.basePricePerSeat.toFixed(2)}</p>
+            <p className="mt-1 text-base font-semibold text-deliivo-dark">
+              {quote ? `${currency} ${quote.perSeat.driverNet.toFixed(2)}` : t('publish.quoteUnavailable')}
+            </p>
           </div>
           <div className="rounded-xl bg-orange-50 px-3 py-3">
             <p className="text-xs font-medium text-deliivo-gray">{t('publish.riderPaysPerSeat')}</p>
-            <p className="mt-1 text-base font-semibold text-deliivo-orange">{currency} {estimatedRiderTotalPerSeat.toFixed(2)}</p>
-            <p className="mt-1 text-[11px] text-deliivo-gray">{t('publish.includesServiceFee', { amount: `${currency} ${estimatedServiceFeePerSeat.toFixed(2)}` })}</p>
+            <p className="mt-1 text-base font-semibold text-deliivo-orange">
+              {quote ? `${currency} ${quote.perSeat.riderTotal.toFixed(2)}` : t('publish.quoteUnavailable')}
+            </p>
+            {quote && (
+              <p className="mt-1 text-[11px] text-deliivo-gray">
+                {t('publish.includesServiceFee', { amount: `${currency} ${quote.perSeat.serviceFee.toFixed(2)}` })}
+              </p>
+            )}
           </div>
           <div className="rounded-xl bg-gray-50 px-3 py-3">
             <p className="text-xs font-medium text-deliivo-gray">{t('publish.fullRideGrossFare', { seats: state.seats })}</p>
-            <p className="mt-1 text-base font-semibold text-deliivo-dark">{currency} {grossFullRideFare.toFixed(2)}</p>
+            <p className="mt-1 text-base font-semibold text-deliivo-dark">
+              {quote ? `${currency} ${quote.fullRide.driverNet.toFixed(2)}` : t('publish.quoteUnavailable')}
+            </p>
           </div>
           <div className="rounded-xl bg-gray-50 px-3 py-3">
             <p className="text-xs font-medium text-deliivo-gray">{t('publish.fullRideRiderTotal', { seats: state.seats })}</p>
-            <p className="mt-1 text-base font-semibold text-deliivo-dark">{currency} {estimatedFullRideRiderTotal.toFixed(2)}</p>
-            <p className="mt-1 text-[11px] text-deliivo-gray">{t('publish.includesServiceFee', { amount: `${currency} ${estimatedFullRideServiceFees.toFixed(2)}` })}</p>
+            <p className="mt-1 text-base font-semibold text-deliivo-dark">
+              {quote ? `${currency} ${quote.fullRide.riderTotal.toFixed(2)}` : t('publish.quoteUnavailable')}
+            </p>
+            {quote && (
+              <p className="mt-1 text-[11px] text-deliivo-gray">
+                {t('publish.includesServiceFee', { amount: `${currency} ${quote.fullRide.serviceFee.toFixed(2)}` })}
+              </p>
+            )}
           </div>
         </div>
         <p className="mt-3 text-xs leading-5 text-deliivo-gray">
-          {t('publish.grossFareNotice')} {t('publish.stripeFeeNotice')}
+          {quote && quote.serviceFeeFlat === 0
+            ? t('publish.serviceFeePercentNote', { percent: quote.serviceFeePercent })
+            : t('publish.grossFareNotice')}
         </p>
       </div>
 
@@ -1522,7 +1566,7 @@ function StepConfirm({
     { icon: <Clock className="h-4 w-4 text-deliivo-orange" />, label: t('publish.time'), value: timeLabel },
     { icon: <Users className="h-4 w-4 text-deliivo-orange" />, label: t('publish.seats'), value: `${state.seats} ${t('publish.passengerWord', { count: state.seats })}` },
     { icon: <Luggage className="h-4 w-4 text-deliivo-orange" />, label: t('publish.luggage'), value: t('publish.maxLuggageValue', { max: state.maxLuggage }) },
-    { icon: <Euro className="h-4 w-4 text-deliivo-orange" />, label: t('publish.pricePerSeatLabel'), value: state.basePricePerSeat > 0 ? `${state.recommendation?.currency || 'EUR'} ${state.basePricePerSeat.toFixed(2)}` : t('publish.free') },
+    { icon: <Euro className="h-4 w-4 text-deliivo-orange" />, label: t('publish.pricePerSeatLabel'), value: state.basePricePerSeat > 0 ? `${state.quote?.currency || state.recommendation?.currency || 'EUR'} ${state.basePricePerSeat.toFixed(2)}` : t('publish.free') },
   ];
 
   return (
@@ -1687,6 +1731,7 @@ const INITIAL_STATE: WizardState = {
   vehicleId: '',
   basePricePerSeat: 0,
   recommendation: null,
+  quote: null,
   notes: "",
 };
 
@@ -1907,10 +1952,12 @@ function PublishRideWizard() {
   const [gateError, setGateError] = useState('');
   const publishGuide = getPublishGuide(step);
 
-  function patch(update: Partial<WizardState>) {
+  // Stable identity: StepPrice debounces its re-quote in an effect that depends on this callback,
+  // so a fresh function each render would restart the timer on every unrelated re-render.
+  const patch = useCallback((update: Partial<WizardState>) => {
     setState((prev) => ({ ...prev, ...update }));
     setError('');
-  }
+  }, []);
 
   useEffect(() => {
     loadPayoutStatus();
@@ -2109,6 +2156,7 @@ function PublishRideWizard() {
           setState(prev => ({
             ...prev,
             recommendation: rec,
+            quote: rec.quote ?? null,
             basePricePerSeat: prev.basePricePerSeat || rec.recommendedPrice,
           }));
         } catch {
