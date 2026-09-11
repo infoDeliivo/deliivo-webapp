@@ -1078,6 +1078,18 @@ export const bookingsApi = {
       method: 'POST',
     });
   },
+
+  /**
+   * Hands back a payable client secret for a booking the rider never finished paying for.
+   *
+   * The secret is only returned when the booking is created, so after a reload there is no way
+   * back into checkout without this. Restarts the payment window server-side.
+   */
+  resumePayment(id: string) {
+    return apiFetch<{ data: Booking }>(`/api/v1/bookings/${id}/payment/resume`, {
+      method: 'POST',
+    });
+  },
 };
 
 // Driver Booking API (accept/reject/OTP)
@@ -3114,6 +3126,8 @@ export interface Booking {
     clientSecret?: string;
     currency?: string;
   } | null;
+  /** True when the backend handed back an existing unpaid booking instead of creating one. */
+  resumed?: boolean;
   ride?: {
     id: string;
     originAddress: string;

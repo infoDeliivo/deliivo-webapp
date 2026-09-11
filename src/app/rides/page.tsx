@@ -32,6 +32,7 @@ const STATUS_CONFIG: Record<string, { labelKey: string; className: string }> = {
   CONFIRMED: { labelKey: 'rides.confirmed', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   PAYMENT_PENDING: { labelKey: 'rides.pending', className: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
   PAYMENT_FAILED: { labelKey: 'rides.paymentFailed', className: 'bg-red-50 text-red-700 border border-red-200' },
+  RIDE_FULL_REFUNDED: { labelKey: 'rides.rideFullRefunded', className: 'bg-red-50 text-red-700 border border-red-200' },
   DRIVER_PENDING: { labelKey: 'rides.pending', className: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
   PUBLISHED: { labelKey: 'rides.upcoming', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   SCHEDULED: { labelKey: 'rides.upcoming', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
@@ -61,7 +62,7 @@ const BOOKING_VIEW_FILTERS: Array<{
   { id: 'active', labelKey: 'rides.active', statuses: ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'] },
   { id: 'pending', labelKey: 'rides.pending', statuses: ['PAYMENT_PENDING', 'DRIVER_PENDING'] },
   { id: 'completed', labelKey: 'rides.completed', statuses: ['COMPLETED'] },
-  { id: 'cancelled', labelKey: 'rides.cancelled', statuses: ['CANCELLED', 'PAYMENT_FAILED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DISPUTED'] },
+  { id: 'cancelled', labelKey: 'rides.cancelled', statuses: ['CANCELLED', 'PAYMENT_FAILED', 'RIDE_FULL_REFUNDED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DISPUTED'] },
 ];
 
 const PUBLISHED_VIEW_FILTERS: Array<{

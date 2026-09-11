@@ -1002,15 +1002,35 @@ function RideDetailContent() {
       }
     } catch (err: unknown) {
       const message = getApiErrorMessage(err, t('rideDetail.bookingFailed'));
-      setBookError(message.includes('TOS_NOT_ACCEPTED')
-        ? t('rideDetail.mustAcceptTerms')
-        : message);
+      const readable = bookingErrorMessage(message, t('rideDetail.bookingFailed'));
+      setBookError(readable);
       setPaymentMessage('');
       pushEvent('payment_failed', { error_message: message, stage: 'book' });
-      showError(t('rideDetail.bookingFailed'), message);
+      showError(t('rideDetail.bookingFailed'), readable);
     } finally {
       setBooking(false);
     }
+  }
+
+  /**
+   * Turns a booking-payment error code into something a rider can act on.
+   *
+   * The backend answers the payment endpoints with typed codes rather than prose, so anything not
+   * translated here would surface to the rider as raw upper-case text.
+   */
+  function bookingErrorMessage(message: string, fallback: string) {
+    if (message.includes('TOS_NOT_ACCEPTED')) return t('rideDetail.mustAcceptTerms');
+    if (message.includes('BOOKING_PRICE_CHANGED')) return t('rideDetail.priceChangedRetry');
+    if (message.includes('PAYMENT_VERIFICATION_UNAVAILABLE')) return t('rideDetail.paymentVerificationUnavailable');
+    if (message.includes('BOOKING_ALREADY_EXISTS')) return t('rideDetail.bookingAlreadyExists');
+    if (message.includes('PAYMENT_CANCELLED')) return t('rideDetail.paymentCancelledRebook');
+    if (message.includes('BOOKING_NOT_PAYABLE') || message.includes('PAYMENT_NOT_INITIALIZED')) {
+      return t('rideDetail.bookingNotPayable');
+    }
+    if (message.includes('INSUFFICIENT_SEATS') || message.includes('RIDE_FULL')) {
+      return t('rideDetail.rideFilledUpRefund');
+    }
+    return message || fallback;
   }
 
   async function handleRetryPayment() {
@@ -1019,17 +1039,35 @@ function RideDetailContent() {
     setBookError('');
     setPaymentMessage('');
     try {
-      const confirmedBooking = await confirmStripeBookingPayment(myBooking);
+      // The client secret only comes back when the booking is created, so after a reload this
+      // booking has none. Resume asks the backend for a payable one and restarts the payment window.
+      let payable = myBooking;
+      if (!payable.payment?.clientSecret) {
+        setPaymentMessage(t('rideDetail.resumingPayment'));
+        const resumed = await bookingsApi.resumePayment(payable.id);
+        payable = resumed.data;
+        setMyBooking(payable);
+      }
+
+      if (!payable.payment?.clientSecret) {
+        // Already settled while the rider was away: nothing left to pay.
+        await loadMyBooking();
+        showSuccess(t('rideDetail.paymentConfirmed'), t('rideDetail.requestWaitingDriverConfirmation'));
+        return;
+      }
+
+      const confirmedBooking = await confirmStripeBookingPayment(payable);
       setMyBooking(confirmedBooking);
       pushEvent('payment_retry', { outcome: 'success' });
       showSuccess(t('rideDetail.paymentConfirmed'), t('rideDetail.requestWaitingDriverConfirmation'));
     } catch (err: unknown) {
       const message = getApiErrorMessage(err, t('rideDetail.paymentFailed'));
-      setBookError(message);
+      const readable = bookingErrorMessage(message, t('rideDetail.paymentFailed'));
+      setBookError(readable);
       setPaymentMessage('');
       pushEvent('payment_retry', { outcome: 'failure' });
       pushEvent('payment_failed', { error_message: message, stage: 'retry' });
-      showError(t('rideDetail.paymentFailed'), message);
+      showError(t('rideDetail.paymentFailed'), readable);
     } finally {
       setBooking(false);
     }
@@ -2082,7 +2120,7 @@ function RideDetailContent() {
                     {t('rideDetail.paymentNeedsConfirmationCopy')}
                   </p>
                 </div>
-                {myBooking.payment?.clientSecret && isStripeConfigured() && paymentMethods.length > 0 && (
+                {isStripeConfigured() && paymentMethods.length > 0 && (
                   <div className="space-y-2">
                     <select
                       value={selectedPaymentMethodId}
@@ -2105,7 +2143,7 @@ function RideDetailContent() {
                     </button>
                   </div>
                 )}
-                {myBooking.payment?.clientSecret && isStripeConfigured() && paymentMethods.length === 0 && (
+                {isStripeConfigured() && paymentMethods.length === 0 && (
                   <RideAddPaymentMethodForm
                     onSaved={(method) => {
                       loadPaymentMethods(method.id);
