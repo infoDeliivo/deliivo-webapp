@@ -29,7 +29,7 @@ import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import EmergencySosButton from '@/components/EmergencySosButton';
 import SupportOverrideCard from '@/components/SupportOverrideCard';
 import FlowGuide, { FlowGuideStep } from '@/components/FlowGuide';
-import { authApi, searchRidesApi, bookingsApi, rideOpsApi, ratingsApi, trackingApi, disputesApi, paymentMethodsApi, RideDetails, PricePreview, Booking, TrackingLink, Dispute, PaymentMethod, formatBookingReference, getApiErrorMessage } from '@/lib/api';
+import { authApi, searchRidesApi, bookingsApi, rideOpsApi, ratingsApi, trackingApi, disputesApi, paymentMethodsApi, RideDetails, PricePreview, Booking, TrackingLink, Dispute, PaymentMethod, OVERRIDE_REASON_MIN_LENGTH, formatBookingReference, getApiErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { emitSocketEvent, getSocket, onSocketEvent, LocationUpdate, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
 import { isStripeConfigured, StripeProvider } from '@/lib/stripe';
@@ -370,7 +370,8 @@ function RideDetailContent() {
     { value: 'TWENTY_FOUR_HOURS', label: t('rideDetail.expiryTwentyFourHours') },
     { value: 'BEFORE_DEPARTURE', label: t('rideDetail.expiryBeforeDeparture') },
   ] as const;
-  const allowManualOverride = process.env.NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE === 'true';
+  // The API only accepts a forced step while the ride is actually running.
+  const overrideAvailable = ride?.status === 'IN_PROGRESS';
   const childSeatControlsEnabled = Boolean(ride?.childSeatAvailable);
 
   useEffect(() => {
@@ -818,11 +819,27 @@ function RideDetailContent() {
     }
   }
 
+  /**
+   * Returns a reason the API will accept, or null when the rider backs out. The
+   * server refuses a forced action without at least a few words.
+   */
   function promptManualOverride(title: string, body: string) {
     if (typeof window === 'undefined') return null;
-    const reason = window.prompt(`${title}\n${body}\n\nEnter a short reason for the override:`, '');
-    if (reason === null) return null;
-    return reason.trim();
+
+    let prefill = '';
+    for (;;) {
+      const answer = window.prompt(
+        `${title}\n${body}\n\nEnter a reason for the override (at least ${OVERRIDE_REASON_MIN_LENGTH} characters):`,
+        prefill,
+      );
+      if (answer === null) return null;
+
+      const reason = answer.trim();
+      if (reason.length >= OVERRIDE_REASON_MIN_LENGTH) return reason;
+
+      prefill = reason;
+      window.alert(`Please write at least ${OVERRIDE_REASON_MIN_LENGTH} characters so the override can be reviewed.`);
+    }
   }
 
   async function handleManualRideReview(reason: string) {
@@ -1949,9 +1966,9 @@ function RideDetailContent() {
                     <p className="mt-1 text-xs text-amber-900">
                       Use these when the booking is blocked but the ride should continue. Each action carries a reason into the dispute evidence.
                     </p>
-                    {!allowManualOverride && (
-                      <p className="mt-1 break-all text-[11px] font-medium text-amber-800">
-                        Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
+                    {!overrideAvailable && (
+                      <p className="mt-1 text-[11px] font-medium text-amber-800">
+                        The drop-off override is available once the ride is in progress.
                       </p>
                     )}
                   </div>
@@ -1960,7 +1977,6 @@ function RideDetailContent() {
                   <button
                     type="button"
                     onClick={() => handleManualRideReview('OTP_ISSUE')}
-                    disabled={!allowManualOverride}
                     className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
                   >
                     Report OTP issue
@@ -1976,7 +1992,7 @@ function RideDetailContent() {
                       if (reason === null) return;
                       setRiderActionLoading(true);
                       try {
-                        await rideOpsApi.riderConfirmDropoff(myBooking.id, reason || undefined);
+                        await rideOpsApi.riderConfirmDropoff(myBooking.id, reason);
                         await loadMyBooking();
                         await loadRide();
                       } catch (err: unknown) {
@@ -1985,7 +2001,7 @@ function RideDetailContent() {
                         setRiderActionLoading(false);
                       }
                     }}
-                    disabled={!allowManualOverride}
+                    disabled={!overrideAvailable || riderActionLoading}
                     className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
                   >
                     Manual drop-off confirm

@@ -1093,6 +1093,16 @@ export const bookingsApi = {
 };
 
 // Driver Booking API (accept/reject/OTP)
+
+/** An overridden OTP check sends the reason instead of a code. */
+function buildOtpBody(otp?: string, overrideReason?: string) {
+  const reason = overrideReason?.trim();
+  return {
+    ...(otp ? { otp } : {}),
+    ...(reason ? { force: true, overrideReason: reason } : {}),
+  };
+}
+
 export const driverBookingApi = {
   accept(bookingId: string) {
     return apiFetch<{ data: DriverBookingResult }>(`/api/v1/driver/bookings/${bookingId}/accept`, { method: 'POST' });
@@ -1104,24 +1114,44 @@ export const driverBookingApi = {
       ...(body ? { body } : {}),
     });
   },
-  verifyPickupOtp(bookingId: string, otp: string) {
+  verifyPickupOtp(bookingId: string, otp?: string, overrideReason?: string) {
     return apiFetch<{ data: DriverBookingResult }>(`/api/v1/driver/bookings/${bookingId}/pickup-otp/verify`, {
-      method: 'POST', body: JSON.stringify({ otp }),
+      method: 'POST', body: JSON.stringify(buildOtpBody(otp, overrideReason)),
     });
   },
-  verifyDropOtp(bookingId: string, otp: string) {
+  verifyDropOtp(bookingId: string, otp?: string, overrideReason?: string) {
     return apiFetch<{ data: DriverBookingResult }>(`/api/v1/driver/bookings/${bookingId}/drop-otp/verify`, {
-      method: 'POST', body: JSON.stringify({ otp }),
+      method: 'POST', body: JSON.stringify(buildOtpBody(otp, overrideReason)),
     });
   },
 };
 
 // Ride Operations API (start/finish/location)
+
+/** Shortest reason the API accepts alongside `force: true`. */
+export const OVERRIDE_REASON_MIN_LENGTH = 5;
+
+/**
+ * What the API reports back about a forced step, so the driver can see exactly
+ * which guards their override skipped.
+ */
+export type ForceResult = {
+  forced?: boolean;
+  overrideReason?: string | null;
+  skippedChecks?: string[];
+};
+
+/**
+ * A reason on its own is only a note. `force: true` is what pushes the step past
+ * a guard, and the API refuses it without a reason — so the two travel together.
+ */
 function createEventMeta(overrides?: { overrideReason?: string }) {
+  const overrideReason = overrides?.overrideReason?.trim();
+
   return {
     actionId: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     clientTimestamp: new Date().toISOString(),
-    ...(overrides?.overrideReason ? { overrideReason: overrides.overrideReason } : {}),
+    ...(overrideReason ? { force: true, overrideReason } : {}),
   };
 }
 
@@ -1133,18 +1163,20 @@ function createEventMetaWithLocation(lat?: number, lng?: number, overrides?: { o
 }
 
 export const rideOpsApi = {
-  syncOfflineActions(actions: Array<{ actionId: string; eventType: string; rideId: string; bookingId?: string; lat?: number; lng?: number; clientTimestamp: string; overrideReason: string }>) {
+  syncOfflineActions(actions: Array<{ actionId: string; eventType: string; rideId: string; bookingId?: string; lat?: number; lng?: number; clientTimestamp: string; force?: boolean; overrideReason: string }>) {
     return apiFetch<{ data: { processed: number; duplicates: number; results: Array<{ actionId: string; status: 'processed' | 'duplicate' | 'error'; error?: string }> } }>('/api/v1/rides/offline-sync', {
       method: 'POST', body: JSON.stringify({ actions }),
     });
   },
-  startRide(rideId: string, overrideReason?: string) {
+  // Starting a ride cannot be forced: the ride is not in progress yet, so the
+  // departure window and the state transition always apply.
+  startRide(rideId: string) {
     return apiFetch<{ message: string }>(`/api/v1/rides/${rideId}/start`, {
-      method: 'POST', body: JSON.stringify(createEventMeta({ overrideReason })),
+      method: 'POST', body: JSON.stringify(createEventMeta()),
     });
   },
   finishRide(rideId: string, overrideReason?: string) {
-    return apiFetch<{ message: string }>(`/api/v1/rides/${rideId}/finish`, {
+    return apiFetch<{ message: string; data?: ForceResult }>(`/api/v1/rides/${rideId}/finish`, {
       method: 'POST', body: JSON.stringify(createEventMeta({ overrideReason })),
     });
   },
@@ -1157,18 +1189,19 @@ export const rideOpsApi = {
     return apiFetch<{ data: LocationUpdateRecord | null }>(`/api/v1/rides/${rideId}/latest-location`);
   },
   driverArrived(bookingId: string, lat?: number, lng?: number, overrideReason?: string) {
-    return apiFetch(`/api/v1/bookings/${bookingId}/driver-arrived`, {
+    return apiFetch<{ data?: ForceResult }>(`/api/v1/bookings/${bookingId}/driver-arrived`, {
       method: 'POST', body: JSON.stringify(createEventMetaWithLocation(lat, lng, { overrideReason })),
     });
   },
   markNoShow(bookingId: string, lat?: number, lng?: number, overrideReason?: string) {
-    return apiFetch(`/api/v1/bookings/${bookingId}/mark-no-show`, {
+    return apiFetch<{ data?: ForceResult }>(`/api/v1/bookings/${bookingId}/mark-no-show`, {
       method: 'POST', body: JSON.stringify(createEventMetaWithLocation(lat, lng, { overrideReason })),
     });
   },
-  verifyPickupOtp(bookingId: string, otp: string, overrideReason?: string) {
-    return apiFetch(`/api/v1/bookings/${bookingId}/verify-pickup-otp`, {
-      method: 'POST', body: JSON.stringify({ otp, ...createEventMeta({ overrideReason }) }),
+  /** `otp` is omitted when forcing — an override has no code to send. */
+  verifyPickupOtp(bookingId: string, otp?: string, overrideReason?: string) {
+    return apiFetch<{ data?: ForceResult }>(`/api/v1/bookings/${bookingId}/verify-pickup-otp`, {
+      method: 'POST', body: JSON.stringify({ ...(otp ? { otp } : {}), ...createEventMeta({ overrideReason }) }),
     });
   },
   riderArrivedAtPickup(bookingId: string, lat?: number, lng?: number, overrideReason?: string) {
@@ -1182,12 +1215,12 @@ export const rideOpsApi = {
     });
   },
   confirmDropoff(bookingId: string, lat?: number, lng?: number, overrideReason?: string) {
-    return apiFetch(`/api/v1/bookings/${bookingId}/confirm-dropoff`, {
+    return apiFetch<{ data?: ForceResult }>(`/api/v1/bookings/${bookingId}/confirm-dropoff`, {
       method: 'POST', body: JSON.stringify(createEventMetaWithLocation(lat, lng, { overrideReason })),
     });
   },
   riderConfirmDropoff(bookingId: string, overrideReason?: string) {
-    return apiFetch(`/api/v1/bookings/${bookingId}/rider-confirm-dropoff`, {
+    return apiFetch<{ data?: ForceResult }>(`/api/v1/bookings/${bookingId}/rider-confirm-dropoff`, {
       method: 'POST', body: JSON.stringify(createEventMeta({ overrideReason })),
     });
   },
@@ -1348,7 +1381,7 @@ export const safetyApi = {
 };
 
 // Live operations types
-export interface DriverBookingResult {
+export interface DriverBookingResult extends ForceResult {
   bookingId: string;
   rideId: string;
   passengerId: string;
@@ -3341,6 +3374,11 @@ export interface PublishedRide {
   departureTime: string;
   totalSeats: number;
   availableSeats: number;
+  /**
+   * Seats actually sold. Not `totalSeats - availableSeats`: availableSeats is peak
+   * occupancy across the ride's segments, so bookings on disjoint legs do not move it.
+   */
+  bookedSeats?: number;
   basePricePerSeat: number;
   currency: string;
   status: string;
@@ -3361,6 +3399,8 @@ export interface DriverRideBooking {
   passengerId: string;
   passenger?: { id: string; firstName: string | null; avatarUrl: string | null };
   seatsBooked: number;
+  /** Set while this booking holds its seats; null once they are released. */
+  seatsReservedAt?: string | null;
   totalPrice: number;
   status: string;
   displayStatus?: string;

@@ -352,7 +352,7 @@ function PublishedRideCard({ ride }: { ride: PublishedRide }) {
 
       <div className="flex items-center justify-between pt-3 border-t border-gray-50 gap-3">
         <span className="flex items-center gap-1 text-xs text-gray-500">
-          <Users className="w-3.5 h-3.5" /> {t('ride.seatsBooked', { booked: ride.totalSeats - ride.availableSeats, total: ride.totalSeats })}
+          <Users className="w-3.5 h-3.5" /> {t('ride.seatsBooked', { booked: ride.bookedSeats ?? (ride.totalSeats - ride.availableSeats), total: ride.totalSeats })}
         </span>
         <span className="text-sm font-bold text-deliivo-orange">
           {ride.currency} {ride.basePricePerSeat.toFixed(2)}/seat

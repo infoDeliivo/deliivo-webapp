@@ -10,6 +10,8 @@ export type RecoveryAction = {
   lat?: number;
   lng?: number;
   clientTimestamp: string;
+  /** A queued action always replays as an override — the guards it would hit describe now, not when the driver acted. */
+  force: true;
   overrideReason: string;
 };
 
@@ -33,9 +35,10 @@ export function isRecoverableServerFailure(error: unknown) {
     || (error instanceof ApiError && (error.status === 0 || error.status >= 500));
 }
 
-export function enqueueRecoveryAction(input: Omit<RecoveryAction, 'actionId' | 'clientTimestamp'>) {
+export function enqueueRecoveryAction(input: Omit<RecoveryAction, 'actionId' | 'clientTimestamp' | 'force'>) {
   const action: RecoveryAction = {
     ...input,
+    force: true,
     actionId: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     clientTimestamp: new Date().toISOString(),
   };

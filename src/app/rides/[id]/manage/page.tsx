@@ -28,7 +28,7 @@ import {
 import ProtectedRoute from '@/components/ProtectedRoute';
 import EmergencySosButton from '@/components/EmergencySosButton';
 import SupportOverrideCard from '@/components/SupportOverrideCard';
-import { driverBookingApi, rideOpsApi, publishRideApi, disputesApi, ratingsApi, trackingApi, DriverPublishedRide, DriverRideBooking, TrackingLink, formatBookingReference, getApiErrorMessage } from '@/lib/api';
+import { driverBookingApi, rideOpsApi, publishRideApi, disputesApi, ratingsApi, trackingApi, DriverPublishedRide, DriverRideBooking, TrackingLink, ForceResult, OVERRIDE_REASON_MIN_LENGTH, formatBookingReference, getApiErrorMessage } from '@/lib/api';
 import { formatMoney } from '@/lib/money';
 import { getSocket, emitSocketEvent, onSocketEvent, LocationUpdate, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
 import { useAuth } from '@/lib/auth-context';
@@ -56,7 +56,8 @@ const [error, setError] = useState('');
   const [confirmRideAction, setConfirmRideAction] = useState<null | 'start' | 'finish'>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const allowRideSimulation = process.env.NEXT_PUBLIC_ALLOW_RIDE_SIMULATION === 'true';
-  const allowManualOverride = process.env.NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE === 'true';
+  // The API only accepts a forced step while the ride is actually running.
+  const overrideAvailable = phase === 'in_progress';
   const [devBusy, setDevBusy] = useState<string | null>(null);
 
   useEffect(() => {
@@ -266,22 +267,15 @@ const [error, setError] = useState('');
     }
   }
 
-  async function performStartRide(overrideReason?: string) {
+  async function performStartRide() {
     setActionLoading('start');
     try {
-      await rideOpsApi.startRide(id, overrideReason || undefined);
+      await rideOpsApi.startRide(id);
       setPhase('in_progress');
       if (ride) setRide({ ...ride, status: 'IN_PROGRESS' });
       await loadData();
       showSuccess(t('manageRide.rideStarted'), t('manageRide.rideStartedCopy'));
     } catch (err: unknown) {
-      if (overrideReason && isRecoverableServerFailure(err)) {
-        enqueueRecoveryAction({ eventType: 'MANUAL_START_RIDE', rideId: id, overrideReason });
-        setPhase('in_progress');
-        setRide((current) => current ? { ...current, status: 'IN_PROGRESS' } : current);
-        showSuccess('Saved offline', 'The manual start is saved on this device and will be reconciled when the server is available.');
-        return;
-      }
       const message = getApiErrorMessage(err, t('manageRide.failedStartRide'));
       setError(message);
       showError(t('manageRide.couldNotStartRide'), message);
@@ -293,11 +287,11 @@ const [error, setError] = useState('');
   async function performFinishRide(overrideReason?: string) {
     setActionLoading('finish');
     try {
-      await rideOpsApi.finishRide(id, overrideReason || undefined);
+      const result = await rideOpsApi.finishRide(id, overrideReason || undefined);
       setPhase('completed');
       if (ride) setRide({ ...ride, status: 'COMPLETED' });
       await loadData();
-      showSuccess(t('manageRide.rideFinished'), t('manageRide.rideFinishedCopy'));
+      showSuccess(t('manageRide.rideFinished'), describeOverride(result) ?? t('manageRide.rideFinishedCopy'));
     } catch (err: unknown) {
       if (overrideReason && isRecoverableServerFailure(err)) {
         enqueueRecoveryAction({ eventType: 'MANUAL_FINISH_RIDE', rideId: id, overrideReason });
@@ -320,12 +314,6 @@ const [error, setError] = useState('');
 
   function handleFinishRide() {
     setConfirmRideAction('finish');
-  }
-
-  async function handleManualStartRide() {
-    const overrideReason = promptManualOverride('Start ride manually', 'Use only when the ride should start but the normal guard is blocking progress.');
-    if (overrideReason === null) return;
-    await performStartRide(overrideReason || undefined);
   }
 
   async function handleManualFinishRide() {
@@ -431,13 +419,13 @@ const [error, setError] = useState('');
     setActionLoading(`arrived-${bookingId}`);
     try {
       const location = driverLocation || getBookingPoint(booking, 'pickup');
-        await rideOpsApi.driverArrived(bookingId, location?.lat, location?.lng, overrideReason);
+      const result = await rideOpsApi.driverArrived(bookingId, location?.lat, location?.lng, overrideReason);
       if (location?.lat != null && location?.lng != null) {
         setDriverLocation({ lat: location.lat, lng: location.lng });
       }
       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'DRIVER_ARRIVED' } : b));
       await loadData();
-      showSuccess(t('manageRide.arrivalMarked'), t('manageRide.arrivalMarkedCopy'));
+      showSuccess(t('manageRide.arrivalMarked'), describeOverride(result) ?? t('manageRide.arrivalMarkedCopy'));
     } catch (err: unknown) {
       if (overrideReason && isRecoverableServerFailure(err)) {
         const location = driverLocation || getBookingPoint(booking, 'pickup');
@@ -457,10 +445,10 @@ const [error, setError] = useState('');
   async function handleMarkNoShow(bookingId: string, overrideReason?: string) {
     setActionLoading(`noshow-${bookingId}`);
     try {
-        await rideOpsApi.markNoShow(bookingId, driverLocation?.lat, driverLocation?.lng, overrideReason);
+      const result = await rideOpsApi.markNoShow(bookingId, driverLocation?.lat, driverLocation?.lng, overrideReason);
       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'NO_SHOW' } : b));
       await loadData();
-      showSuccess(t('manageRide.noShowMarked'), t('manageRide.noShowMarkedCopy'));
+      showSuccess(t('manageRide.noShowMarked'), describeOverride(result) ?? t('manageRide.noShowMarkedCopy'));
     } catch (err: unknown) {
       const message = getApiErrorMessage(err, t('manageRide.failedMarkNoShow'));
       setError(message);
@@ -551,10 +539,10 @@ const [error, setError] = useState('');
     setActionLoading(`dropoff-${bookingId}`);
     try {
       const point = getBookingPoint(booking, 'dropoff');
-        await rideOpsApi.confirmDropoff(bookingId, point?.lat, point?.lng, overrideReason);
+      const result = await rideOpsApi.confirmDropoff(bookingId, point?.lat, point?.lng, overrideReason);
       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'DROP_PENDING' } : b));
       await loadData();
-      showSuccess(t('manageRide.dropoffMarked'), t('manageRide.dropoffMarkedCopy'));
+      showSuccess(t('manageRide.dropoffMarked'), describeOverride(result) ?? t('manageRide.dropoffMarkedCopy'));
     } catch (err: unknown) {
       if (overrideReason && isRecoverableServerFailure(err)) {
         const point = getBookingPoint(booking, 'dropoff');
@@ -610,7 +598,11 @@ const [error, setError] = useState('');
   ].includes(b.status));
   const pickupOtpBookings = confirmedBookings.filter(b => ['WAITING_FOR_PICKUP', 'DRIVER_ARRIVED'].includes(b.status));
   const requestCount = pendingBookings.length;
-  const passengerCount = confirmedBookings.length;
+  // Seats sold, not rows and not totalSeats - availableSeats: availableSeats is peak
+  // occupancy across the ride's segments, so a segment booking on a quieter leg never
+  // moves it. The backend sends the sum; the reduce is the fallback for an older API.
+  const bookedSeatCount = ride.bookedSeats
+    ?? bookings.reduce((total, b) => total + (b.seatsReservedAt ? (b.seatsBooked ?? 0) : 0), 0);
   const departureDate = new Date(ride.departureDate);
   const [departureHour, departureMinute] = ride.departureTime.split(':').map(Number);
   const departureAt = Date.UTC(
@@ -674,8 +666,8 @@ const [error, setError] = useState('');
                 <p className="text-sm font-semibold text-deliivo-dark">{requestCount}</p>
               </div>
               <div className="rounded-xl bg-gray-50 px-3 py-2">
-                <p className="text-[11px] text-deliivo-gray">{t('manageRide.passengers')}</p>
-                <p className="text-sm font-semibold text-deliivo-dark">{passengerCount}</p>
+                <p className="text-[11px] text-deliivo-gray">{t('manageRide.seatsBooked')}</p>
+                <p className="text-sm font-semibold text-deliivo-dark">{bookedSeatCount}</p>
               </div>
               <div className="rounded-xl bg-gray-50 px-3 py-2">
                 <p className="text-[11px] text-deliivo-gray">{t('manageRide.status')}</p>
@@ -1015,19 +1007,16 @@ const [error, setError] = useState('');
                     <div>
                       <h3 className="text-sm font-semibold text-amber-950">Manual recovery</h3>
                       <p className="mt-1 text-xs text-amber-900">
-                        Use these only when the normal ride-day control is blocked. Every action is written into the dispute evidence trail.
+                        Use these only when the normal ride-day control is blocked. Each one asks for a written reason, tells the rider what you overrode, and goes to support for review.
                       </p>
-                      {!allowManualOverride && (
-                        <p className="mt-1 break-all text-[11px] font-medium text-amber-800">
-                          Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
+                      {!overrideAvailable && (
+                        <p className="mt-1 text-[11px] font-medium text-amber-800">
+                          Available once the ride is in progress. Starting a ride cannot be overridden.
                         </p>
                       )}
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" onClick={handleManualStartRide} disabled={!allowManualOverride || !startWindowOpen} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
-                      Manual start ride
-                    </button>
                     <button
                       type="button"
                       onClick={async () => {
@@ -1037,8 +1026,9 @@ const [error, setError] = useState('');
                         if (overrideReason === null) return;
                         setActionLoading(`manual-pickup-${target.id}`);
                         try {
-                          await rideOpsApi.verifyPickupOtp(target.id, '000000', overrideReason || undefined);
+                          const result = await rideOpsApi.verifyPickupOtp(target.id, undefined, overrideReason);
                           await loadData();
+                          showSuccess('Passenger onboarded', describeOverride(result) ?? 'Recorded for review.');
                         } catch (err: unknown) {
                           if (isRecoverableServerFailure(err)) {
                             enqueueRecoveryAction({ eventType: 'MANUAL_PICKUP_APPROVAL', rideId: id, bookingId: target.id, overrideReason: overrideReason || 'Manual pickup approval' });
@@ -1053,10 +1043,27 @@ const [error, setError] = useState('');
                           setActionLoading('');
                         }
                       }}
-                      disabled={Boolean(actionLoading) || !allowManualOverride}
+                      disabled={Boolean(actionLoading) || !overrideAvailable}
                       className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
                     >
                       Manual pickup approval
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const noShowCandidates = confirmedBookings.filter(
+                          (booking) => booking.status === 'DRIVER_ARRIVED' || booking.status === 'WAITING_FOR_PICKUP'
+                        );
+                        const target = selectManualOperationBooking(noShowCandidates, 'Manual no-show');
+                        if (!target) return;
+                        const overrideReason = promptManualOverride('Manual no-show', 'Use when the rider never turned up and the wait timer has not run out yet.');
+                        if (overrideReason === null) return;
+                        handleMarkNoShow(target.id, overrideReason);
+                      }}
+                      disabled={Boolean(actionLoading) || !overrideAvailable}
+                      className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                    >
+                      Manual no-show
                     </button>
                     <button
                       type="button"
@@ -1068,12 +1075,12 @@ const [error, setError] = useState('');
                         if (overrideReason === null) return;
                         handleConfirmDropoff(target, overrideReason);
                       }}
-                      disabled={!allowManualOverride}
+                      disabled={!overrideAvailable}
                       className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
                     >
                       Manual drop-off
                     </button>
-                    <button type="button" onClick={handleManualFinishRide} disabled={!allowManualOverride} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
+                    <button type="button" onClick={handleManualFinishRide} disabled={!overrideAvailable} className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40">
                       Manual finish ride
                     </button>
                   </div>
@@ -1540,11 +1547,59 @@ function formatCountdown(totalSeconds: number, t: (key: string, params?: Record<
   return t('manageRide.countdownSeconds', { seconds });
 }
 
+/** Guard codes the API reports back, in words a driver can read. */
+const SKIPPED_CHECK_LABELS: Record<string, string> = {
+  BOOKING_NOT_WAITING_FOR_PICKUP: 'the rider was not waiting for pickup',
+  BOOKING_NOT_READY_FOR_OTP: 'the booking was not ready for OTP',
+  BOOKING_NOT_AT_PICKUP: 'the booking was not at the pickup stage',
+  BOOKING_NOT_ONBOARD: 'the rider was not onboard',
+  BOOKING_NOT_DROP_PENDING: 'the drop-off was not awaiting confirmation',
+  PICKUP_OTP_NOT_AVAILABLE: 'no pickup OTP existed',
+  PICKUP_OTP_EXPIRED: 'the pickup OTP had expired',
+  INVALID_PICKUP_OTP: 'the OTP did not match',
+  INVALID_DROP_OTP: 'the drop-off OTP did not match',
+  DROP_OTP_EXPIRED: 'the drop-off OTP had expired',
+  DROP_OTP_NOT_AVAILABLE: 'no drop-off OTP existed',
+  OTP_ATTEMPT_LIMIT_EXCEEDED: 'the OTP attempt limit was reached',
+  INVALID_BOOKING_STATUS: 'the booking was in the wrong state',
+  WAIT_TIME_NOT_ELAPSED: 'the wait timer had not elapsed',
+  BOOKINGS_NOT_ALL_TERMINAL: 'some bookings were still open',
+  GEOFENCE_OUT_OF_RANGE: 'you were away from the meeting point',
+};
+
+/** Reads the force summary off a response so the driver sees what was overridden. */
+function describeOverride(result?: { data?: ForceResult } | ForceResult | null) {
+  const force = (result && 'data' in result ? result.data : result) as ForceResult | undefined;
+  if (!force?.forced) return undefined;
+
+  const checks = (force.skippedChecks ?? []).map((code) => SKIPPED_CHECK_LABELS[code] ?? code);
+  if (checks.length === 0) return 'Recorded as an override and sent for review.';
+
+  return `Overridden even though ${checks.join(', ')}. Recorded for review.`;
+}
+
+/**
+ * Returns a reason the API will accept, or null when the driver backs out.
+ * The server refuses a forced action without at least a few words, so asking
+ * again here beats a 400 after the fact.
+ */
 function promptManualOverride(title: string, body: string) {
   if (typeof window === 'undefined') return null;
-  const reason = window.prompt(`${title}\n${body}\n\nEnter a short reason for the override:`, '');
-  if (reason === null) return null;
-  return reason.trim();
+
+  let prefill = '';
+  for (;;) {
+    const answer = window.prompt(
+      `${title}\n${body}\n\nEnter a reason for the override (at least ${OVERRIDE_REASON_MIN_LENGTH} characters):`,
+      prefill,
+    );
+    if (answer === null) return null;
+
+    const reason = answer.trim();
+    if (reason.length >= OVERRIDE_REASON_MIN_LENGTH) return reason;
+
+    prefill = reason;
+    window.alert(`Please write at least ${OVERRIDE_REASON_MIN_LENGTH} characters so the override can be reviewed.`);
+  }
 }
 
 // ─── OTP Verification Section ─────────────────────────────────────────────────
