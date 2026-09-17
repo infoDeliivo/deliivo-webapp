@@ -28,6 +28,7 @@ import {
 import ProtectedRoute from '@/components/ProtectedRoute';
 import EmergencySosButton from '@/components/EmergencySosButton';
 import SupportOverrideCard from '@/components/SupportOverrideCard';
+import RideEarningsBreakdown from '@/components/RideEarningsBreakdown';
 import { driverBookingApi, rideOpsApi, publishRideApi, disputesApi, ratingsApi, trackingApi, DriverPublishedRide, DriverRideBooking, TrackingLink, ForceResult, OVERRIDE_REASON_MIN_LENGTH, formatBookingReference, getApiErrorMessage } from '@/lib/api';
 import { formatMoney } from '@/lib/money';
 import { getSocket, emitSocketEvent, onSocketEvent, LocationUpdate, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
@@ -680,6 +681,13 @@ const [error, setError] = useState('');
             </div>
           </div>
         </div>
+
+        {/* Driver price breakdown for this ride */}
+        <RideEarningsBreakdown
+          confirmedBookings={confirmedBookings}
+          pendingBookings={pendingBookings}
+          rideCurrency={ride.currency}
+        />
 
         {/* Pending booking requests */}
         {pendingBookings.length > 0 && (
