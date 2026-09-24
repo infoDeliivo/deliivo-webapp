@@ -870,7 +870,6 @@ const [error, setError] = useState('');
             </p>
             <div className="space-y-3">
               {confirmedBookings.map((booking) => {
-                const pickupOtp = (booking as unknown as { pickupOtp?: string }).pickupOtp;
                 const isWaiting = booking.status === 'WAITING_FOR_PICKUP';
                 const isArrived = booking.status === 'DRIVER_ARRIVED';
                 const isOnboard = booking.status === 'ONBOARD';
@@ -885,7 +884,6 @@ const [error, setError] = useState('');
                         </p>
                         <p className="text-xs text-deliivo-gray">
                           {t('manageRide.status')}: {booking.status}
-                          {pickupOtp ? ` | ${t('manageRide.pickupOtpShort')}: ${pickupOtp}` : ''}
                         </p>
                       </div>
                       <Sparkles className="h-4 w-4 text-deliivo-orange" />
