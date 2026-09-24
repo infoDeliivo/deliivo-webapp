@@ -20,10 +20,13 @@ import {
   Loader2,
   Pencil,
   Route,
+  Mail,
+  Phone,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { getApiErrorMessage, userApi, travelPreferencesApi, TravelPreference, UserFullProfile, validateImageFile, UPLOAD_ACCEPT, rewardsApi } from '@/lib/api';
-import type { RewardWallet } from '@/lib/api';
+import type { ContactMethod, RewardWallet } from '@/lib/api';
+import ContactVerifyForm from '@/components/contact/ContactVerifyForm';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { showError, showSuccess } from '@/lib/app-feedback';
@@ -76,6 +79,9 @@ function ProfileContent() {
   // Avatar upload
   const [avatarUploading, setAvatarUploading] = useState(false);
 
+  // Add / change email or phone
+  const [editingContact, setEditingContact] = useState<ContactMethod | null>(null);
+
   useEffect(() => {
     travelPreferencesApi.get()
       .then((res) => setTravelPref(res.data))
@@ -115,6 +121,16 @@ function ProfileContent() {
     setProfileDob(formatDateInput(fullProfile?.user.dob || user?.dob || null));
     setProfileSalutation(user?.salutation || '');
     setProfileGender(user?.gender || '');
+  }
+
+  async function handleContactVerified() {
+    const method = editingContact;
+    setEditingContact(null);
+    await refreshUser();
+    userApi.getMyProfile()
+      .then((res) => setFullProfile(res.data))
+      .catch(() => {});
+    showSuccess(t(method === 'email' ? 'contact.emailSaved' : 'contact.phoneSaved'));
   }
 
   async function handleSaveProfile() {
@@ -221,7 +237,33 @@ function ProfileContent() {
               {t('profile.verified')}
             </span>
           )}
-          <p className="mt-2 text-sm text-deliivo-gray">{user?.email || user?.phone}</p>
+          <div className="mt-3 w-full space-y-2 text-left">
+            {([
+              { method: 'email', icon: Mail, value: user?.email, verified: user?.emailVerified },
+              { method: 'phone', icon: Phone, value: user?.phone, verified: user?.phoneVerified },
+            ] as const).map(({ method, icon: Icon, value, verified }) => (
+              <div key={method} className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2">
+                <Icon size={16} className="shrink-0 text-deliivo-gray" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-deliivo-gray">
+                    {t(method === 'email' ? 'contact.email' : 'contact.phone')}
+                  </p>
+                  <p className={`truncate text-sm ${value ? 'text-deliivo-dark' : 'text-deliivo-gray italic'}`}>
+                    {value || t('contact.notAdded')}
+                  </p>
+                </div>
+                {value && verified && (
+                  <CheckCircle size={14} className="shrink-0 text-green-600" aria-label={t('profile.verified')} />
+                )}
+                <button
+                  onClick={() => setEditingContact(method)}
+                  className="shrink-0 text-xs font-semibold text-deliivo-orange hover:underline"
+                >
+                  {value ? t('contact.change') : t('contact.add')}
+                </button>
+              </div>
+            ))}
+          </div>
           <div className="mt-4 grid w-full grid-cols-1 gap-2 text-center sm:grid-cols-3">
             <div className="rounded-xl bg-gray-50 px-2 py-2">
               <p className="text-xs font-semibold text-deliivo-dark">
@@ -263,6 +305,26 @@ function ProfileContent() {
 
         {/* Right: Settings */}
         <div className="space-y-6">
+          {/* Add / change email or phone */}
+          {editingContact && (
+            <section className="card">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-deliivo-gray">
+                  {t(
+                    editingContact === 'email'
+                      ? (user?.email ? 'contact.changeEmail' : 'contact.addEmail')
+                      : (user?.phone ? 'contact.changePhone' : 'contact.addPhone'),
+                  )}
+                </h3>
+                <button onClick={() => setEditingContact(null)} className="text-xs font-semibold text-deliivo-orange">{t('common.cancel')}</button>
+              </div>
+              {((editingContact === 'email' && user?.email) || (editingContact === 'phone' && user?.phone)) && (
+                <p className="mb-3 text-xs text-deliivo-gray">{t('contact.changeHint')}</p>
+              )}
+              <ContactVerifyForm key={editingContact} method={editingContact} onVerified={handleContactVerified} />
+            </section>
+          )}
+
           {/* Profile Edit Form */}
           {editingProfile && (
             <section className="card">

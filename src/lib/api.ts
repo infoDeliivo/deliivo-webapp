@@ -581,6 +581,22 @@ export const userApi = {
     });
   },
 
+  /** Send an OTP to an email/phone the user wants to add or switch to. `code` only comes back on staging. */
+  requestContactChange(data: { method: ContactMethod; identifier: string }) {
+    return apiFetch<{ data: { method: ContactMethod; identifier: string; code?: string } }>(
+      '/api/v1/users/me/contact/request',
+      { method: 'POST', body: JSON.stringify(data) },
+    );
+  },
+
+  /** Confirm the OTP; the value is saved as verified and the updated user comes back. */
+  verifyContactChange(data: { method: ContactMethod; identifier: string; code: string }) {
+    return apiFetch<{ data: UserProfile }>('/api/v1/users/me/contact/verify', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   async uploadAvatar(file: File) {
     const data = await uploadViaPresign<{ avatarUrl: string }>('avatar', file);
     return { data };
@@ -3440,10 +3456,14 @@ export interface DriverPublishedRide extends PublishedRide {
 }
 
 // Types
+export type ContactMethod = 'email' | 'phone';
+
 export interface UserProfile {
   id: string;
-  email?: string;
-  phone?: string;
+  email?: string | null;
+  phone?: string | null;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
   firstName?: string;
   lastName?: string;
   salutation?: string | null;
