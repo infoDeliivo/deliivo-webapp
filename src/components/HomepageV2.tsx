@@ -158,7 +158,6 @@ export default function HomepageV2() {
       <Navbar home />
       <main>
         <section className={styles.hero}>
-          <div className={styles.heroArt}><Image src="/suggested-banner-coverpage.png" alt="Travellers overlooking Tallinn at sunset" fill priority sizes="100vw" /></div>
           <div className={`${styles.container} ${styles.heroGrid}`}>
             <div className={styles.heroMain}>
               <p className={styles.eyebrow}>People. Places. A brighter tomorrow.</p>
@@ -169,6 +168,7 @@ export default function HomepageV2() {
                 <div><CreditCard /><p><strong>Secure payments</strong><span>Money stays safe</span></p></div>
                 <div><Users /><p><strong>Real people, real routes</strong><span>A shared way to travel</span></p></div>
               </div>
+              <div className={styles.heroArt}><Image src="/suggested-banner-coverpage.png" alt="Travellers overlooking Tallinn at sunset" fill priority sizes="(max-width: 799px) 100vw, (max-width: 1199px) 70vw, 1100px" /></div>
               <div className={styles.heroSearch}><SearchForm variant="landing" /></div>
               <div className={styles.searchBenefits}>
                 {[{ icon: Search, key: 'home.searchFree' }, { icon: CreditCard, key: 'home.securePayments' }, { icon: Navigation, key: 'home.liveRideTracking' }, { icon: Headphones, key: 'nav.support' }].map(({ icon: Icon, key }) => <span key={key}><Icon size={18} />{t(key)}</span>)}
