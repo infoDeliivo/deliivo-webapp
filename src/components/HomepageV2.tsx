@@ -101,7 +101,7 @@ export default function HomepageV2() {
       <Navbar />
       <main className="min-w-0 flex-1">
         <section className="relative isolate overflow-hidden border-b border-orange-100/70 bg-[#fffaf5]">
-          <Image src="/baltic-hero-v2.png" alt="A car travelling toward a Baltic old-town skyline" fill priority sizes="100vw" className="-z-20 object-cover object-[66%_center] opacity-55 sm:opacity-70 lg:opacity-100" />
+          <Image src="/suggested-banner-coverpage.png" alt="Travellers overlooking Tallinn's old town at sunset" fill priority sizes="100vw" className="-z-20 object-cover object-[70%_center] opacity-55 sm:opacity-70 lg:opacity-100" />
           <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#fffaf5] via-[#fffaf5]/95 to-[#fffaf5]/10 lg:via-[#fffaf5]/76" />
           <div className="mx-auto grid max-w-7xl gap-6 px-4 pb-6 pt-6 sm:px-6 sm:pb-10 sm:pt-10 lg:px-8 lg:pt-12 xl:grid-cols-[minmax(0,1fr)_20rem]">
             <div className="min-w-0">
