@@ -3,12 +3,15 @@ import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import RideRequestLayout from '@/components/RideRequestLayout';
+import RideRequestConsent, { acceptRideRequestConsent } from '@/components/RideRequestConsent';
+import { useAuth } from '@/lib/auth-context';
 import RequestPlaceField from '@/components/RequestPlaceField';
 import { rideRequestsApi } from '@/lib/ride-requests';
 import { getApiErrorMessage } from '@/lib/api';
 
 function CreateRequest() {
   const router = useRouter();
+  const { user, refreshUser } = useAuth();
   const [origin, setOrigin] = useState({ id: '', address: '' }),
     [destination, setDestination] = useState({ id: '', address: '' });
   const [busy, setBusy] = useState(false),
@@ -23,6 +26,8 @@ function CreateRequest() {
     const data = new FormData(event.currentTarget);
     setBusy(true);
     try {
+      await acceptRideRequestConsent(user, data);
+      await refreshUser();
       const after = new Date(String(data.get('after'))).toISOString();
       const result = await rideRequestsApi.create({
         originPlaceId: origin.id,
@@ -144,6 +149,7 @@ function CreateRequest() {
           This is a shared ride request, not a private taxi booking. Other riders may join spare
           seats. The request closes 30 minutes before your earliest departure.
         </p>
+        <RideRequestConsent disabled={busy} />
         {error && (
           <p role="alert" className="text-red-600">
             {error}

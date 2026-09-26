@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
 import RideRequestLayout from '@/components/RideRequestLayout';
+import RideRequestConsent, { acceptRideRequestConsent } from '@/components/RideRequestConsent';
 import { StripeProvider, isStripeConfigured } from '@/lib/stripe';
 import { bookingsApi, vehicleApi, getApiErrorMessage, type Booking, type Vehicle } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
@@ -77,6 +78,7 @@ function Checkout({ booking, onComplete }: { booking: Booking; onComplete: () =>
 }
 
 function OfferForm({ request, onComplete }: { request: RideRequest; onComplete: () => void }) {
+  const { user, refreshUser } = useAuth();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
@@ -104,6 +106,8 @@ function OfferForm({ request, onComplete }: { request: RideRequest; onComplete: 
     setBusy(true);
     setError('');
     try {
+      await acceptRideRequestConsent(user, data);
+      await refreshUser();
       await rideRequestsApi.offer(request.id, {
         vehicleId: String(data.get('vehicle')),
         departureAt: new Date(String(data.get('departure'))).toISOString(),
@@ -194,6 +198,7 @@ function OfferForm({ request, onComplete }: { request: RideRequest; onComplete: 
         space. I agree to drive at this fare even if no additional riders join, and to open spare
         seats to others.
       </label>
+      <RideRequestConsent disabled={busy} />
       {error && (
         <p role="alert" className="text-red-600">
           {error}
