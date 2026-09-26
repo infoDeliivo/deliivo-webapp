@@ -17,6 +17,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import LoadFailureCard from '@/components/LoadFailureCard';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { rideRequestsEnabled } from '@/lib/ride-requests';
 import { bookingsApi, publishRideApi, Booking, PublishedRide, Pagination, getApiErrorMessage } from '@/lib/api';
 import { getSocket, onSocketEvent, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
 import { useAuth } from '@/lib/auth-context';
@@ -464,6 +465,7 @@ function RidesContent() {
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold text-deliivo-dark">{t('rides.myRides')}</h1>
+          {rideRequestsEnabled && <Link href="/ride-requests?view=mine" className="text-sm font-semibold text-deliivo-orange">My ride requests →</Link>}
         </div>
 
         <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-1.5 shadow-sm">

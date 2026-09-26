@@ -15,6 +15,7 @@ import { useTranslation } from '@/lib/i18n-context';
 import { useAuth } from '@/lib/auth-context';
 import { contentApi, searchRidesApi, type SearchRideResult } from '@/lib/api';
 import styles from './HomepageV2.module.css';
+import { rideRequestsEnabled } from '@/lib/ride-requests';
 
 const routes = [
   { from: 'Tallinn', to: 'Tartu', image: 'tallinn', copy: 'From the capital to the university city' },
@@ -172,6 +173,7 @@ export default function HomepageV2() {
               <p className={styles.heroNote} aria-hidden="true">Same roads<br />Brighter stories</p>
               <span className={styles.journeyTag} aria-hidden="true">Good<br />people<br />Great<br />journeys<Heart size={17} /></span>
               <div className={styles.heroSearch}><SearchForm variant="landing" /></div>
+              {rideRequestsEnabled && <Link href="/ride-requests/new" className="relative z-10 mt-3 inline-block rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-deliivo-orange shadow-sm">Cannot find a ride? Request one →</Link>}
               <div className={styles.searchBenefits}>
                 {[{ icon: Search, key: 'home.searchFree' }, { icon: CreditCard, key: 'home.securePayments' }, { icon: Navigation, key: 'home.liveRideTracking' }, { icon: Headphones, key: 'nav.support' }].map(({ icon: Icon, key }) => <span key={key}><Icon size={18} />{t(key)}</span>)}
               </div>

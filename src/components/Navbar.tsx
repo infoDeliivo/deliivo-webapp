@@ -9,6 +9,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useTranslation } from "@/lib/i18n-context";
 import { useNotificationStore } from "@/lib/notification-store";
 import BrandLogo from "@/components/BrandLogo";
+import { rideRequestsEnabled } from '@/lib/ride-requests';
 import { prefetchHref, useRoutePrefetch } from "@/lib/use-route-prefetch";
 
 export default function Navbar({ home = false }: { home?: boolean }) {
@@ -28,6 +29,7 @@ export default function Navbar({ home = false }: { home?: boolean }) {
   const rideLinks: NavLink[] = [
     { label: t('nav.searchRide'), href: "/search" },
     { label: t('nav.offerRide'), href: "/publish" },
+    ...(rideRequestsEnabled ? [{ label: 'Ride requests', href: '/ride-requests' }] : []),
   ];
   const publicLinks: NavLink[] = [
     ...rideLinks,

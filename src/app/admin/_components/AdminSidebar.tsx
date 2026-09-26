@@ -18,11 +18,13 @@ import {
   X,
 } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
+import { rideRequestsEnabled } from '@/lib/ride-requests'
 
 const navItems = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Users', href: '/admin/users', icon: Users },
   { label: 'Rides', href: '/admin/rides', icon: Car },
+  ...(rideRequestsEnabled ? [{ label: 'Ride requests', href: '/admin/ride-requests', icon: Car }] : []),
   { label: 'Vehicles', href: '/admin/vehicles', icon: BadgeCheck },
   { label: 'Licences', href: '/admin/dl-verification', icon: IdCard },
   { label: 'SOS', href: '/admin/sos', icon: Siren },

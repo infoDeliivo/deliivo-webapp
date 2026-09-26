@@ -33,6 +33,7 @@ import {
   RecentSearch,
 } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n-context';
+import { rideRequestsEnabled } from '@/lib/ride-requests';
 import { pushEvent, pushEcommerceEvent } from '@/lib/analytics';
 
 // ─── Place Input (reusable autocomplete) ──────────────────────────────────────
@@ -698,6 +699,14 @@ function SearchPageContent() {
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {rideRequestsEnabled && searched && !loading && visibleResults.length === 0 && (
+            <div className="mb-6 rounded-2xl border border-orange-100 bg-orange-50 p-5">
+              <h2 className="font-semibold">No suitable ride?</h2>
+              <p className="mt-1 text-sm text-gray-600">Post your travel plans and let drivers send you an offer.</p>
+              <Link href="/ride-requests/new" className="btn-primary mt-4 inline-flex">Request a ride</Link>
             </div>
           )}
 
