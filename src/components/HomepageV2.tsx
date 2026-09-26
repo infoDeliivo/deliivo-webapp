@@ -117,21 +117,21 @@ function AppUpdates() {
         <div className={`${styles.phone} ${styles.phoneFront}`}><span className={styles.notch} /><b>Deliivo</b><p>People. Places.<br />A brighter tomorrow.</p><Car size={36} /><span>More than<br />just a ride.</span></div>
       </div>
       <div className={styles.appCopy}>
-        <span className={styles.badge}>Stay in the loop</span>
-        <h2 id="app-title">Take Deliivo with you</h2>
-        <p>Get product news, mobile app updates and fresh ideas for your next journey.</p>
+        <span className={styles.badge}>Mobile app launching soon</span>
+        <h2 id="app-title">Your next ride.<br />Soon in your pocket.</h2>
+        <p>The Deliivo mobile app is on its way. Subscribe for launch news and updates. Until then, find and share rides right here on our website.</p>
         <form onSubmit={subscribe} className={styles.subscribe}>
           <label className="sr-only" htmlFor="home-updates-email">Your email address</label>
           <input id="home-updates-email" type="email" autoComplete="email" placeholder="Enter your email" required value={email} onChange={(event) => { setEmail(event.target.value); setStatus('idle'); }} disabled={status === 'saving' || status === 'saved'} />
           <button type="submit" disabled={status === 'saving' || status === 'saved'}>{status === 'saving' ? 'Subscribing...' : status === 'saved' ? 'Subscribed' : 'Notify me'}</button>
         </form>
-        <p className={styles.consent}>By subscribing, you agree to receive Deliivo news by email. Unsubscribe anytime. <Link href="/privacy">Privacy policy</Link>.</p>
+        <p className={styles.consent}>By subscribing, you agree to receive Deliivo news, including mobile app launch updates, by email. Unsubscribe anytime. <Link href="/privacy">Privacy policy</Link>.</p>
         <p role="status" className={styles.formStatus}>{status === 'saved' ? t('blog.newsletterSuccess') : status === 'error' ? t('blog.newsletterError') : ''}</p>
       </div>
       <div className={styles.appPerks}>
-        <div><span className={styles.iconDisc}><Bell /></span><p><strong>Be the first to know</strong><span>News straight to your inbox</span></p></div>
+        <div><span className={styles.iconDisc}><Bell /></span><p><strong>Stay updated on the launch</strong><span>App news straight to your inbox</span></p></div>
         <div><span className={styles.iconDisc}><MapPin /></span><p><strong>A little travel inspiration</strong><span>Discover your next destination</span></p></div>
-        <div><span className={styles.iconDisc}><Smartphone /></span><p><strong>Deliivo on the go</strong><span>Follow our mobile app updates</span></p></div>
+        <div><span className={styles.iconDisc}><Smartphone /></span><p><strong>Coming soon to mobile</strong><span>Your shared journeys, on the go</span></p></div>
       </div>
     </section>
   );

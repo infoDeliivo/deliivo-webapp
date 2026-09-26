@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import BrandLogo from "@/components/BrandLogo";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n-context";
 import { publicConfig } from "@/lib/public-config";
@@ -65,10 +66,12 @@ export default function Footer({ light = false }: { light?: boolean }) {
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="mb-4 flex items-center">
-              {!light && <span className="relative h-9 w-9 shrink-0 overflow-hidden" aria-hidden="true">
+              {light ? <BrandLogo size={36} className="h-9 w-auto object-contain" /> : <>
+              <span className="relative h-9 w-9 shrink-0 overflow-hidden" aria-hidden="true">
                 <Image src="/logo.png" alt="" width={104} height={36} className="h-9 w-auto max-w-none object-contain object-left" />
-              </span>}
-              <span className={light ? 'text-4xl font-extrabold tracking-[-0.07em] text-[#ff540b]' : 'ml-2 text-xl font-black tracking-tight text-white'}>Deliivo</span>
+              </span>
+              <span className="ml-2 text-xl font-black tracking-tight text-white">Deliivo</span>
+              </>}
             </Link>
             <p className="text-sm leading-relaxed text-gray-500">
               {t('footer.description')}

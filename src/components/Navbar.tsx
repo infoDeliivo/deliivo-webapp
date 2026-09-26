@@ -55,7 +55,7 @@ export default function Navbar({ home = false }: { home?: boolean }) {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
         <Link href="/" className="flex items-center shrink-0">
-          {home ? <span className="text-[29px] font-extrabold tracking-[-0.07em] text-[#ff540b]">Deliivo</span> : <BrandLogo size={35} className="h-8 w-auto object-contain" />}
+          <BrandLogo size={35} className="h-8 w-auto object-contain" />
         </Link>
 
         {/* Desktop nav links */}
