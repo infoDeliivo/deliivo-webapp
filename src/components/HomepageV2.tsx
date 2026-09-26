@@ -2,12 +2,14 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, CalendarCheck, Car, CreditCard, Headphones, MapPin, Navigation, Route, Search, ShieldCheck, Star, Tags, Users, Wallet } from 'lucide-react';
+import { ArrowRight, Calendar, CalendarCheck, Car, CreditCard, Headphones, MapPin, Navigation, Route, Search, ShieldCheck, Star, Tags, Users, Wallet } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import SearchForm from '@/components/SearchForm';
 import { useTranslation } from '@/lib/i18n-context';
 import { useAuth } from '@/lib/auth-context';
+import { SearchRideResult, searchRidesApi } from '@/lib/api';
+import { useEffect, useState } from 'react';
 
 const featuredRoutes = [
   { from: 'Tallinn', to: 'Tartu', price: 12, duration: '2h 20m', drivers: 12 },
@@ -36,6 +38,60 @@ const benefits = [
   { icon: Headphones, titleKey: 'home.support247', copyKey: 'home.support247Copy' },
 ];
 
+const quickSearches = [
+  ['Tallinn', 'Tartu'],
+  ['Vilnius', 'Kaunas'],
+  ['Riga', 'Tallinn'],
+  ['Tallinn', 'Riga'],
+];
+
+function shortPlace(address: string) {
+  return address.split(',')[0]?.trim() || address;
+}
+
+function UpcomingRidesRail() {
+  const [rides, setRides] = useState<SearchRideResult[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    searchRidesApi.available(1, 3)
+      .then((response) => setRides(response.data?.rides || []))
+      .catch(() => setRides([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <aside className="overflow-hidden rounded-[1.75rem] border border-orange-100 bg-[#fffdfa]/95 p-4 shadow-[0_20px_50px_rgba(70,40,15,0.14)] backdrop-blur">
+      <div className="flex items-center gap-2">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-deliivo-orange"><Search className="h-4 w-4" /></span>
+        <div><p className="text-xs font-black uppercase tracking-[0.14em] text-deliivo-orange">Explore routes</p><h2 className="text-base font-black text-deliivo-dark">Where to next?</h2></div>
+      </div>
+      <div className="mt-3 divide-y divide-orange-100 rounded-2xl border border-orange-100 bg-white px-3">
+        {quickSearches.map(([from, to]) => (
+          <Link key={`${from}-${to}`} href={`/search?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`} className="flex items-center justify-between gap-2 py-2.5 text-sm font-semibold text-deliivo-dark transition hover:text-deliivo-orange">
+            <span className="min-w-0 truncate">{from} <span className="text-deliivo-orange">to</span> {to}</span><ArrowRight className="h-4 w-4 shrink-0 text-deliivo-orange" />
+          </Link>
+        ))}
+      </div>
+
+      <div className="mt-5 flex items-center justify-between"><h2 className="text-sm font-black text-deliivo-dark">Upcoming rides</h2><Link href="/search" className="text-xs font-bold text-deliivo-orange hover:underline">View all</Link></div>
+      <div className="mt-3 space-y-2">
+        {loading ? (
+          <div className="space-y-2" aria-label="Loading upcoming rides"><div className="h-16 animate-pulse rounded-2xl bg-orange-50" /><div className="h-16 animate-pulse rounded-2xl bg-orange-50" /></div>
+        ) : rides.length ? rides.map((ride) => {
+          const departure = new Date(ride.departureDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          const driverName = ride.driver?.firstName || 'Driver';
+          return (
+            <Link key={ride.id} href={`/rides/${ride.id}`} className="block rounded-2xl border border-gray-100 bg-white p-3 transition hover:border-orange-200 hover:shadow-sm">
+              <div className="flex items-start gap-2.5"><div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-orange-100 text-xs font-black text-deliivo-orange">{ride.driver?.avatarUrl ? <img src={ride.driver.avatarUrl} alt="" className="h-full w-full object-cover" /> : driverName.slice(0, 1)}</div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><p className="truncate text-sm font-black text-deliivo-dark">{shortPlace(ride.originAddress)} <span className="text-deliivo-orange">to</span> {shortPlace(ride.destinationAddress)}</p><span className="shrink-0 text-xs font-black text-deliivo-orange">{ride.currency} {ride.basePricePerSeat}</span></div><p className="mt-1 flex items-center gap-1 text-xs text-deliivo-gray"><Calendar className="h-3 w-3" />{departure}, {ride.departureTime} <span className="mx-1">|</span> {ride.availableSeats} seats</p></div></div>
+            </Link>
+          );
+        }) : <p className="rounded-2xl bg-orange-50 px-3 py-4 text-center text-xs leading-5 text-deliivo-gray">New rides will appear here as drivers publish them.</p>}
+      </div>
+    </aside>
+  );
+}
+
 export default function HomepageV2() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -47,21 +103,23 @@ export default function HomepageV2() {
         <section className="relative isolate overflow-hidden border-b border-orange-100/70 bg-[#fffaf5]">
           <Image src="/baltic-hero-v2.png" alt="A car travelling toward a Baltic old-town skyline" fill priority sizes="100vw" className="-z-20 object-cover object-[66%_center] opacity-55 sm:opacity-70 lg:opacity-100" />
           <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#fffaf5] via-[#fffaf5]/95 to-[#fffaf5]/10 lg:via-[#fffaf5]/76" />
-          <div className="mx-auto max-w-7xl px-4 pb-6 pt-6 sm:px-6 sm:pb-10 sm:pt-10 lg:px-8 lg:pt-12">
-            <div className="mb-3 flex flex-col gap-2.5 sm:mb-4 sm:flex-row sm:items-start sm:justify-between">
-              <span className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/90 px-3.5 py-2 text-[13px] font-semibold text-deliivo-orange shadow-sm backdrop-blur sm:px-4 sm:text-sm"><MapPin className="h-4 w-4" />{t('home.region')}</span>
-              {user && (
-                <p className="inline-flex self-start rounded-lg border border-orange-200 bg-white/90 px-3 py-1.5 text-[13px] font-semibold text-deliivo-dark shadow-sm backdrop-blur sm:self-auto sm:text-sm">
-                  Welcome back, {user.firstName || 'rider'}.
-                </p>
-              )}
-            </div>
-            <div className="min-w-0 max-w-3xl overflow-hidden">
-              <h1 className="max-w-3xl break-words text-[1.9rem] font-black leading-[1.02] tracking-[-0.04em] text-deliivo-dark sm:text-5xl lg:text-6xl">{t('home.heroTitle')}</h1>
-              <p className="mt-3 max-w-2xl text-[15px] leading-7 text-deliivo-gray sm:mt-4 sm:text-lg">{t('home.heroCopy')}</p>
-            </div>
-            <div className="mt-5 min-w-0 max-w-6xl sm:mt-6">
-              <SearchForm variant="hero" />
+          <div className="mx-auto grid max-w-7xl gap-6 px-4 pb-6 pt-6 sm:px-6 sm:pb-10 sm:pt-10 lg:px-8 lg:pt-12 xl:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="min-w-0">
+              <div className="mb-3 flex flex-col gap-2.5 sm:mb-4 sm:flex-row sm:items-start sm:justify-between">
+                <span className="inline-flex items-center gap-2 self-start rounded-full border border-orange-200 bg-white/90 px-3.5 py-2 text-[13px] font-semibold text-deliivo-orange shadow-sm backdrop-blur sm:px-4 sm:text-sm"><MapPin className="h-4 w-4" />{t('home.region')}</span>
+                {user && <p className="inline-flex self-start rounded-lg border border-orange-200 bg-white/90 px-3 py-1.5 text-[13px] font-semibold text-deliivo-dark shadow-sm backdrop-blur sm:text-sm">Welcome back, {user.firstName || 'rider'}.</p>}
+              </div>
+              <div className="min-w-0 max-w-3xl overflow-hidden">
+                <p className="mb-3 text-xs font-black uppercase tracking-[0.22em] text-deliivo-orange">People. Places. A brighter tomorrow.</p>
+                <h1 className="max-w-3xl break-words text-[2.15rem] font-black leading-[1.02] tracking-[-0.045em] text-deliivo-dark sm:text-5xl lg:text-6xl">{t('home.heroTitle')}</h1>
+                <p className="mt-3 max-w-2xl text-[15px] leading-7 text-deliivo-gray sm:mt-4 sm:text-lg">{t('home.heroCopy')}</p>
+                <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-xs font-bold text-deliivo-dark sm:text-sm">
+                  <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-deliivo-orange" /> Verified drivers</span>
+                  <span className="inline-flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-deliivo-orange" /> Secure payments</span>
+                  <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4 text-deliivo-orange" /> Real people, real routes</span>
+                </div>
+              </div>
+              <div className="mt-5 min-w-0 sm:mt-6"><SearchForm variant="hero" /></div>
               <div className="mt-3 grid gap-2 rounded-2xl border border-white/80 bg-white/85 p-3 text-xs font-semibold text-deliivo-gray shadow-sm backdrop-blur sm:grid-cols-4 sm:text-sm">
                 <span className="flex items-center gap-2"><Search className="h-4 w-4 text-deliivo-orange" />{t('home.searchFree')}</span>
                 <span className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-deliivo-orange" />{t('home.securePayments')}</span>
@@ -69,6 +127,7 @@ export default function HomepageV2() {
                 <span className="flex items-center gap-2"><Headphones className="h-4 w-4 text-deliivo-orange" />{t('home.support247')}</span>
               </div>
             </div>
+            <div className="self-center"><UpcomingRidesRail /></div>
           </div>
         </section>
 
