@@ -17,22 +17,26 @@
 .container { width: calc(100% - 64px); max-width: 1180px; margin-inline: auto; }
 .home .eyebrow { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; color: var(--orange); margin-bottom: 9px; }
 .hero { position: relative; isolation: isolate; background: #fff7ee; }
-/* Keep the people inside the main column, clear of the rides panel. */
-.heroArt { position: absolute; top: -39px; bottom: -26px; right: 0; width: min(1100px, calc(100vw - 347px)); z-index: -1; overflow: hidden; }
-.heroArt img { object-fit: cover; object-position: right bottom; }
-.heroArt::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, #fffaf3fa 0%, #fffaf3ed 32%, #fffaf380 52%, transparent 67%), linear-gradient(0deg, #fff7ee, transparent 25%), linear-gradient(270deg, #fff7ee, transparent 12px); }
-.heroGrid { display: grid; grid-template-columns: minmax(0, 1fr) 285px; gap: 30px; align-items: start; padding-block: 36px 26px; }
-.heroMain { position: relative; isolation: isolate; min-width: 0; padding-top: 3px; }
-.hero h1 { font-size: clamp(35px, 4.1vw, 52px); line-height: 1.03; max-width: 540px; }
+/* The scene spans the hero; its focal group stays left of the live rides rail. */
+.heroArt { position: absolute; inset-block: 0; left: max(0px, calc((100% - 1440px) / 2)); width: min(calc(100% - 100px), 1340px); z-index: -1; overflow: hidden; }
+.heroArt img { height: auto !important; top: -40px !important; bottom: auto !important; mask-image: linear-gradient(#000 75%, transparent); }
+.heroArt::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, #fffaf3e6 0%, #fffaf3c9 27%, #fffaf366 36%, transparent 49%), linear-gradient(0deg, #fff7ee 0%, #fff7ee00 30%), linear-gradient(270deg, #fff7ee, transparent 5%); }
+.heroGrid { display: grid; grid-template-columns: minmax(0, 1fr) 25.5%; gap: 34px; align-items: start; width: calc(100% - 96px); max-width: 1320px; padding-block: 30px 28px; }
+.heroMain { min-width: 0; padding-top: 3px; }
+.hero h1 { font-size: clamp(35px, 3.65vw, 50px); line-height: 1.03; max-width: 540px; }
 .hero h1 em { font-style: normal; color: var(--orange); }
-.heroCopy { max-width: 475px; margin-top: 16px; font-size: 14px; line-height: 1.6; color: var(--ink) !important; }
-.trust { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 25px; }
+.heroCopy { max-width: 505px; margin-top: 16px; font-size: 14px; line-height: 1.5; color: var(--ink) !important; }
+.trust { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 44px; }
 .trust > div { display: flex; align-items: center; gap: 8px; }
 .trust svg { width: 30px; height: 35px; color: var(--orange); }
 .trust p, .benefitGrid p, .appPerks p { display: grid; margin: 0; }
 .trust strong { font-size: 11px; color: var(--ink); }
 .trust span { font-size: 10px; }
-.heroSearch { position: relative; z-index: 10; margin-top: 30px; }
+.heroSearch { position: relative; z-index: 10; margin-top: 46px; }
+.heroNote { position: absolute; left: calc(50% + 80px); top: 26px; color: var(--ink) !important; font: italic clamp(18px, 1.6vw, 23px)/1.1 Georgia, serif; transform: rotate(-11deg); }
+.heroNote::after { content: ''; display: block; height: 3px; width: 70px; background: var(--orange); margin: 9px 0 0 38px; transform: rotate(-8deg); }
+.journeyTag { position: absolute; top: 300px; right: calc(max(48px, (100% - 1320px) / 2) + min(25.5vw, 337px) + 20px); display: grid; justify-items: center; padding: 8px 11px; border-radius: 14px 14px 24px 24px; background: #fffdf7; font: italic 13px/1.1 Georgia, serif; transform: rotate(-12deg); box-shadow: 0 3px 8px #352d2920; }
+.journeyTag svg { color: var(--orange); margin-top: 4px; }
 .searchBenefits { display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between; margin-top: 10px; padding: 14px 17px; border-radius: 13px; background: #fffffff5; box-shadow: 0 4px 10px #31221818; }
 .searchBenefits span { display: inline-flex; align-items: center; gap: 9px; font-size: 11px; font-weight: 600; }
 .searchBenefits svg { color: var(--orange); }
@@ -165,10 +169,13 @@
 .phoneFront p { color: #ffffffe6; font-size: 10px; margin-top: 12px; }
 .phoneFront svg { margin: 28px auto 14px; }
 .phoneFront > span:last-child { font: italic 20px Georgia, serif; }
-@media (max-width: 1199px) {
+@media (max-width: 1099px) {
   .heroArt { position: relative; inset: auto; z-index: 0; width: 100%; height: clamp(220px, 32vw, 310px); margin-top: 22px; border-radius: 16px; }
-  .heroArt img { object-position: right center; }
+  .heroArt img { height: 100% !important; top: 0 !important; object-fit: cover; object-position: 70% center; mask-image: none; }
   .heroArt::after { display: none; }
+  .heroNote, .journeyTag { display: none; }
+  .heroSearch { margin-top: 24px; }
+  .trust { margin-top: 25px; }
 }
 @media (max-width: 1099px) {
   .container { width: calc(100% - 40px); }
@@ -262,8 +269,9 @@
   .appCopy { padding: 25px 20px 10px; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .heroMain { animation: arrive .65s ease-out both; }
+  .heroMain { animation: reveal .65s ease-out both; }
   .rail { animation: arrive .65s .1s ease-out both; }
+  @keyframes reveal { from { opacity: 0; } to { opacity: 1; } }
   @keyframes arrive { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 }
 @media print {

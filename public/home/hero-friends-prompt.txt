@@ -1,0 +1,16 @@
+Asset: hero-friends.png
+Generated with the built-in image generation tool from the user-provided
+suggested-design-home.png reference. This is a recreated background, not
+an exact extraction of the original photograph.
+
+Prompt:
+Create only the photographic hero background from the top of the reference:
+Tallinn old town spires, three laughing adult friends wearing sunglasses
+with luggage beside an open car hatch. Remove all website UI and lettering.
+Match the reference people, poses, scene placement and soft golden daylight.
+Wide landscape banner, approximately 2.45:1. Place the man in a denim jacket
+and backpack around 52% across, the woman with a straw hat and denim jacket
+around 61%, and the woman in a white top around 70%. Keep heads in the upper
+half, clear of the rightmost rides panel and bottom search form. Leave the
+left 42% as a quiet, softly faded city backdrop for navy page copy. No text,
+mockup, border or watermark.
