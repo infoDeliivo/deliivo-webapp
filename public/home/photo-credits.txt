@@ -1,0 +1,25 @@
+Homepage destination photography
+
+Tallinn: "Raekoja plats at night" by Jorge Franganillo.
+Source: https://commons.wikimedia.org/wiki/File:Raekoja_plats_at_night.jpg
+License: CC BY 2.0 https://creativecommons.org/licenses/by/2.0/
+
+Riga: "Riga (33844464828)" by Jorge Franganillo.
+Source: https://commons.wikimedia.org/wiki/File:Riga_(33844464828).jpg
+License: CC BY 2.0 https://creativecommons.org/licenses/by/2.0/
+
+Vilnius: "Vilnius old town by Augustas Didzgalvis" by Augustas Didzgalvis (BigHead).
+Source: https://commons.wikimedia.org/wiki/File:Vilnius_old_town_by_Augustas_Didzgalvis.jpg
+License: CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/
+
+Kaunas: "Kauno senamiestis by Augustas Didzgalvis" by Augustas Didzgalvis (BigHead).
+Source: https://commons.wikimedia.org/wiki/File:Kauno_senamiestis_by_Augustas_Didzgalvis.jpg
+License: CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/
+
+Lake Bled: "Lake Bled from the Mountain" by Canadianhockey91.
+Source: https://commons.wikimedia.org/wiki/File:Lake_Bled_from_the_Mountain.jpg
+License: CC BY-SA 3.0 https://creativecommons.org/licenses/by-sa/3.0/
+
+Images downloaded as Wikimedia thumbnails. Displayed with responsive CSS cropping
+and overlays. The underlying photographs retain the licenses linked above.
+The Tallinn sunset hero was supplied by Deliivo separately.

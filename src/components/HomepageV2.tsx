@@ -2,177 +2,235 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, Calendar, CalendarCheck, Car, CreditCard, Headphones, MapPin, Navigation, Route, Search, ShieldCheck, Star, Tags, Users, Wallet } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import {
+  ArrowLeft, ArrowRight, Bell, CalendarDays, Car, Check, ChevronRight,
+  CreditCard, Flame, Headphones, Heart, Leaf, Loader2, MapPin,
+  Navigation, Search, ShieldCheck, Smartphone, Star, Users, Wallet,
+} from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import SearchForm from '@/components/SearchForm';
 import { useTranslation } from '@/lib/i18n-context';
 import { useAuth } from '@/lib/auth-context';
-import { SearchRideResult, searchRidesApi } from '@/lib/api';
-import { useEffect, useState } from 'react';
+import { contentApi, searchRidesApi, type SearchRideResult } from '@/lib/api';
+import styles from './HomepageV2.module.css';
 
-const featuredRoutes = [
-  { from: 'Tallinn', to: 'Tartu', price: 12, duration: '2h 20m', drivers: 12 },
-  { from: 'Riga', to: 'Vilnius', price: 16, duration: '4h 10m', drivers: 8 },
-  { from: 'Vilnius', to: 'Kaunas', price: 7, duration: '1h 20m', drivers: 15 },
+const routes = [
+  { from: 'Tallinn', to: 'Tartu', image: 'tallinn', copy: 'From the capital to the university city' },
+  { from: 'Riga', to: 'Vilnius', image: 'riga', copy: 'Two capitals, one shared journey' },
+  { from: 'Vilnius', to: 'Kaunas', image: 'kaunas', copy: 'A little closer to your next adventure' },
+  { from: 'Tallinn', to: 'Riga', image: 'riga', copy: 'Follow the road along the Baltic coast' },
+];
+const destinations = [
+  { name: 'Tallinn', caption: 'Medieval charm', image: 'tallinn' },
+  { name: 'Riga', caption: 'Art & architecture', image: 'riga' },
+  { name: 'Vilnius', caption: 'History & culture', image: 'vilnius' },
+  { name: 'Kaunas', caption: 'A fresh perspective', image: 'kaunas' },
+  { name: 'Beyond the Baltics', caption: 'New horizons', image: 'lake_bled', href: '/search' },
 ];
 
-const riderSteps = [
-  { icon: Search, titleKey: 'home.riderStep1Title', copyKey: 'home.riderStep1Copy' },
-  { icon: CreditCard, titleKey: 'home.riderStep2Title', copyKey: 'home.riderStep2Copy' },
-  { icon: CalendarCheck, titleKey: 'home.riderStep3Title', copyKey: 'home.riderStep3Copy' },
-];
-
-const driverSteps = [
-  { icon: Route, titleKey: 'home.driverStep1Title', copyKey: 'home.driverStep1Copy' },
-  { icon: Users, titleKey: 'home.driverStep2Title', copyKey: 'home.driverStep2Copy' },
-  { icon: Wallet, titleKey: 'home.driverStep3Title', copyKey: 'home.driverStep3Copy' },
-];
-
-const benefits = [
-  { icon: ShieldCheck, titleKey: 'home.verifiedDrivers', copyKey: 'home.verifiedDriversCopy' },
-  { icon: Star, titleKey: 'home.trustedCommunity', copyKey: 'home.trustedCommunityCopy' },
-  { icon: Users, titleKey: 'home.womenOnlyOption', copyKey: 'home.womenOnlyOptionCopy' },
-  { icon: Tags, titleKey: 'home.transparentPricing', copyKey: 'home.transparentPricingCopy' },
-  { icon: Navigation, titleKey: 'home.regionalFares', copyKey: 'home.regionalFaresCopy' },
-  { icon: Headphones, titleKey: 'home.support247', copyKey: 'home.support247Copy' },
-];
-
-const quickSearches = [
-  ['Tallinn', 'Tartu'],
-  ['Vilnius', 'Kaunas'],
-  ['Riga', 'Tallinn'],
-  ['Tallinn', 'Riga'],
-];
-
-function shortPlace(address: string) {
-  return address.split(',')[0]?.trim() || address;
+function routeUrl(from: string, to?: string) {
+  const query = new URLSearchParams({ from });
+  if (to) query.set('to', to);
+  return `/search?${query}`;
 }
 
 function UpcomingRidesRail() {
+  const { locale } = useTranslation();
   const [rides, setRides] = useState<SearchRideResult[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    searchRidesApi.available(1, 3)
-      .then((response) => setRides(response.data?.rides || []))
-      .catch(() => setRides([]))
-      .finally(() => setLoading(false));
-  }, []);
+    let active = true;
+    setLoading(true);
+    setFailed(false);
+    searchRidesApi.available(page, 2)
+      .then(({ data }) => {
+        if (!active) return;
+        setRides(data.rides || []);
+        setTotalPages(Math.max(1, data.pagination.totalPages));
+      })
+      .catch(() => { if (active) setFailed(true); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [page, attempt]);
 
   return (
-    <aside className="overflow-hidden rounded-[1.75rem] border border-orange-100 bg-[#fffdfa]/95 p-4 shadow-[0_20px_50px_rgba(70,40,15,0.14)] backdrop-blur">
-      <div className="flex items-center gap-2">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-deliivo-orange"><Search className="h-4 w-4" /></span>
-        <div><p className="text-xs font-black uppercase tracking-[0.14em] text-deliivo-orange">Explore routes</p><h2 className="text-base font-black text-deliivo-dark">Where to next?</h2></div>
+    <aside className={styles.rail} aria-label="Find upcoming rides">
+      <div className={styles.railHeading}>
+        <span className={styles.iconDisc}><Flame size={23} /></span>
+        <h2>Find your next<br />carpool ride</h2>
       </div>
-      <div className="mt-3 divide-y divide-orange-100 rounded-2xl border border-orange-100 bg-white px-3">
-        {quickSearches.map(([from, to]) => (
-          <Link key={`${from}-${to}`} href={`/search?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`} className="flex items-center justify-between gap-2 py-2.5 text-sm font-semibold text-deliivo-dark transition hover:text-deliivo-orange">
-            <span className="min-w-0 truncate">{from} <span className="text-deliivo-orange">to</span> {to}</span><ArrowRight className="h-4 w-4 shrink-0 text-deliivo-orange" />
-          </Link>
+      <div className={styles.quickRoutes}>
+        {routes.map(({ from, to }) => (
+          <Link key={from + to} href={routeUrl(from, to)}><Search size={15} /><span>{from} to {to}</span><ChevronRight size={16} /></Link>
         ))}
+        <Link href={routeUrl('Tallinn', 'Kaunas')}><Search size={15} /><span>Tallinn to Kaunas</span><ChevronRight size={16} /></Link>
       </div>
-
-      <div className="mt-5 flex items-center justify-between"><h2 className="text-sm font-black text-deliivo-dark">Upcoming rides</h2><Link href="/search" className="text-xs font-bold text-deliivo-orange hover:underline">View all</Link></div>
-      <div className="mt-3 space-y-2">
-        {loading ? (
-          <div className="space-y-2" aria-label="Loading upcoming rides"><div className="h-16 animate-pulse rounded-2xl bg-orange-50" /><div className="h-16 animate-pulse rounded-2xl bg-orange-50" /></div>
-        ) : rides.length ? rides.map((ride) => {
-          const departure = new Date(ride.departureDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-          const driverName = ride.driver?.firstName || 'Driver';
-          return (
-            <Link key={ride.id} href={`/rides/${ride.id}`} className="block rounded-2xl border border-gray-100 bg-white p-3 transition hover:border-orange-200 hover:shadow-sm">
-              <div className="flex items-start gap-2.5"><div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-orange-100 text-xs font-black text-deliivo-orange">{ride.driver?.avatarUrl ? <img src={ride.driver.avatarUrl} alt="" className="h-full w-full object-cover" /> : driverName.slice(0, 1)}</div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><p className="truncate text-sm font-black text-deliivo-dark">{shortPlace(ride.originAddress)} <span className="text-deliivo-orange">to</span> {shortPlace(ride.destinationAddress)}</p><span className="shrink-0 text-xs font-black text-deliivo-orange">{ride.currency} {ride.basePricePerSeat}</span></div><p className="mt-1 flex items-center gap-1 text-xs text-deliivo-gray"><Calendar className="h-3 w-3" />{departure}, {ride.departureTime} <span className="mx-1">|</span> {ride.availableSeats} seats</p></div></div>
+      <h3 className={styles.railSubheading}>Upcoming rides</h3>
+      <div className={styles.liveRides} aria-live="polite" aria-busy={loading}>
+        {loading ? <div className={styles.railMessage}><Loader2 size={19} className="animate-spin" /> Loading rides...</div>
+          : failed ? <div className={styles.railMessage}><p>Rides could not be loaded.</p><button onClick={() => setAttempt(attempt + 1)}>Try again</button></div>
+          : rides.length === 0 ? <div className={styles.railMessage}><Car size={24} /><p>No upcoming rides yet.<br />Be the first to offer a seat.</p><Link href="/publish">Publish a ride <ArrowRight size={14} /></Link></div>
+          : rides.map((ride) => (
+            <Link key={`${ride.id}-${ride.segmentId || ''}`} className={styles.liveRide} href={`/rides/${ride.id}${ride.segmentId ? `?segmentId=${encodeURIComponent(ride.segmentId)}` : ''}`}>
+              <span className={styles.avatar}>{ride.driver?.avatarUrl ? <img src={ride.driver.avatarUrl} alt="" /> : (ride.driver?.firstName || 'D').slice(0, 1)}</span>
+              <span className={styles.rideInfo}>
+                <strong>{ride.originAddress.split(',')[0]} <ArrowRight size={12} /> {ride.destinationAddress.split(',')[0]}</strong>
+                <span><Car size={12} /> {[ride.vehicle?.brand, ride.vehicle?.model_name].filter(Boolean).join(' ') || 'Carpool'} <span>{ride.availableSeats} seats</span></span>
+                <span><CalendarDays size={12} /> {new Date(ride.departureDate).toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })}, {ride.departureTime}</span>
+                <b>{new Intl.NumberFormat(locale, { style: 'currency', currency: ride.currency || 'EUR' }).format(ride.segment?.segmentFare ?? ride.basePricePerSeat)} <small>/ seat</small></b>
+              </span>
             </Link>
-          );
-        }) : <p className="rounded-2xl bg-orange-50 px-3 py-4 text-center text-xs leading-5 text-deliivo-gray">New rides will appear here as drivers publish them.</p>}
+          ))}
       </div>
+      {totalPages > 1 && <div className={styles.pagination}>
+        <button aria-label="Previous rides" disabled={page === 1 || loading} onClick={() => setPage(page - 1)}><ArrowLeft size={15} /></button>
+        <span>{page} / {totalPages}</span>
+        <button aria-label="Next rides" disabled={page === totalPages || loading} onClick={() => setPage(page + 1)}><ArrowRight size={15} /></button>
+      </div>}
+      <Link href="/search" className={styles.railMore}>View all rides <ArrowRight size={15} /></Link>
     </aside>
   );
 }
 
-export default function HomepageV2() {
-  const { t } = useTranslation();
-  const { user } = useAuth();
+function AppUpdates() {
+  const { locale, t } = useTranslation();
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  async function subscribe(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus('saving');
+    try { await contentApi.subscribeNewsletter(email.trim(), locale); setStatus('saved'); }
+    catch { setStatus('error'); }
+  }
 
   return (
-    <div className="flex min-h-full w-full min-w-0 flex-col overflow-x-hidden bg-[#fbfaf8]">
-      <Navbar />
-      <main className="min-w-0 flex-1">
-        <section className="relative isolate overflow-hidden border-b border-orange-100/70 bg-[#fffaf5]">
-          <Image src="/suggested-banner-coverpage.png" alt="Travellers overlooking Tallinn's old town at sunset" fill priority sizes="100vw" className="-z-20 object-cover object-[70%_center] opacity-55 sm:opacity-70 lg:opacity-100" />
-          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#fffaf5] via-[#fffaf5]/95 to-[#fffaf5]/10 lg:via-[#fffaf5]/76" />
-          <div className="mx-auto grid max-w-7xl gap-6 px-4 pb-6 pt-6 sm:px-6 sm:pb-10 sm:pt-10 lg:px-8 lg:pt-12 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            <div className="min-w-0">
-              <div className="mb-3 flex flex-col gap-2.5 sm:mb-4 sm:flex-row sm:items-start sm:justify-between">
-                <span className="inline-flex items-center gap-2 self-start rounded-full border border-orange-200 bg-white/90 px-3.5 py-2 text-[13px] font-semibold text-deliivo-orange shadow-sm backdrop-blur sm:px-4 sm:text-sm"><MapPin className="h-4 w-4" />{t('home.region')}</span>
-                {user && <p className="inline-flex self-start rounded-lg border border-orange-200 bg-white/90 px-3 py-1.5 text-[13px] font-semibold text-deliivo-dark shadow-sm backdrop-blur sm:text-sm">Welcome back, {user.firstName || 'rider'}.</p>}
+    <section className={`${styles.container} ${styles.appSection}`} aria-labelledby="app-title">
+      <div className={styles.phoneScene} aria-hidden="true">
+        <div className={`${styles.phone} ${styles.phoneBack}`}><span className={styles.notch} /><b>Deliivo</b><h3>Travel together.<br />Go further.</h3><div className={styles.mockSearch}><MapPin size={13} /> Tallinn <ArrowRight size={13} /> Riga</div><span className={styles.mockButton}>Find your next ride</span></div>
+        <div className={`${styles.phone} ${styles.phoneFront}`}><span className={styles.notch} /><b>Deliivo</b><p>People. Places.<br />A brighter tomorrow.</p><Car size={36} /><span>More than<br />just a ride.</span></div>
+      </div>
+      <div className={styles.appCopy}>
+        <span className={styles.badge}>Stay in the loop</span>
+        <h2 id="app-title">Take Deliivo with you</h2>
+        <p>Get product news, mobile app updates and fresh ideas for your next journey.</p>
+        <form onSubmit={subscribe} className={styles.subscribe}>
+          <label className="sr-only" htmlFor="home-updates-email">Your email address</label>
+          <input id="home-updates-email" type="email" autoComplete="email" placeholder="Enter your email" required value={email} onChange={(event) => { setEmail(event.target.value); setStatus('idle'); }} disabled={status === 'saving' || status === 'saved'} />
+          <button type="submit" disabled={status === 'saving' || status === 'saved'}>{status === 'saving' ? 'Subscribing...' : status === 'saved' ? 'Subscribed' : 'Notify me'}</button>
+        </form>
+        <p className={styles.consent}>By subscribing, you agree to receive Deliivo news by email. Unsubscribe anytime. <Link href="/privacy">Privacy policy</Link>.</p>
+        <p role="status" className={styles.formStatus}>{status === 'saved' ? t('blog.newsletterSuccess') : status === 'error' ? t('blog.newsletterError') : ''}</p>
+      </div>
+      <div className={styles.appPerks}>
+        <div><span className={styles.iconDisc}><Bell /></span><p><strong>Be the first to know</strong><span>News straight to your inbox</span></p></div>
+        <div><span className={styles.iconDisc}><MapPin /></span><p><strong>A little travel inspiration</strong><span>Discover your next destination</span></p></div>
+        <div><span className={styles.iconDisc}><Smartphone /></span><p><strong>Deliivo on the go</strong><span>Follow our mobile app updates</span></p></div>
+      </div>
+    </section>
+  );
+}
+
+export default function HomepageV2() {
+  const { t, locale } = useTranslation();
+  const { user } = useAuth();
+  const benefits = [
+    { icon: Wallet, title: 'Lower travel costs', copy: 'Share the cost of getting there' },
+    { icon: Leaf, title: 'A cleaner planet', copy: 'More shared seats, fewer cars' },
+    { icon: Users, title: 'A connected community', copy: 'Meet people along the way' },
+    { icon: Heart, title: 'Travel with confidence', copy: 'Verified users and secure payments' },
+  ];
+  const steps = [
+    { icon: Search, title: 'Find a ride', copy: 'Enter your route and travel date.' },
+    { icon: CalendarDays, title: 'Book your seat', copy: 'Choose your driver and pay securely.' },
+    { icon: Car, title: 'Meet and travel', copy: 'Meet at the pickup point and enjoy the ride.' },
+    { icon: Star, title: 'Rate and repeat', copy: 'Share your experience and travel again.' },
+  ];
+
+  return (
+    <div className={styles.home}>
+      <Navbar home />
+      <main>
+        <section className={styles.hero}>
+          <div className={styles.heroArt}><Image src="/suggested-banner-coverpage.png" alt="Travellers overlooking Tallinn at sunset" fill priority sizes="100vw" /></div>
+          <div className={`${styles.container} ${styles.heroGrid}`}>
+            <div className={styles.heroMain}>
+              <p className={styles.eyebrow}>People. Places. A brighter tomorrow.</p>
+              <h1>{locale === 'en' ? <>Carpool the <em>Baltics</em><br />and Beyond</> : t('home.heroTitle')}</h1>
+              <p className={styles.heroCopy}>{t('home.heroCopy')}</p>
+              <div className={styles.trust}>
+                <div><ShieldCheck /><p><strong>Verified users</strong><span>Travel with trust</span></p></div>
+                <div><CreditCard /><p><strong>Secure payments</strong><span>Money stays safe</span></p></div>
+                <div><Users /><p><strong>Real people, real routes</strong><span>A shared way to travel</span></p></div>
               </div>
-              <div className="min-w-0 max-w-3xl overflow-hidden">
-                <p className="mb-3 text-xs font-black uppercase tracking-[0.22em] text-deliivo-orange">People. Places. A brighter tomorrow.</p>
-                <h1 className="max-w-3xl break-words text-[2.15rem] font-black leading-[1.02] tracking-[-0.045em] text-deliivo-dark sm:text-5xl lg:text-6xl">{t('home.heroTitle')}</h1>
-                <p className="mt-3 max-w-2xl text-[15px] leading-7 text-deliivo-gray sm:mt-4 sm:text-lg">{t('home.heroCopy')}</p>
-                <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-xs font-bold text-deliivo-dark sm:text-sm">
-                  <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-deliivo-orange" /> Verified drivers</span>
-                  <span className="inline-flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-deliivo-orange" /> Secure payments</span>
-                  <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4 text-deliivo-orange" /> Real people, real routes</span>
-                </div>
-              </div>
-              <div className="mt-5 min-w-0 sm:mt-6"><SearchForm variant="hero" /></div>
-              <div className="mt-3 grid gap-2 rounded-2xl border border-white/80 bg-white/85 p-3 text-xs font-semibold text-deliivo-gray shadow-sm backdrop-blur sm:grid-cols-4 sm:text-sm">
-                <span className="flex items-center gap-2"><Search className="h-4 w-4 text-deliivo-orange" />{t('home.searchFree')}</span>
-                <span className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-deliivo-orange" />{t('home.securePayments')}</span>
-                <span className="flex items-center gap-2"><Navigation className="h-4 w-4 text-deliivo-orange" />{t('home.liveRideTracking')}</span>
-                <span className="flex items-center gap-2"><Headphones className="h-4 w-4 text-deliivo-orange" />{t('home.support247')}</span>
+              <div className={styles.heroSearch}><SearchForm variant="landing" /></div>
+              <div className={styles.searchBenefits}>
+                {[{ icon: Search, key: 'home.searchFree' }, { icon: CreditCard, key: 'home.securePayments' }, { icon: Navigation, key: 'home.liveRideTracking' }, { icon: Headphones, key: 'nav.support' }].map(({ icon: Icon, key }) => <span key={key}><Icon size={18} />{t(key)}</span>)}
               </div>
             </div>
-            <div className="self-center"><UpcomingRidesRail /></div>
+            <UpcomingRidesRail />
           </div>
         </section>
 
-        <section className="border-b border-gray-100 bg-white px-4 py-12 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div><p className="text-sm font-bold uppercase tracking-[0.18em] text-deliivo-orange">{t('home.corridor')}</p><h2 className="mt-2 text-3xl font-black tracking-tight text-deliivo-dark">{t('home.popularRoutes')}</h2><p className="mt-2 text-deliivo-gray">{t('home.popularRoutesCopy')}</p></div>
-              <Link href="/search" className="inline-flex items-center gap-2 text-sm font-bold text-deliivo-orange">{t('home.seeAll')} <ArrowRight className="h-4 w-4" /></Link>
-            </div>
-            <div className="mt-7 grid gap-4 lg:grid-cols-3">
-              {featuredRoutes.map((route, index) => (
-                <Link key={`${route.from}-${route.to}`} href={`/search?from=${encodeURIComponent(route.from)}&to=${encodeURIComponent(route.to)}`} className="group min-w-0 overflow-hidden rounded-3xl border border-gray-200 bg-[#fbfaf8] transition hover:-translate-y-1 hover:border-orange-200 hover:shadow-xl">
-                  <div className="relative h-24 overflow-hidden bg-orange-50">
-                    <Image src="/baltic-hero-v2.png" alt="" fill sizes="(max-width: 1024px) 100vw, 33vw" className="object-cover opacity-90 transition duration-500 group-hover:scale-105" style={{ objectPosition: `${62 + index * 12}% 48%` }} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#fbfaf8] to-transparent" />
-                  </div>
-                  <div className="min-w-0 p-5 pt-2">
-                    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3"><div className="min-w-0"><p className="break-words text-xl font-black text-deliivo-dark">{route.from} <span className="text-deliivo-orange">→</span> {route.to}</p><p className="mt-2 text-sm text-deliivo-gray">{t('home.routeMeta', { drivers: route.drivers, duration: route.duration })}</p></div><span className="shrink-0 rounded-2xl bg-white px-3 py-2 text-right shadow-sm"><span className="block text-[10px] font-bold uppercase tracking-wide text-deliivo-gray">{t('home.from')}</span><span className="text-lg font-black text-deliivo-orange">EUR {route.price}</span></span></div>
-                    <span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-deliivo-orange">{t('home.exploreRoute')} <ArrowRight className="h-4 w-4" /></span>
-                  </div>
-                </Link>
-              ))}
-            </div>
+        <section className={`${styles.container} ${styles.routes}`}>
+          <div className={styles.sectionHeading}>
+            <div><p className={styles.eyebrow}>{t('home.corridor')}</p><h2>{t('home.popularRoutes')}</h2><p>{t('home.popularRoutesCopy')}</p></div>
+            <Link href="/search" className={styles.textLink}>{t('home.seeAll')} <ArrowRight size={16} /></Link>
+          </div>
+          <div className={styles.routeGrid}>
+            {routes.map((route) => <Link key={route.from + route.to} href={routeUrl(route.from, route.to)} className={styles.routeCard}>
+              <div className={styles.routeImage}><Image src={`/home/${route.image}.jpg`} alt={`${route.image} city view`} fill sizes="(max-width: 600px) 90vw, (max-width: 900px) 45vw, 25vw" /></div>
+              <div className={styles.routeBody}><h3>{route.from} <ArrowRight size={17} /> {route.to}</h3><p>{route.copy}</p><span>{t('home.exploreRoute')} <ArrowRight size={14} /></span></div>
+            </Link>)}
           </div>
         </section>
 
-        <section id="how-it-works" className="scroll-mt-24 bg-[#fbfaf8] px-4 py-16 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl">
-            <div className="text-center"><p className="text-sm font-bold uppercase tracking-[0.18em] text-deliivo-orange">{t('home.simpleSafe')}</p><h2 className="mt-3 text-3xl font-black tracking-tight text-deliivo-dark sm:text-4xl">{t('home.howTitle')}</h2><p className="mt-3 text-deliivo-gray">{t('home.howCopy')}</p></div>
-            <div className="mt-10 grid gap-6 lg:grid-cols-2">
-              {[{ title: t('home.forRiders'), icon: Users, items: riderSteps }, { title: t('home.forDrivers'), icon: Car, items: driverSteps }].map((group) => {
-                const GroupIcon = group.icon;
-                return <article key={group.title} className="rounded-[2rem] border border-gray-200 bg-white p-5 shadow-sm sm:p-7"><div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-deliivo-orange"><GroupIcon className="h-5 w-5" /></span><h3 className="text-xl font-black text-deliivo-dark">{group.title}</h3></div><div className="mt-6 grid gap-3 sm:grid-cols-3">{group.items.map((item, index) => { const Icon = item.icon; return <div key={item.titleKey} className="relative rounded-2xl bg-[#fbfaf8] p-4"><span className="absolute right-3 top-3 text-3xl font-black text-orange-100">{index + 1}</span><Icon className="relative h-5 w-5 text-deliivo-orange" /><h4 className="relative mt-4 font-black text-deliivo-dark">{t(item.titleKey)}</h4><p className="relative mt-2 text-xs leading-5 text-deliivo-gray">{t(item.copyKey)}</p></div>; })}</div></article>;
-              })}
-            </div>
+        <section className={styles.benefits} aria-label="Why carpool with Deliivo"><div className={`${styles.container} ${styles.benefitGrid}`}>
+          {benefits.map(({ icon: Icon, title, copy }) => <div key={title}><Icon size={35} /><p><strong>{title}</strong><span>{copy}</span></p></div>)}
+        </div></section>
+
+        <section id="how-it-works" className={`${styles.container} ${styles.how}`}>
+          <div className={styles.centerHeading}><p className={styles.eyebrow}>Simple steps, bigger journeys</p><h2>{t('home.howTitle')}</h2><p>From search to the road, it&apos;s simple.</p></div>
+          <div className={styles.steps}>{steps.map(({ icon: Icon, title, copy }, index) => <article key={title}>
+            <div className={styles.stepTop}><span className={styles.iconDisc}><Icon size={31} /></span><span>{index + 1}</span></div>
+            <h3>{title}</h3><p>{copy}</p>{index < steps.length - 1 && <ChevronRight className={styles.stepArrow} size={22} />}
+          </article>)}</div>
+          <p className={styles.driverNote}>Already heading that way? <Link href="/publish">Offer your spare seats <ArrowRight size={14} /></Link></p>
+        </section>
+
+        <section className={styles.journey}>
+          <Image src="/home/lake_bled.jpg" alt="A lake and mountains in Europe" fill sizes="100vw" />
+          <div className={`${styles.container} ${styles.journeyContent}`}>
+            <p className={styles.handwritten}>More than<br />just a ride</p>
+            <div><h2>Make your next journey a shared one</h2><Link href={user ? '/publish' : '/auth/signup'} className={styles.primary}><Users size={21} />{user ? t('home.publishRoute') : 'Register now'}<ArrowRight size={19} /></Link><p><span><Check size={17} />Free to join</span><span><Check size={17} />Quick signup</span><span><Check size={17} />Start exploring</span></p></div>
+            <div className={styles.signpost} aria-hidden="true"><span>Tallinn</span><span>Riga</span><span>Vilnius</span><span>And beyond</span></div>
           </div>
         </section>
 
-        <section className="border-y border-gray-100 bg-white px-4 py-16 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl"><div className="text-center"><p className="text-sm font-bold uppercase tracking-[0.18em] text-deliivo-orange">{t('home.travelSmarter')}</p><h2 className="mt-3 text-3xl font-black tracking-tight text-deliivo-dark sm:text-4xl">{t('home.whyTitle')}</h2><p className="mt-3 text-deliivo-gray">{t('home.whyCopy')}</p></div><div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{benefits.map((benefit) => { const Icon = benefit.icon; return <div key={benefit.titleKey} className="rounded-3xl border border-gray-200 bg-[#fbfaf8] p-6"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-deliivo-orange shadow-sm"><Icon className="h-6 w-6" /></span><h3 className="mt-5 text-lg font-black text-deliivo-dark">{t(benefit.titleKey)}</h3><p className="mt-2 text-sm leading-6 text-deliivo-gray">{t(benefit.copyKey)}</p></div>; })}</div></div>
-        </section>
+        <section className={styles.experiences}><div className={styles.container}>
+          <div className={styles.centerHeading}><p className={styles.eyebrow}>A seat for every kind of journey</p><h2>Small journeys. More possibilities.</h2></div>
+          <div className={styles.experienceGrid}>{[
+            { icon: Wallet, title: 'Your everyday commute', copy: 'Share the journey, split the cost and make your regular route a little more social.', from: 'Tallinn', to: 'Tartu' },
+            { icon: Users, title: 'A weekend with friends', copy: 'Spend less time planning how to get there and more time with the people you came to see.', from: 'Vilnius', to: 'Kaunas' },
+            { icon: Heart, title: 'Somewhere new', copy: 'A new city, a shared ride and a chance to meet someone along the way.', from: 'Riga', to: 'Tallinn' },
+          ].map(({ icon: Icon, title, copy, from, to }) => <article key={title}><span className={styles.iconDisc}><Icon /></span><div><h3>{title}</h3><p>{copy}</p><Link href={routeUrl(from, to)}>{from} <ArrowRight size={13} /> {to}</Link></div></article>)}</div>
+        </div></section>
 
-        <section className="relative isolate overflow-hidden bg-[#ef6c21] px-4 py-9 sm:px-6 sm:py-10 lg:px-8"><Image src="/baltic-hero-v2.png" alt="" fill sizes="100vw" className="-z-20 object-cover object-[center_58%] opacity-45" /><div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#d94f0b]/95 via-[#ef6c21]/80 to-[#d94f0b]/90" /><div className="relative mx-auto max-w-4xl text-center"><h2 className="text-2xl font-black tracking-tight text-white sm:text-3xl">{t('home.balancedCtaTitle')}</h2><p className="mx-auto mt-2 max-w-2xl text-sm text-orange-50 sm:text-base">{t('home.balancedCtaCopy')}</p><div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row"><Link href="/search" className="inline-flex min-w-48 items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-black text-deliivo-orange shadow-lg">{t('home.findRide')} <ArrowRight className="h-4 w-4" /></Link><Link href="/publish" className="inline-flex min-w-48 items-center justify-center gap-2 rounded-full border border-white/70 px-6 py-3 text-sm font-black text-white">{t('home.publishRoute')} <ArrowRight className="h-4 w-4" /></Link></div></div></section>
+        <section id="destinations" className={`${styles.container} ${styles.destinations}`}>
+          <div><p className={styles.eyebrow}>Explore beyond</p><h2>Discover amazing destinations</h2><p>From historic cities to hidden gems, there&apos;s so much to discover. Carpool, explore and make your next journey unforgettable.</p><Link href="/search" className={styles.primary}>Explore destinations <ArrowRight size={16} /></Link></div>
+          <div className={styles.destinationGrid}>{destinations.map(({ name, caption, image, href }) => <Link key={name} href={href || routeUrl(name)} className={styles.destination}>
+            <Image src={`/home/${image}.jpg`} alt="" fill sizes="(max-width: 600px) 40vw, 15vw" /><span><strong>{name}</strong><small>{caption}</small></span>
+          </Link>)}</div>
+        </section>
+        <AppUpdates />
       </main>
-      <Footer />
+      <Footer light />
     </div>
   );
 }

@@ -17,7 +17,7 @@ const socialLinks = [
   { label: "Facebook", href: publicConfig.facebookUrl, icon: FaFacebookF },
 ];
 
-export default function Footer() {
+export default function Footer({ light = false }: { light?: boolean }) {
   const router = useRouter();
   const { t } = useTranslation();
   const footerColumns = [
@@ -58,17 +58,17 @@ export default function Footer() {
   useRoutePrefetch(footerColumns.flatMap((column) => column.links.map((link) => link.href)));
 
   return (
-    <footer style={{ backgroundColor: "#1a1a2e" }} className="text-gray-400">
+    <footer style={{ backgroundColor: light ? '#ffffff' : '#1a1a2e' }} className="text-gray-500">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
         {/* Top section: logo + columns */}
         <div className="grid grid-cols-2 gap-8 md:grid-cols-5">
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="mb-4 flex items-center">
-              <span className="relative h-9 w-9 shrink-0 overflow-hidden" aria-hidden="true">
+              {!light && <span className="relative h-9 w-9 shrink-0 overflow-hidden" aria-hidden="true">
                 <Image src="/logo.png" alt="" width={104} height={36} className="h-9 w-auto max-w-none object-contain object-left" />
-              </span>
-              <span className="ml-2 text-xl font-black tracking-tight text-white">Deliivo</span>
+              </span>}
+              <span className={light ? 'text-4xl font-extrabold tracking-[-0.07em] text-[#ff540b]' : 'ml-2 text-xl font-black tracking-tight text-white'}>Deliivo</span>
             </Link>
             <p className="text-sm leading-relaxed text-gray-500">
               {t('footer.description')}
@@ -78,7 +78,7 @@ export default function Footer() {
           {/* Link columns */}
           {footerColumns.map((col) => (
             <div key={col.heading}>
-              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-white">
+              <h3 className={`mb-4 text-sm font-semibold ${light ? 'text-deliivo-dark' : 'uppercase tracking-wider text-white'}`}>
                 {col.heading}
               </h3>
               <ul className="space-y-2">
@@ -113,10 +113,11 @@ export default function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-12 border-t border-white/10 pt-8 flex flex-col items-center justify-between gap-4 sm:flex-row">
+        <div className={`mt-12 border-t ${light ? 'border-gray-200' : 'border-white/10'} pt-8 flex flex-col items-center justify-between gap-4 sm:flex-row`}>
           <p className="text-sm text-gray-600">
             &copy; {new Date().getFullYear()} Deliivo. {t('footer.rights')}
           </p>
+          {light && <a href="/home/photo-credits.txt" className="text-xs hover:text-deliivo-orange">Photo credits</a>}
 
           {/* Social links */}
           <div className="flex items-center gap-4">

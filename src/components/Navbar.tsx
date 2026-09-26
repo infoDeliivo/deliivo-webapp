@@ -11,7 +11,7 @@ import { useNotificationStore } from "@/lib/notification-store";
 import BrandLogo from "@/components/BrandLogo";
 import { prefetchHref, useRoutePrefetch } from "@/lib/use-route-prefetch";
 
-export default function Navbar() {
+export default function Navbar({ home = false }: { home?: boolean }) {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
   const { t } = useTranslation();
@@ -55,11 +55,11 @@ export default function Navbar() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
         <Link href="/" className="flex items-center shrink-0">
-          <BrandLogo size={35} className="h-8 w-auto object-contain" />
+          {home ? <span className="text-[29px] font-extrabold tracking-[-0.07em] text-[#ff540b]">Deliivo</span> : <BrandLogo size={35} className="h-8 w-auto object-contain" />}
         </Link>
 
         {/* Desktop nav links */}
-        <nav className="hidden md:flex items-center gap-8">
+        <nav className={`hidden ${home ? 'lg:flex gap-5' : 'md:flex gap-8'} items-center`}>
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
@@ -75,7 +75,7 @@ export default function Navbar() {
         </nav>
 
         {/* Desktop right side */}
-        <div className="hidden md:flex items-center gap-3">
+        <div className={`hidden ${home ? 'lg:flex' : 'md:flex'} items-center gap-3`}>
           <LanguageSwitcher compact />
           {loading ? (
             <div className="h-8 w-24 animate-pulse rounded-full bg-gray-100" />
@@ -156,7 +156,7 @@ export default function Navbar() {
 
         {/* Mobile hamburger */}
         <button
-          className="md:hidden rounded-lg p-2 text-deliivo-gray hover:bg-gray-100 transition-colors"
+          className={`${home ? 'lg:hidden' : 'md:hidden'} rounded-lg p-2 text-deliivo-gray hover:bg-gray-100 transition-colors`}
           onClick={() => setMobileOpen((prev) => !prev)}
           aria-label={t('nav.toggleMenu')}
         >
@@ -166,7 +166,7 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className={`fixed inset-0 z-50 ${home ? 'lg:hidden' : 'md:hidden'}`}>
           <button
             type="button"
             aria-label={t('nav.toggleMenu')}

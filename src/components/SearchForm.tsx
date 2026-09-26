@@ -7,8 +7,11 @@ import { mapsApi, PlacePrediction } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from '@/lib/i18n-context';
 import { pushEvent } from '@/lib/analytics';
+import styles from './SearchForm.module.css';
 
-export default function SearchForm({ variant = 'default' }: { variant?: 'default' | 'hero' }) {
+export default function SearchForm({ variant = 'default' }: { variant?: 'default' | 'hero' | 'landing' }) {
+  const hero = variant !== 'default';
+  const landing = variant === 'landing';
   const router = useRouter();
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -130,15 +133,15 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
   return (
     <form
       onSubmit={handleSubmit}
-      className={`w-full min-w-0 max-w-full overflow-hidden rounded-3xl border border-primary-100 bg-white shadow-xl ${variant === 'hero' ? 'p-3.5 sm:p-5' : 'p-5 sm:p-8'}`}
+      className={`w-full min-w-0 max-w-full rounded-3xl border border-primary-100 bg-white shadow-xl ${hero ? 'p-3.5 sm:p-5' : 'p-5 sm:p-8'} ${landing ? styles.landing : ''}`}
     >
-      <div className={variant === 'hero' ? 'sr-only' : 'mb-5'}>
+      <div className={hero ? 'sr-only' : 'mb-5'}>
         <p className="text-sm font-semibold text-deliivo-dark">{t('search.formTitle')}</p>
         <p className="mt-1 text-xs text-deliivo-gray">{t('search.formCopy')}</p>
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-        <div className="flex min-w-0 flex-col gap-3 lg:flex-1 lg:flex-row lg:items-end">
+      <div className={landing ? styles.row : 'flex flex-col gap-3 lg:flex-row lg:items-end'}>
+        <div className={landing ? styles.locations : 'flex min-w-0 flex-col gap-3 lg:flex-1 lg:flex-row lg:items-end'}>
           <div className="relative min-w-0 w-full flex-1">
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
               {t('search.fromLabel')}
@@ -186,7 +189,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
             type="button"
             onClick={swap}
             aria-label={t('search.swap')}
-            className="mx-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-primary-500 transition-colors hover:bg-primary-50 lg:mx-0 lg:mb-2"
+            className={`mx-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-primary-500 transition-colors hover:bg-primary-50 lg:mx-0 lg:mb-2 ${landing ? styles.swap : ''}`}
           >
             <ArrowLeftRight size={16} />
           </button>
@@ -235,8 +238,8 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
           </div>
         </div>
 
-        <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-[minmax(10.5rem,1.15fr)_minmax(8.5rem,0.85fr)] lg:w-[21rem] lg:flex-none">
-          <div className="relative min-w-0 w-full min-[420px]:min-w-[10.5rem]">
+        <div className={landing ? styles.extras : 'grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-[minmax(10.5rem,1.15fr)_minmax(8.5rem,0.85fr)] lg:w-[21rem] lg:flex-none'}>
+          <div className={`relative min-w-0 w-full ${landing ? '' : 'min-[420px]:min-w-[10.5rem]'}`}>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
               {t('search.dateLabel')}
             </label>
@@ -249,7 +252,7 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
             />
           </div>
 
-          <div className="relative min-w-0 w-full min-[420px]:min-w-[8.5rem]">
+          <div className={`relative min-w-0 w-full ${landing ? '' : 'min-[420px]:min-w-[8.5rem]'}`}>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
               {t('search.seatsLabel')}
             </label>
@@ -272,8 +275,8 @@ export default function SearchForm({ variant = 'default' }: { variant?: 'default
           </div>
         </div>
 
-        {variant === 'hero' && (
-          <button type="submit" className="btn-primary h-14 w-full shrink-0 whitespace-nowrap px-7 text-base lg:mb-0 lg:min-w-[12rem] lg:w-auto">
+        {hero && (
+          <button type="submit" className={landing ? styles.submit : 'btn-primary h-14 w-full shrink-0 whitespace-nowrap px-7 text-base lg:mb-0 lg:min-w-[12rem] lg:w-auto'}>
             {t('search.submit')}
           </button>
         )}

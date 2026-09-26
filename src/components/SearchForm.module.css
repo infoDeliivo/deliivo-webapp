@@ -1,0 +1,29 @@
+.landing { container-type: inline-size; padding: 14px !important; border-radius: 15px; box-shadow: 0 5px 15px #31221822; }
+.row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto; align-items: end; gap: 10px; }
+.locations { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr); gap: 6px; align-items: end; min-width: 0; }
+.extras { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 10px; min-width: 0; }
+.landing .swap { width: 28px; height: 28px; margin: 0 0 9px; }
+.landing label { font-size: 9px; letter-spacing: .025em; margin-bottom: 5px; color: #56637b; }
+.landing input, .landing select { height: 46px; font-size: 12px; border-radius: 10px; box-shadow: none; padding-right: 8px; }
+.landing input[type='text'] { padding-left: 29px; }
+.landing input[type='date'] { padding-inline: 8px; }
+.landing select { padding-left: 29px; padding-right: 25px; background-position: right 6px center; }
+.locations > div > svg, .extras > div > svg { left: 9px; width: 14px; }
+.submit { height: 46px; background: linear-gradient(100deg, #ff4e06, #ff7510); border-radius: 999px; padding: 0 18px; font-size: 12px; font-weight: 700; color: white; white-space: nowrap; }
+.submit:hover { background: #e84c05; }
+@container (max-width: 680px) {
+  .row { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .locations { grid-column: 1 / -1; }
+  .extras { grid-column: 1; }
+  .submit { grid-column: 2; }
+}
+@container (max-width: 440px) {
+  .row { grid-template-columns: minmax(0, 1fr); }
+  .locations, .extras, .submit { grid-column: 1; }
+  .landing input, .landing select { font-size: 16px; }
+  .submit { font-size: 14px; }
+}
+@container (max-width: 330px) {
+  .locations { gap: 4px; grid-template-columns: minmax(0, 1fr) 25px minmax(0, 1fr); }
+  .landing .swap { width: 25px; height: 25px; }
+}
