@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
 import RideRequestLayout from '@/components/RideRequestLayout';
-import RideRequestConsent, { acceptRideRequestConsent } from '@/components/RideRequestConsent';
+import DriverRideRequest from '@/components/DriverRideRequest';
 import { StripeProvider, isStripeConfigured } from '@/lib/stripe';
-import { bookingsApi, vehicleApi, getApiErrorMessage, type Booking, type Vehicle } from '@/lib/api';
+import { bookingsApi, getApiErrorMessage, type Booking } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { rideRequestsApi, money, requestTime, type RideRequest } from '@/lib/ride-requests';
 
@@ -77,140 +77,6 @@ function Checkout({ booking, onComplete }: { booking: Booking; onComplete: () =>
   );
 }
 
-function OfferForm({ request, onComplete }: { request: RideRequest; onComplete: () => void }) {
-  const { user, refreshUser } = useAuth();
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]),
-    [error, setError] = useState(''),
-    [busy, setBusy] = useState(false);
-  useEffect(() => {
-    let active = true;
-    vehicleApi
-      .list(1, 10)
-      .then((res) => {
-        if (active) setVehicles(res.data.vehicles);
-      })
-      .catch((err) => {
-        if (active) setError(getApiErrorMessage(err, 'Could not load your vehicles.'));
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-  const date = new Date(request.departureAfter);
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16);
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    setBusy(true);
-    setError('');
-    try {
-      await acceptRideRequestConsent(user, data);
-      await refreshUser();
-      await rideRequestsApi.offer(request.id, {
-        vehicleId: String(data.get('vehicle')),
-        departureAt: new Date(String(data.get('departure'))).toISOString(),
-        totalSeats: Number(data.get('seats')),
-        pricePerSeat: Number(data.get('price')),
-        expiresInHours: Number(data.get('expiry')),
-        acceptsSharedJourney: true,
-      });
-      onComplete();
-    } catch (err) {
-      setError(getApiErrorMessage(err, 'Could not send your offer.'));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <form onSubmit={submit} className="space-y-4 rounded-2xl border bg-white p-6">
-      <h2 className="text-xl font-bold">Offer this ride</h2>
-      <p className="text-sm text-gray-600">
-        The request supplies the route and meeting points. You supply the car, exact time and fare.
-      </p>
-      <label className="block text-sm font-semibold">
-        Vehicle
-        <select required name="vehicle" className="input-field mt-2 w-full">
-          <option value="">Select your vehicle</option>
-          {vehicles.map((vehicle) => (
-            <option key={vehicle.id} value={vehicle.id}>
-              {vehicle.brand} {vehicle.model_name} · {vehicle.licenseNumber}
-            </option>
-          ))}
-        </select>
-      </label>
-      <Link href="/profile/vehicle" className="block text-sm text-deliivo-orange">
-        Manage vehicles and documents
-      </Link>
-      <label className="block text-sm font-semibold">
-        Departure (your device timezone)
-        <input
-          type="datetime-local"
-          name="departure"
-          defaultValue={localDate}
-          required
-          className="input-field mt-2 w-full"
-        />
-      </label>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="text-sm font-semibold">
-          Total passenger seats
-          <input
-            type="number"
-            name="seats"
-            min={request.seats}
-            max={8}
-            defaultValue={request.seats}
-            required
-            className="input-field mt-2 w-full"
-          />
-        </label>
-        <label className="text-sm font-semibold">
-          Fare per seat (EUR)
-          <input
-            type="number"
-            name="price"
-            min="0.01"
-            max="1000"
-            step="0.01"
-            required
-            className="input-field mt-2 w-full"
-          />
-        </label>
-      </div>
-      <label className="block text-sm font-semibold">
-        Offer valid for
-        <select name="expiry" defaultValue="24" className="input-field mt-2 w-full">
-          {[1, 3, 6, 12, 24, 48].map((hours) => (
-            <option key={hours} value={hours}>
-              {hours} hours
-            </option>
-          ))}
-        </select>
-      </label>
-      <p className="text-sm text-gray-500">
-        Any service fee is added to the fare and shown to the rider before payment. Your offer
-        expires no later than the request deadline.
-      </p>
-      <label className="flex items-start gap-3 text-sm">
-        <input required type="checkbox" className="mt-1" />I have enough passenger seats and luggage
-        space. I agree to drive at this fare even if no additional riders join, and to open spare
-        seats to others.
-      </label>
-      <RideRequestConsent disabled={busy} />
-      {error && (
-        <p role="alert" className="text-red-600">
-          {error}
-        </p>
-      )}
-      <button disabled={busy || !vehicles.length} className="btn-primary">
-        {busy ? 'Sending...' : 'Send driver offer'}
-      </button>
-    </form>
-  );
-}
-
 function RequestDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -245,11 +111,14 @@ function RequestDetail() {
       active = false;
     };
   }, [id, refresh]);
+  const waitingForRider = !request?.isOwner && request?.offers?.some(
+    (offer) => offer.driverId === user?.id && offer.status === 'OPEN',
+  );
   useEffect(() => {
-    if (request?.status !== 'CHECKOUT_PENDING') return;
+    if (request?.status !== 'CHECKOUT_PENDING' && !waitingForRider) return;
     const timer = setInterval(reload, 15000);
     return () => clearInterval(timer);
-  }, [request?.status]);
+  }, [request?.status, waitingForRider]);
   async function checkout(offerId: string) {
     setBusy(true);
     setError('');
@@ -305,7 +174,10 @@ function RequestDetail() {
           Loading request...
         </p>
       )}
-      {request && (
+      {request && !request.isOwner && user?.role !== 'ADMIN' && (
+        <DriverRideRequest request={request} userId={user?.id || ''} busy={busy} onComplete={reload} onWithdraw={withdraw} />
+      )}
+      {request && (request.isOwner || user?.role === 'ADMIN') && (
         <>
           <div className="my-6 rounded-3xl border border-orange-100 bg-white p-6 sm:p-8">
             <div className="flex justify-between gap-3">
@@ -394,7 +266,7 @@ function RequestDetail() {
           <div className="my-6 grid items-start gap-6 lg:grid-cols-2">
             <section>
               <h2 className="mb-4 text-2xl font-bold">
-                {request.isOwner ? 'Driver offers' : 'Your offers'}
+                Driver offers
               </h2>
               {!request.offers?.length && (
                 <p className="rounded-2xl border border-dashed p-6 text-gray-600">
@@ -466,11 +338,9 @@ function RequestDetail() {
                 ))}
               </div>
             </section>
-            {!request.isOwner &&
-              request.status === 'OPEN' &&
-              !request.offers?.some(
-                (offer) => offer.driverId === user?.id && offer.status === 'OPEN',
-              ) && <OfferForm request={request} onComplete={reload} />}
+            {!request.isOwner && user?.role === 'ADMIN' && (
+              <DriverRideRequest request={request} userId={user.id} busy={busy} onComplete={reload} onWithdraw={withdraw} showRequestSummary={false} />
+            )}
           </div>
         </>
       )}
