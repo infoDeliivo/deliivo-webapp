@@ -34,6 +34,7 @@ import { emitSocketEvent, getSocket, onSocketEvent, LocationUpdate, Notification
 import { isStripeConfigured, StripeProvider } from '@/lib/stripe';
 import { showError, showSuccess } from '@/lib/app-feedback';
 import { useTranslation } from '@/lib/i18n-context';
+import { formatRideTime } from '@/lib/format-time';
 import { withReturnTo } from '@/lib/auth-redirect';
 import { getBookingStatusBadgeClass, getRideStatusLabel } from '@/lib/ride-status';
 import { enqueueRecoveryAction, isRecoverableServerFailure } from '@/lib/recovery-outbox';
@@ -1222,7 +1223,7 @@ function RideDetailContent() {
         {/* Route card */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
           <div className="bg-gradient-to-r from-deliivo-orange to-primary-600 px-5 py-4">
-            <p className="text-sm text-white/80">{t('rideDetail.dateAtTime', { date: dateLabel, time: ride.departureTime })}</p>
+            <p className="text-sm text-white/80">{t('rideDetail.dateAtTime', { date: dateLabel, time: formatRideTime(ride.departureTime, locale) })}</p>
             <p className="text-lg font-bold text-white mt-0.5">
               {ride.originAddress.split(',')[0]} → {ride.destinationAddress.split(',')[0]}
             </p>
@@ -1251,7 +1252,7 @@ function RideDetailContent() {
             {/* Meta info */}
             <div className="flex flex-wrap gap-4 pt-3 border-t border-gray-50 text-xs text-deliivo-gray">
               <span className="flex items-center gap-1"><Calendar size={13} /> {dateLabel}</span>
-              <span className="flex items-center gap-1"><Clock size={13} /> {ride.departureTime}</span>
+              <span className="flex items-center gap-1"><Clock size={13} /> {formatRideTime(ride.departureTime, locale)}</span>
               {durationLabel && <span className="flex items-center gap-1"><Clock size={13} /> {durationLabel}</span>}
               {distanceKm && <span className="flex items-center gap-1"><MapPin size={13} /> {distanceKm} km</span>}
             </div>
@@ -1456,7 +1457,7 @@ function RideDetailContent() {
                             {option.address}
                           </span>
                           <span className="mt-1 block text-xs text-deliivo-gray">
-                            {t('rideDetail.estimatedPickup')}: {option.estimatedArrivalTime || ride.departureTime}
+                            {t('rideDetail.estimatedPickup')}: {formatRideTime(option.estimatedArrivalTime || ride.departureTime, locale)}
                           </span>
                         </span>
                       </button>
@@ -1960,7 +1961,7 @@ function RideDetailContent() {
                             {option.address}
                           </span>
                           <span className="mt-1 block text-xs text-deliivo-gray">
-                            {t('rideDetail.estimatedPickup')}: {option.estimatedArrivalTime || ride.departureTime}
+                            {t('rideDetail.estimatedPickup')}: {formatRideTime(option.estimatedArrivalTime || ride.departureTime, locale)}
                           </span>
                         </span>
                       </button>

@@ -7,6 +7,7 @@ import { ArrowRight, Calendar, Clock, Loader2, MapPin, Navigation } from 'lucide
 import { Booking, bookingsApi, PublishedRide, publishRideApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { getSocket, onSocketEvent, BookingUpdatedPayload, RideUpdatedPayload, NotificationPayload } from '@/lib/socket';
+import { formatRideTime } from '@/lib/format-time';
 
 type PanelRide = {
   id: string;
@@ -235,7 +236,7 @@ export default function OngoingRidePanel() {
                 <Calendar className="h-3 w-3" /> {dateLabel}
               </span>
               <span className="inline-flex items-center gap-1">
-                <Clock className="h-3 w-3" /> {ride.departureTime}
+                <Clock className="h-3 w-3" /> {formatRideTime(ride.departureTime)}
               </span>
             </span>
             <span className="mt-1 flex min-w-0 items-center gap-1 text-sm font-semibold text-deliivo-dark">

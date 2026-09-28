@@ -16,6 +16,7 @@ import { useAuth } from '@/lib/auth-context';
 import { contentApi, searchRidesApi, type SearchRideResult } from '@/lib/api';
 import styles from './HomepageV2.module.css';
 import { rideRequestsEnabled } from '@/lib/ride-requests';
+import { formatRideTime } from '@/lib/format-time';
 
 const routes = [
   { from: 'Tallinn', to: 'Tartu', image: 'tallinn', copy: 'From the capital to the university city' },
@@ -35,15 +36,6 @@ function routeUrl(from: string, to?: string) {
   const query = new URLSearchParams({ from });
   if (to) query.set('to', to);
   return `/search?${query}`;
-}
-
-// departureTime arrives as a 24-hour "HH:mm" string; show it as 12-hour with AM/PM.
-function formatDepartureTime(time: string, locale: string) {
-  const [hours, minutes] = time.split(':').map(Number);
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return time;
-  return new Date(Date.UTC(1970, 0, 1, hours, minutes)).toLocaleTimeString(locale, {
-    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC',
-  });
 }
 
 function UpcomingRidesRail() {
@@ -93,7 +85,7 @@ function UpcomingRidesRail() {
               <span className={styles.rideInfo}>
                 <strong>{ride.originAddress.split(',')[0]} <ArrowRight size={12} /> {ride.destinationAddress.split(',')[0]}</strong>
                 <span><Car size={12} /> {[ride.vehicle?.brand, ride.vehicle?.model_name].filter(Boolean).join(' ') || 'Carpool'} <span>{ride.availableSeats} seats</span></span>
-                <span><CalendarDays size={12} /> {new Date(ride.departureDate).toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })}, {formatDepartureTime(ride.departureTime, locale)}</span>
+                <span><CalendarDays size={12} /> {new Date(ride.departureDate).toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })}, {formatRideTime(ride.departureTime, locale)}</span>
                 <b>{new Intl.NumberFormat(locale, { style: 'currency', currency: ride.currency || 'EUR' }).format(ride.segment?.segmentFare ?? ride.basePricePerSeat)} <small>/ seat</small></b>
               </span>
             </Link>

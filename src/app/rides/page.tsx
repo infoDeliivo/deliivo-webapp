@@ -22,6 +22,7 @@ import { bookingsApi, publishRideApi, Booking, PublishedRide, Pagination, getApi
 import { getSocket, onSocketEvent, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
 import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from '@/lib/i18n-context';
+import { formatRideTime } from '@/lib/format-time';
 import { pushEcommerceEvent } from '@/lib/analytics';
 
 type Tab = 'booked' | 'published';
@@ -144,7 +145,7 @@ function PaginationControls({
 }
 
 function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => void }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const ride = booking.ride;
   const status = STATUS_CONFIG[booking.status] || STATUS_CONFIG.DRIVER_PENDING;
   const dateLabel = ride
@@ -237,7 +238,7 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
                 <Calendar className="w-3.5 h-3.5" /> {dateLabel}
               </span>
               <span className="flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5" /> {ride.departureTime}
+                <Clock className="w-3.5 h-3.5" /> {formatRideTime(ride.departureTime, locale)}
               </span>
             </div>
           </div>
@@ -299,7 +300,7 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
 }
 
 function PublishedRideCard({ ride }: { ride: PublishedRide }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const displayStatus = getPublishedRideDisplayStatus(ride);
   const status = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.PUBLISHED;
   const dateLabel = new Date(ride.departureDate).toLocaleDateString('en-US', {
@@ -333,7 +334,7 @@ function PublishedRideCard({ ride }: { ride: PublishedRide }) {
             <Calendar className="w-3.5 h-3.5" /> {dateLabel}
           </span>
           <span className="flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5" /> {ride.departureTime}
+            <Clock className="w-3.5 h-3.5" /> {formatRideTime(ride.departureTime, locale)}
           </span>
         </div>
       </div>
