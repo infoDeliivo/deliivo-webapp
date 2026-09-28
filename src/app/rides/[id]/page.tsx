@@ -1153,8 +1153,8 @@ function RideDetailContent() {
     || myBooking?.segmentRide?.destinationAddress
     || myBooking?.fullRide?.destinationAddress
     || ride.destinationAddress;
-  const bookedPickupTime = bookedPickupWaypoint?.estimatedArrivalTime || null;
-  const bookedDropoffTime = bookedDropoffWaypoint?.estimatedArrivalTime || null;
+  const bookedPickupTime = bookedPickupWaypoint?.estimatedArrivalTime ? formatRideTime(bookedPickupWaypoint.estimatedArrivalTime, locale) : null;
+  const bookedDropoffTime = bookedDropoffWaypoint?.estimatedArrivalTime ? formatRideTime(bookedDropoffWaypoint.estimatedArrivalTime, locale) : null;
   const isOwnRide = user?.id === ride.driverId;
   const bookingGuide = getBookingGuide(Boolean(user));
   const needsTosAcceptance = !user?.tosAcceptedAt || !user?.privacyAcceptedAt;
@@ -1499,7 +1499,7 @@ function RideDetailContent() {
                             {option.address}
                           </span>
                           <span className="mt-1 block text-xs text-deliivo-gray">
-                            {t('rideDetail.estimatedDropoff')}: {option.estimatedArrivalTime || t('rideDetail.atDestination')}
+                            {t('rideDetail.estimatedDropoff')}: {option.estimatedArrivalTime ? formatRideTime(option.estimatedArrivalTime, locale) : t('rideDetail.atDestination')}
                           </span>
                         </span>
                       </button>
@@ -2003,7 +2003,7 @@ function RideDetailContent() {
                             {option.address}
                           </span>
                           <span className="mt-1 block text-xs text-deliivo-gray">
-                            {t('rideDetail.estimatedDropoff')}: {option.estimatedArrivalTime || t('rideDetail.atDestination')}
+                            {t('rideDetail.estimatedDropoff')}: {option.estimatedArrivalTime ? formatRideTime(option.estimatedArrivalTime, locale) : t('rideDetail.atDestination')}
                           </span>
                         </span>
                       </button>
