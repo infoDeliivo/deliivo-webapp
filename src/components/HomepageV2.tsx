@@ -37,6 +37,15 @@ function routeUrl(from: string, to?: string) {
   return `/search?${query}`;
 }
 
+// departureTime arrives as a 24-hour "HH:mm" string; show it as 12-hour with AM/PM.
+function formatDepartureTime(time: string, locale: string) {
+  const [hours, minutes] = time.split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return time;
+  return new Date(Date.UTC(1970, 0, 1, hours, minutes)).toLocaleTimeString(locale, {
+    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC',
+  });
+}
+
 function UpcomingRidesRail() {
   const { locale } = useTranslation();
   const [rides, setRides] = useState<SearchRideResult[]>([]);
@@ -84,7 +93,7 @@ function UpcomingRidesRail() {
               <span className={styles.rideInfo}>
                 <strong>{ride.originAddress.split(',')[0]} <ArrowRight size={12} /> {ride.destinationAddress.split(',')[0]}</strong>
                 <span><Car size={12} /> {[ride.vehicle?.brand, ride.vehicle?.model_name].filter(Boolean).join(' ') || 'Carpool'} <span>{ride.availableSeats} seats</span></span>
-                <span><CalendarDays size={12} /> {new Date(ride.departureDate).toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })}, {ride.departureTime}</span>
+                <span><CalendarDays size={12} /> {new Date(ride.departureDate).toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })}, {formatDepartureTime(ride.departureTime, locale)}</span>
                 <b>{new Intl.NumberFormat(locale, { style: 'currency', currency: ride.currency || 'EUR' }).format(ride.segment?.segmentFare ?? ride.basePricePerSeat)} <small>/ seat</small></b>
               </span>
             </Link>
