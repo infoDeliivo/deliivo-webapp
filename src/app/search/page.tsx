@@ -33,6 +33,7 @@ import {
   RecentSearch,
 } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n-context';
+import { formatRideTime } from '@/lib/format-time';
 import { rideRequestsEnabled } from '@/lib/ride-requests';
 import { pushEvent, pushEcommerceEvent } from '@/lib/analytics';
 
@@ -133,7 +134,7 @@ function PlaceInput({
 // ─── Ride Result Card ─────────────────────────────────────────────────────────
 
 function RideResultCard({ ride }: { ride: SearchRideResult }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const seatsLeft = ride.availableSeats;
   const driverName = ride.driver?.firstName || 'Driver';
   const initials = driverName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
@@ -181,7 +182,7 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
         {/* Ride details */}
         <div className="flex flex-1 flex-col gap-3">
           <div className="flex items-center gap-2 text-sm text-deliivo-gray">
-            <span className="font-semibold text-deliivo-dark">{ride.departureTime}</span>
+            <span className="font-semibold text-deliivo-dark">{formatRideTime(ride.departureTime, locale)}</span>
             <span>&middot;</span>
             <span>{dateLabel}</span>
             {ride.femaleOnly && (

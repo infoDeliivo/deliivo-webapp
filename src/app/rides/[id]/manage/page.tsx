@@ -33,6 +33,7 @@ import { getSocket, emitSocketEvent, onSocketEvent, LocationUpdate, Notification
 import { useAuth } from '@/lib/auth-context';
 import { showError, showSuccess } from '@/lib/app-feedback';
 import { useTranslation } from '@/lib/i18n-context';
+import { formatRideTime } from '@/lib/format-time';
 import { getRideStatusLabel } from '@/lib/ride-status';
 import { enqueueRecoveryAction, isRecoverableServerFailure } from '@/lib/recovery-outbox';
 import { withReturnTo } from '@/lib/auth-redirect';
@@ -648,7 +649,7 @@ const [error, setError] = useState('');
           <div className={`px-5 py-4 ${phase === 'in_progress' ? 'bg-gradient-to-r from-green-500 to-green-600' : phase === 'completed' ? 'bg-gradient-to-r from-gray-500 to-gray-600' : phase === 'cancelled' ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-deliivo-orange to-primary-600'}`}>
             <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <p className="text-sm text-white/80">{t('manageRide.dateAtTime', { date: dateLabel, time: ride.departureTime })}</p>
+                <p className="text-sm text-white/80">{t('manageRide.dateAtTime', { date: dateLabel, time: formatRideTime(ride.departureTime, locale) })}</p>
                 <p className="break-words text-lg font-bold text-white mt-0.5">
                   {ride.originAddress.split(',')[0]} → {ride.destinationAddress.split(',')[0]}
                 </p>
@@ -662,7 +663,7 @@ const [error, setError] = useState('');
           <div className="p-5">
             <div className="grid grid-cols-1 gap-3 text-xs text-deliivo-gray sm:grid-cols-2 lg:grid-cols-4">
               <span className="flex items-center gap-1"><Calendar size={13} /> {dateLabel}</span>
-              <span className="flex items-center gap-1"><Clock size={13} /> {ride.departureTime}</span>
+              <span className="flex items-center gap-1"><Clock size={13} /> {formatRideTime(ride.departureTime, locale)}</span>
               <span className="flex items-center gap-1"><Users size={13} /> {t('manageRide.availableSeats', { available: ride.availableSeats, total: ride.totalSeats })}</span>
               <span className="flex items-center gap-1"><MapPin size={13} /> {ride.currency} {ride.basePricePerSeat.toFixed(2)}{t('rideDetail.perSeatShort')}</span>
             </div>

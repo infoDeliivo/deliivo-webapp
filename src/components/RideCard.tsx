@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Star, Users, Car } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n-context';
+import { formatRideTime } from '@/lib/format-time';
 import { pushEcommerceEvent } from '@/lib/analytics';
 
 export interface Ride {
@@ -49,7 +50,7 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 export default function RideCard({ ride }: RideCardProps) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const seatsLeft = ride.availableSeats ?? Math.max(0, ride.seatsTotal - ride.seatsBooked);
   const bookedSeats = Math.max(0, ride.seatsTotal - seatsLeft);
 
@@ -80,7 +81,7 @@ export default function RideCard({ ride }: RideCardProps) {
       <div className="flex flex-1 flex-col gap-3">
         {/* Time + date */}
         <div className="flex items-center gap-2 text-sm text-deliivo-gray">
-          <span className="font-semibold text-deliivo-dark">{ride.departureTime}</span>
+          <span className="font-semibold text-deliivo-dark">{formatRideTime(ride.departureTime, locale)}</span>
           <span>&middot;</span>
           <span>{ride.departureDate}</span>
           {ride.femaleOnly && (

@@ -7,6 +7,7 @@ import { AlertCircle, ArrowLeft, Clock, Loader2, MapPin, Radio } from 'lucide-re
 import GoogleMap from '@/components/GoogleMap';
 import { PublicTrackingData, trackingApi } from '@/lib/api';
 import { pushEvent } from '@/lib/analytics';
+import { formatRideTime } from '@/lib/format-time';
 
 export default function PublicTrackingPage() {
   const { token } = useParams<{ token: string }>();
@@ -87,7 +88,7 @@ export default function PublicTrackingPage() {
       <div className="mx-auto max-w-3xl px-4 py-6 space-y-6">
         <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
           <div className="bg-gradient-to-r from-deliivo-orange to-primary-600 px-5 py-4 text-white">
-            <p className="text-sm text-white/80">{departureDate} {data.departureTime ? `at ${data.departureTime}` : ''}</p>
+            <p className="text-sm text-white/80">{departureDate} {data.departureTime ? `at ${formatRideTime(data.departureTime)}` : ''}</p>
             <h1 className="mt-0.5 text-lg font-bold">
               {data.originAddress.split(',')[0]} to {data.destinationAddress.split(',')[0]}
             </h1>

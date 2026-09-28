@@ -16,6 +16,7 @@ import { useAuth } from '@/lib/auth-context';
 import { contentApi, searchRidesApi, type SearchRideResult } from '@/lib/api';
 import styles from './HomepageV2.module.css';
 import { rideRequestsEnabled } from '@/lib/ride-requests';
+import { formatRideTime } from '@/lib/format-time';
 
 const routes = [
   { from: 'Tallinn', to: 'Tartu', image: 'tallinn', copy: 'From the capital to the university city' },
@@ -84,7 +85,7 @@ function UpcomingRidesRail() {
               <span className={styles.rideInfo}>
                 <strong>{ride.originAddress.split(',')[0]} <ArrowRight size={12} /> {ride.destinationAddress.split(',')[0]}</strong>
                 <span><Car size={12} /> {[ride.vehicle?.brand, ride.vehicle?.model_name].filter(Boolean).join(' ') || 'Carpool'} <span>{ride.availableSeats} seats</span></span>
-                <span><CalendarDays size={12} /> {new Date(ride.departureDate).toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })}, {ride.departureTime}</span>
+                <span><CalendarDays size={12} /> {new Date(ride.departureDate).toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })}, {formatRideTime(ride.departureTime, locale)}</span>
                 <b>{new Intl.NumberFormat(locale, { style: 'currency', currency: ride.currency || 'EUR' }).format(ride.segment?.segmentFare ?? ride.basePricePerSeat)} <small>/ seat</small></b>
               </span>
             </Link>

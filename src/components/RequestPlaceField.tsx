@@ -4,10 +4,12 @@ import { mapsApi, type PlacePrediction } from '@/lib/api';
 
 export default function RequestPlaceField({
   label,
+  placeholder,
   scope = 'baltic',
   onChange,
 }: {
   label: string;
+  placeholder: string;
   scope?: 'baltic' | 'europe';
   onChange: (id: string, address: string) => void;
 }) {
@@ -48,7 +50,7 @@ export default function RequestPlaceField({
         required
         autoComplete="off"
         className="input-field w-full"
-        placeholder="Search a city or meeting point"
+        placeholder={placeholder}
         aria-describedby={`${id}-hint`}
         onChange={(event) => {
           setQuery(event.target.value);

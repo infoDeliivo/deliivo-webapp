@@ -62,9 +62,13 @@ function CreateRequest() {
         onSubmit={submit}
         className="space-y-5 rounded-3xl border bg-white p-5 shadow-sm sm:p-8"
       >
-        <RequestPlaceField label="From" onChange={(id, address) => setOrigin({ id, address })} />
+        <RequestPlaceField
+          label="From"
+          placeholder="Search your location or pick-up point"
+          onChange={(id, address) => setOrigin({ id, address })} />
         <RequestPlaceField
           label="To"
+          placeholder="Search your destination or drop-off point"
           scope="europe"
           onChange={(id, address) => setDestination({ id, address })}
         />
