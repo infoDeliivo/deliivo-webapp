@@ -1024,7 +1024,11 @@ function VehiclePanel({ vehicle, onOpenDocument, documentLoading }: { vehicle: A
     <div className="rounded-xl border border-gray-100 p-3">
       <div className="flex gap-3">
         <div className="h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-gray-100">
-          {vehicle.imageUrl ? <img src={vehicle.imageUrl} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center"><Car className="h-5 w-5 text-gray-300" /></div>}
+          {vehicle.imageUrl ? (
+            <a href={vehicle.imageUrl} target="_blank" rel="noopener noreferrer" title="Open vehicle image" className="block h-full w-full hover:opacity-80">
+              <img src={vehicle.imageUrl} alt="" className="h-full w-full object-cover" />
+            </a>
+          ) :<div className="flex h-full w-full items-center justify-center"><Car className="h-5 w-5 text-gray-300" /></div>}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
