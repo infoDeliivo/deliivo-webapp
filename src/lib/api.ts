@@ -581,6 +581,22 @@ export const userApi = {
     });
   },
 
+  /** Send an OTP to an email/phone the user wants to add or switch to. `code` only comes back on staging. */
+  requestContactChange(data: { method: ContactMethod; identifier: string }) {
+    return apiFetch<{ data: { method: ContactMethod; identifier: string; code?: string } }>(
+      '/api/v1/users/me/contact/request',
+      { method: 'POST', body: JSON.stringify(data) },
+    );
+  },
+
+  /** Confirm the OTP; the value is saved as verified and the updated user comes back. */
+  verifyContactChange(data: { method: ContactMethod; identifier: string; code: string }) {
+    return apiFetch<{ data: UserProfile }>('/api/v1/users/me/contact/verify', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   async uploadAvatar(file: File) {
     const data = await uploadViaPresign<{ avatarUrl: string }>('avatar', file);
     return { data };
@@ -926,8 +942,15 @@ export const publishRideApi = {
   },
 
   // Step 9: Get recommended price
-  getRecommendedPrice() {
-    return apiFetch<{ data: PriceRecommendation }>('/api/v1/publish-ride/draft/pricing/recommended');
+  getRecommendedPrice(params?: { basePricePerSeat?: number }, init?: RequestInit) {
+    const query =
+      params?.basePricePerSeat !== undefined
+        ? `?basePricePerSeat=${encodeURIComponent(params.basePricePerSeat)}`
+        : '';
+    return apiFetch<{ data: PriceRecommendation }>(
+      `/api/v1/publish-ride/draft/pricing/recommended${query}`,
+      init
+    );
   },
 
   // Step 10: Set pricing
@@ -1075,9 +1098,31 @@ export const bookingsApi = {
       method: 'POST',
     });
   },
+
+  /**
+   * Hands back a payable client secret for a booking the rider never finished paying for.
+   *
+   * The secret is only returned when the booking is created, so after a reload there is no way
+   * back into checkout without this. Restarts the payment window server-side.
+   */
+  resumePayment(id: string) {
+    return apiFetch<{ data: Booking }>(`/api/v1/bookings/${id}/payment/resume`, {
+      method: 'POST',
+    });
+  },
 };
 
 // Driver Booking API (accept/reject/OTP)
+
+/** An overridden OTP check sends the reason instead of a code. */
+function buildOtpBody(otp?: string, overrideReason?: string) {
+  const reason = overrideReason?.trim();
+  return {
+    ...(otp ? { otp } : {}),
+    ...(reason ? { force: true, overrideReason: reason } : {}),
+  };
+}
+
 export const driverBookingApi = {
   accept(bookingId: string) {
     return apiFetch<{ data: DriverBookingResult }>(`/api/v1/driver/bookings/${bookingId}/accept`, { method: 'POST' });
@@ -1089,24 +1134,44 @@ export const driverBookingApi = {
       ...(body ? { body } : {}),
     });
   },
-  verifyPickupOtp(bookingId: string, otp: string) {
+  verifyPickupOtp(bookingId: string, otp?: string, overrideReason?: string) {
     return apiFetch<{ data: DriverBookingResult }>(`/api/v1/driver/bookings/${bookingId}/pickup-otp/verify`, {
-      method: 'POST', body: JSON.stringify({ otp }),
+      method: 'POST', body: JSON.stringify(buildOtpBody(otp, overrideReason)),
     });
   },
-  verifyDropOtp(bookingId: string, otp: string) {
+  verifyDropOtp(bookingId: string, otp?: string, overrideReason?: string) {
     return apiFetch<{ data: DriverBookingResult }>(`/api/v1/driver/bookings/${bookingId}/drop-otp/verify`, {
-      method: 'POST', body: JSON.stringify({ otp }),
+      method: 'POST', body: JSON.stringify(buildOtpBody(otp, overrideReason)),
     });
   },
 };
 
 // Ride Operations API (start/finish/location)
+
+/** Shortest reason the API accepts alongside `force: true`. */
+export const OVERRIDE_REASON_MIN_LENGTH = 5;
+
+/**
+ * What the API reports back about a forced step, so the driver can see exactly
+ * which guards their override skipped.
+ */
+export type ForceResult = {
+  forced?: boolean;
+  overrideReason?: string | null;
+  skippedChecks?: string[];
+};
+
+/**
+ * A reason on its own is only a note. `force: true` is what pushes the step past
+ * a guard, and the API refuses it without a reason — so the two travel together.
+ */
 function createEventMeta(overrides?: { overrideReason?: string }) {
+  const overrideReason = overrides?.overrideReason?.trim();
+
   return {
     actionId: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     clientTimestamp: new Date().toISOString(),
-    ...(overrides?.overrideReason ? { overrideReason: overrides.overrideReason } : {}),
+    ...(overrideReason ? { force: true, overrideReason } : {}),
   };
 }
 
@@ -1118,18 +1183,20 @@ function createEventMetaWithLocation(lat?: number, lng?: number, overrides?: { o
 }
 
 export const rideOpsApi = {
-  syncOfflineActions(actions: Array<{ actionId: string; eventType: string; rideId: string; bookingId?: string; lat?: number; lng?: number; clientTimestamp: string; overrideReason: string }>) {
+  syncOfflineActions(actions: Array<{ actionId: string; eventType: string; rideId: string; bookingId?: string; lat?: number; lng?: number; clientTimestamp: string; force?: boolean; overrideReason: string }>) {
     return apiFetch<{ data: { processed: number; duplicates: number; results: Array<{ actionId: string; status: 'processed' | 'duplicate' | 'error'; error?: string }> } }>('/api/v1/rides/offline-sync', {
       method: 'POST', body: JSON.stringify({ actions }),
     });
   },
-  startRide(rideId: string, overrideReason?: string) {
+  // Starting a ride cannot be forced: the ride is not in progress yet, so the
+  // departure window and the state transition always apply.
+  startRide(rideId: string) {
     return apiFetch<{ message: string }>(`/api/v1/rides/${rideId}/start`, {
-      method: 'POST', body: JSON.stringify(createEventMeta({ overrideReason })),
+      method: 'POST', body: JSON.stringify(createEventMeta()),
     });
   },
   finishRide(rideId: string, overrideReason?: string) {
-    return apiFetch<{ message: string }>(`/api/v1/rides/${rideId}/finish`, {
+    return apiFetch<{ message: string; data?: ForceResult }>(`/api/v1/rides/${rideId}/finish`, {
       method: 'POST', body: JSON.stringify(createEventMeta({ overrideReason })),
     });
   },
@@ -1142,18 +1209,19 @@ export const rideOpsApi = {
     return apiFetch<{ data: LocationUpdateRecord | null }>(`/api/v1/rides/${rideId}/latest-location`);
   },
   driverArrived(bookingId: string, lat?: number, lng?: number, overrideReason?: string) {
-    return apiFetch(`/api/v1/bookings/${bookingId}/driver-arrived`, {
+    return apiFetch<{ data?: ForceResult }>(`/api/v1/bookings/${bookingId}/driver-arrived`, {
       method: 'POST', body: JSON.stringify(createEventMetaWithLocation(lat, lng, { overrideReason })),
     });
   },
   markNoShow(bookingId: string, lat?: number, lng?: number, overrideReason?: string) {
-    return apiFetch(`/api/v1/bookings/${bookingId}/mark-no-show`, {
+    return apiFetch<{ data?: ForceResult }>(`/api/v1/bookings/${bookingId}/mark-no-show`, {
       method: 'POST', body: JSON.stringify(createEventMetaWithLocation(lat, lng, { overrideReason })),
     });
   },
-  verifyPickupOtp(bookingId: string, otp: string, overrideReason?: string) {
-    return apiFetch(`/api/v1/bookings/${bookingId}/verify-pickup-otp`, {
-      method: 'POST', body: JSON.stringify({ otp, ...createEventMeta({ overrideReason }) }),
+  /** `otp` is omitted when forcing — an override has no code to send. */
+  verifyPickupOtp(bookingId: string, otp?: string, overrideReason?: string) {
+    return apiFetch<{ data?: ForceResult }>(`/api/v1/bookings/${bookingId}/verify-pickup-otp`, {
+      method: 'POST', body: JSON.stringify({ ...(otp ? { otp } : {}), ...createEventMeta({ overrideReason }) }),
     });
   },
   riderArrivedAtPickup(bookingId: string, lat?: number, lng?: number, overrideReason?: string) {
@@ -1167,12 +1235,12 @@ export const rideOpsApi = {
     });
   },
   confirmDropoff(bookingId: string, lat?: number, lng?: number, overrideReason?: string) {
-    return apiFetch(`/api/v1/bookings/${bookingId}/confirm-dropoff`, {
+    return apiFetch<{ data?: ForceResult }>(`/api/v1/bookings/${bookingId}/confirm-dropoff`, {
       method: 'POST', body: JSON.stringify(createEventMetaWithLocation(lat, lng, { overrideReason })),
     });
   },
   riderConfirmDropoff(bookingId: string, overrideReason?: string) {
-    return apiFetch(`/api/v1/bookings/${bookingId}/rider-confirm-dropoff`, {
+    return apiFetch<{ data?: ForceResult }>(`/api/v1/bookings/${bookingId}/rider-confirm-dropoff`, {
       method: 'POST', body: JSON.stringify(createEventMeta({ overrideReason })),
     });
   },
@@ -1333,7 +1401,7 @@ export const safetyApi = {
 };
 
 // Live operations types
-export interface DriverBookingResult {
+export interface DriverBookingResult extends ForceResult {
   bookingId: string;
   rideId: string;
   passengerId: string;
@@ -1525,6 +1593,100 @@ export const payoutsApi = {
   },
 };
 
+export interface RewardWalletSummary {
+  walletType: 'RIDER' | 'DRIVER';
+  currency: string;
+  balance: number;
+  credited: number;
+  debited: number;
+}
+
+export interface RewardWalletCampaign {
+  id: string;
+  code: string;
+  name: string;
+  audience: 'RIDER' | 'DRIVER';
+  triggerType: string;
+  thresholdCount: number;
+  rewardAmount: number;
+  currency: string;
+  active: boolean;
+  repeatable: boolean;
+  description: string | null;
+  terms: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  metadataJson: Record<string, unknown> | null;
+  createdById: string | null;
+  updatedById: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RewardWalletEntry {
+  id: string;
+  walletType: 'RIDER' | 'DRIVER';
+  entryType: string;
+  direction: 'CREDIT' | 'DEBIT';
+  amount: number;
+  currency: string;
+  sourceType: string;
+  sourceId: string;
+  description: string | null;
+  campaign: {
+    id: string;
+    code: string;
+    name: string;
+    triggerType: string;
+    audience: string;
+  } | null;
+  referral: {
+    id: string;
+    referrerUserId: string;
+    referredUserId: string;
+    status: string;
+  } | null;
+  previousHash?: string | null;
+  entryHash?: string | null;
+  reversalOfEntryId?: string | null;
+  createdAt: string;
+}
+
+export interface RewardWallet {
+  userId: string;
+  referralCode: string;
+  referredByUserId: string | null;
+  totals: RewardWalletSummary[];
+  campaigns?: RewardWalletCampaign[];
+  ledgerIntegrity?: { ok: boolean; brokenEntryId: string | null };
+  history: RewardWalletEntry[];
+}
+
+export const rewardsApi = {
+  getMyWallet() {
+    return apiFetch<{ data: RewardWallet }>('/api/v1/users/me/rewards');
+  },
+  listCampaigns() {
+    return apiFetch<{ data: RewardWalletCampaign[] }>('/api/v1/admin/rewards/campaigns');
+  },
+  saveCampaign(data: Partial<RewardWalletCampaign> & Pick<RewardWalletCampaign, 'code' | 'name' | 'audience' | 'triggerType' | 'rewardAmount'>) {
+    const isUpdate = Boolean(data.id);
+    return apiFetch<{ data: RewardWalletCampaign }>(`/api/v1/admin/rewards/campaigns${isUpdate ? `/${data.id}` : ''}`, {
+      method: isUpdate ? 'PUT' : 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  getUserWallet(userId: string) {
+    return apiFetch<{ data: RewardWallet }>(`/api/v1/admin/rewards/users/${encodeURIComponent(userId)}/rewards`);
+  },
+  grantUserReward(userId: string, data: { amount: number; currency?: string; walletType?: 'RIDER' | 'DRIVER'; reason: string; sourceType?: string; sourceId?: string; metadataJson?: Record<string, unknown> | null }) {
+    return apiFetch<{ data: { entry: RewardWalletEntry; created: boolean } }>(`/api/v1/admin/rewards/users/${encodeURIComponent(userId)}/rewards/manual-grant`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 // Payment Methods API
 export const paymentMethodsApi = {
   list() {
@@ -1605,6 +1767,9 @@ export const adminApi = {
   getUserDetails(id: string) {
     return apiFetch<{ data: AdminUserDetails }>(`/api/v1/admin/users/${encodeURIComponent(id)}`);
   },
+  getUserRewards(id: string) {
+    return apiFetch<{ data: RewardWallet }>(`/api/v1/admin/rewards/users/${encodeURIComponent(id)}/rewards`);
+  },
   getRides(params?: { page?: number; limit?: number; status?: string; search?: string; searchBy?: string }) {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
@@ -1614,11 +1779,83 @@ export const adminApi = {
     if (params?.searchBy) query.set('searchBy', params.searchBy);
     return apiFetch<{ data: { rides: AdminRide[]; pagination: Pagination } }>(`/api/v1/admin/rides?${query}`);
   },
+  getTrackerTickets(params?: { productArea?: TrackerProductArea }) {
+    const query = new URLSearchParams();
+    if (params?.productArea) query.set('productArea', params.productArea);
+    const suffix = query.toString() ? `?${query}` : '';
+    return apiFetch<{ data: TrackerTicket[] }>(`/api/v1/admin/tracker/tickets${suffix}`);
+  },
+  getTrackerTicket(id: string) {
+    return apiFetch<{ data: TrackerTicketDetails }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(id)}`);
+  },
+  createTrackerTicket(data: TrackerTicketWriteInput) {
+    return apiFetch<{ data: TrackerTicketDetails }>('/api/v1/admin/tracker/tickets', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  updateTrackerTicket(id: string, data: Partial<TrackerTicketWriteInput>) {
+    return apiFetch<{ data: TrackerTicketDetails }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+  addTrackerComment(ticketId: string, body: string) {
+    return apiFetch<{ data: TrackerComment }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+  },
+  addTrackerAttachment(ticketId: string, data: TrackerAttachmentWriteInput) {
+    return apiFetch<{ data: TrackerAttachment }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/attachments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  addTrackerChecklistItem(ticketId: string, data: TrackerChecklistWriteInput) {
+    return apiFetch<{ data: TrackerChecklistItem }>(`/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/checklist-items`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  updateTrackerChecklistItem(ticketId: string, itemId: string, data: Partial<TrackerChecklistWriteInput>) {
+    return apiFetch<{ data: TrackerChecklistItem }>(
+      `/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/checklist-items/${encodeURIComponent(itemId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    );
+  },
+  deleteTrackerChecklistItem(ticketId: string, itemId: string) {
+    return apiFetch<{ data: { deleted: boolean } }>(
+      `/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/checklist-items/${encodeURIComponent(itemId)}`,
+      { method: 'DELETE' },
+    );
+  },
+  deleteTrackerComment(ticketId: string, commentId: string) {
+    return apiFetch<{ data: { deleted: boolean } }>(
+      `/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/comments/${encodeURIComponent(commentId)}`,
+      { method: 'DELETE' },
+    );
+  },
+  deleteTrackerAttachment(ticketId: string, attachmentId: string) {
+    return apiFetch<{ data: { deleted: boolean } }>(
+      `/api/v1/admin/tracker/tickets/${encodeURIComponent(ticketId)}/attachments/${encodeURIComponent(attachmentId)}`,
+      { method: 'DELETE' },
+    );
+  },
   banUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/ban`, { method: 'POST' });
   },
   unbanUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/unban`, { method: 'POST' });
+  },
+  deleteUser(id: string, data: { confirm: true; mode: 'soft' | 'hard' }) {
+    return apiFetch<{ data: { deleted: boolean; hardDeleted?: boolean } }>(`/api/v1/admin/users/${id}/delete`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
   requireVeriff(id: string) {
     return apiFetch<{ data: { id: string; dlVerified: boolean; requiresVeriff: boolean } }>(
@@ -1671,6 +1908,12 @@ export const adminApi = {
     return apiFetch<{ data: { dlVerified: boolean; record: AdminDlRecord } }>(
       `/api/v1/admin/dl-verifications/${userId}/resubmit`,
       { method: 'POST', body: JSON.stringify({ reason }) },
+    );
+  },
+  grantUserReward(userId: string, data: { amount: number; currency?: string; walletType?: 'RIDER' | 'DRIVER'; reason: string; sourceType?: string; sourceId?: string; metadataJson?: Record<string, unknown> | null }) {
+    return apiFetch<{ data: { entry: RewardWalletEntry; created: boolean } }>(
+      `/api/v1/admin/rewards/users/${encodeURIComponent(userId)}/rewards/manual-grant`,
+      { method: 'POST', body: JSON.stringify(data) },
     );
   },
   // Vehicle review queue. Oldest-first server-side, so the list arrives in the order
@@ -1876,6 +2119,121 @@ export interface AdminOperationsSummary {
   };
 }
 
+export type TrackerProductArea = 'WEBAPP' | 'MOBILE_APP';
+export type TrackerTicketType = 'BUG' | 'STORY' | 'TASK' | 'CHORE' | 'IMPROVEMENT';
+export type TrackerTicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type TrackerTicketStatus = 'TODO' | 'IN_PROGRESS' | 'IN_TESTING' | 'DONE';
+
+export interface TrackerPerson {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+}
+
+export interface TrackerChecklistItem {
+  id: string;
+  label: string;
+  done: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrackerComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  authorId: string | null;
+  author: TrackerPerson | null;
+  authorName: string | null;
+}
+
+export interface TrackerAttachment {
+  id: string;
+  label: string;
+  url: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  createdAt: string;
+  uploadedById: string | null;
+  uploadedBy: TrackerPerson | null;
+  uploadedByName: string | null;
+}
+
+export interface TrackerTicket {
+  id: string;
+  productArea: TrackerProductArea;
+  title: string;
+  summary: string | null;
+  ticketType: TrackerTicketType;
+  priority: TrackerTicketPriority;
+  status: TrackerTicketStatus;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  assignee: TrackerPerson | null;
+  dueDate: string | null;
+  description: string | null;
+  acceptanceCriteria: string | null;
+  notes: string | null;
+  blockerReason: string | null;
+  releaseTarget: string | null;
+  externalLinksJson: Record<string, unknown> | unknown[] | null;
+  metadataJson: Record<string, unknown> | unknown[] | null;
+  sortOrder: number;
+  commentsCount: number;
+  attachmentsCount: number;
+  checklistTotalCount: number;
+  checklistDoneCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrackerTicketDetails extends TrackerTicket {
+  createdById: string | null;
+  createdBy: TrackerPerson | null;
+  updatedById: string | null;
+  updatedBy: TrackerPerson | null;
+  comments: TrackerComment[];
+  attachments: TrackerAttachment[];
+  checklistItems: TrackerChecklistItem[];
+}
+
+export interface TrackerTicketWriteInput {
+  productArea: TrackerProductArea;
+  title: string;
+  summary?: string | null;
+  ticketType: TrackerTicketType;
+  priority?: TrackerTicketPriority;
+  status?: TrackerTicketStatus;
+  assigneeId?: string | null;
+  assigneeName?: string | null;
+  dueDate?: string | null;
+  description?: string | null;
+  acceptanceCriteria?: string | null;
+  notes?: string | null;
+  blockerReason?: string | null;
+  releaseTarget?: string | null;
+  externalLinksJson?: Record<string, unknown> | unknown[] | null;
+  metadataJson?: Record<string, unknown> | unknown[] | null;
+  sortOrder?: number;
+}
+
+export interface TrackerAttachmentWriteInput {
+  label: string;
+  url: string;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+}
+
+export interface TrackerChecklistWriteInput {
+  label: string;
+  sortOrder?: number;
+  done?: boolean;
+}
+
 export interface AdminPricingConfig {
   id: string;
   regionCode: string;
@@ -1885,6 +2243,9 @@ export interface AdminPricingConfig {
   maxRatePerKm: number;
   minimumSeatPrice: number;
   roundingStrategy: string;
+  /** Rider-paid service fee, charged on top of the driver's fare. */
+  serviceFeePercent: number;
+  serviceFeeFlat: number;
   active: boolean;
   validFrom: string;
   validTo?: string | null;
@@ -1901,6 +2262,9 @@ export interface AdminPricingConfigWriteInput {
   maxRatePerKm: number;
   minimumSeatPrice: number;
   roundingStrategy: string;
+  /** Rider-paid service fee, charged on top of the driver's fare. */
+  serviceFeePercent: number;
+  serviceFeeFlat: number;
   active: boolean;
   validFrom?: string;
   validTo?: string | null;
@@ -1975,6 +2339,7 @@ export interface AdminVerificationEmailDraft {
 export interface AdminUser {
   id: string;
   firstName: string | null;
+  lastName?: string | null;
   salutation: string | null;
   gender: string | null;
   email: string | null;
@@ -2663,7 +3028,11 @@ export interface SearchRideResult {
   departureDate: string;
   departureTime: string;
   availableSeats: number;
+  /** The driver's fare. Riders are shown riderTotalPerSeat. */
   basePricePerSeat: number;
+  /** What the rider pays per seat, service fee included. Backend-computed. */
+  riderTotalPerSeat?: number;
+  serviceFeePerSeat?: number;
   currency: string;
   status: string;
   femaleOnly?: boolean;
@@ -2729,6 +3098,9 @@ export interface PricePreview {
     serviceFee: number;
     totalPrice: number;
     currency: string;
+    /** Rate the backend used, for display copy only — never multiply with it. */
+    serviceFeePercent: number;
+    serviceFeeFlat: number;
   };
   ride: {
     id: string;
@@ -2778,9 +3150,18 @@ export interface Booking {
     serviceFee: number;
     totalPrice: number;
     currency: string;
+    /** Rate the backend used, for display copy only — never multiply with it. */
+    serviceFeePercent: number;
+    serviceFeeFlat: number;
   };
   status: string;
   displayStatus?: string;
+  cancelledAt?: string | null;
+  /**
+   * Who ended the booking: 'PASSENGER' | 'DRIVER' | 'ADMIN' | 'SYSTEM'. A CANCELLED booking can be
+   * any of these, and only the rider's own cancellation reopens booking on that ride.
+   */
+  cancelledByRole?: string | null;
   pickupWaypointId: string | null;
   dropoffWaypointId: string | null;
   notes?: string;
@@ -2804,6 +3185,8 @@ export interface Booking {
     clientSecret?: string;
     currency?: string;
   } | null;
+  /** True when the backend handed back an existing unpaid booking instead of creating one. */
+  resumed?: boolean;
   ride?: {
     id: string;
     originAddress: string;
@@ -2954,6 +3337,53 @@ export interface PriceRecommendation {
     maxRatePerKm?: number;
     pricingConfigFallback?: boolean;
   };
+  /** Every money figure the publish screen shows, computed by the backend. */
+  quote: PriceQuote;
+  /**
+   * Backend-computed fare for each stopover the draft already has, sorted by distance from origin.
+   * Absent when the draft has no stopovers. Render as-is — the split is distance-based and derived
+   * from the same pricing config that prices the real booking, so recomputing it here would drift.
+   */
+  stopoverPricing?: StopoverRecommendedPrice[];
+}
+
+/** One stopover's backend-computed fare and allowed range, from the recommended-price endpoint. */
+export interface StopoverRecommendedPrice {
+  placeId: string;
+  address: string;
+  distanceFromOriginKm: number;
+  /** Distance-derived fare at the base price currently being quoted. */
+  recommendedPrice: number;
+  minPrice: number;
+  maxPrice: number;
+  /** The driver's own fare for this stop, when they have already set one. */
+  driverPricePerSeat?: number;
+  estimatedArrivalTime?: string;
+}
+
+/**
+ * Backend-computed amounts for the publish price step.
+ *
+ * The frontend must render these as-is. It previously multiplied a hardcoded 20% client-side, which
+ * drifted from what the backend charged. `perSeat` and `fullRide` are computed independently — the
+ * fee is charged once per booking, so per-seat times seats can differ by a cent from the real
+ * charge. Never derive one from the other.
+ */
+export interface PriceQuote {
+  basePricePerSeat: number;
+  seats: number;
+  currency: string;
+  serviceFeePercent: number;
+  serviceFeeFlat: number;
+  perSeat: PriceQuoteAmounts;
+  fullRide: PriceQuoteAmounts;
+}
+
+export interface PriceQuoteAmounts {
+  /** What the driver receives. The fee is added on top of this, never taken out of it. */
+  driverNet: number;
+  serviceFee: number;
+  riderTotal: number;
 }
 
 export interface PublishedRide {
@@ -2964,6 +3394,11 @@ export interface PublishedRide {
   departureTime: string;
   totalSeats: number;
   availableSeats: number;
+  /**
+   * Seats actually sold. Not `totalSeats - availableSeats`: availableSeats is peak
+   * occupancy across the ride's segments, so bookings on disjoint legs do not move it.
+   */
+  bookedSeats?: number;
   basePricePerSeat: number;
   currency: string;
   status: string;
@@ -2984,6 +3419,8 @@ export interface DriverRideBooking {
   passengerId: string;
   passenger?: { id: string; firstName: string | null; avatarUrl: string | null };
   seatsBooked: number;
+  /** Set while this booking holds its seats; null once they are released. */
+  seatsReservedAt?: string | null;
   totalPrice: number;
   status: string;
   displayStatus?: string;
@@ -3005,6 +3442,15 @@ export interface DriverRideBooking {
   pickupLocation?: { address: string; placeId: string; lat?: number; lng?: number; estimatedArrivalTime?: string | null };
   dropoffLocation?: { address: string; placeId: string; lat?: number; lng?: number; estimatedArrivalTime?: string | null };
   createdAt?: string;
+  /** Currency of the amounts below — do not assume EUR. */
+  currency?: string;
+  /** What the rider paid, fee included. */
+  riderTotalAmount?: number;
+  /** The rider's service fee. Not deducted from the driver. */
+  serviceFeeAmount?: number;
+  /** What the driver earns. Already net — do not subtract the fee from it. */
+  driverNetAmount?: number;
+  serviceFeePercent?: number | null;
 }
 
 export interface DriverPublishedRide extends PublishedRide {
@@ -3014,10 +3460,14 @@ export interface DriverPublishedRide extends PublishedRide {
 }
 
 // Types
+export type ContactMethod = 'email' | 'phone';
+
 export interface UserProfile {
   id: string;
-  email?: string;
-  phone?: string;
+  email?: string | null;
+  phone?: string | null;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
   firstName?: string;
   lastName?: string;
   salutation?: string | null;

@@ -20,6 +20,7 @@ import {
   CheckCircle,
   History,
   ShieldCheck,
+  Route,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -139,7 +140,10 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
   const driverName = ride.driver?.firstName || 'Driver';
   const initials = driverName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const vehicleLabel = ride.vehicle ? [ride.vehicle.brand, ride.vehicle.model_name].filter(Boolean).join(' ') : null;
-  const price = ride.segment?.segmentFare ?? ride.basePricePerSeat;
+  // The all-in price the rider pays, straight from the backend. Falling back to the driver's fare
+  // only for older responses that predate the field — never adding a fee here.
+  const price = ride.riderTotalPerSeat ?? ride.segment?.segmentFare ?? ride.basePricePerSeat;
+  const serviceFeePerSeat = ride.serviceFeePerSeat ?? 0;
   const dateLabel = new Date(ride.departureDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const durationLabel = formatDurationLabel(ride.routeDurationSeconds);
   const distanceLabel = ride.routeDistanceMeters ? `${(ride.routeDistanceMeters / 1000).toFixed(1)} km` : null;
@@ -187,6 +191,13 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
             <span>{dateLabel}</span>
             {ride.femaleOnly && (
               <span className="ml-1 rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-600">{t('ride.womenOnly')}</span>
+            )}
+            {/* The rider only travels part of this driver's route, so the times, distance and
+                price on this card describe their leg rather than the whole trip. */}
+            {ride.isSegmentView && (
+              <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                <Route size={12} /> {t('search.partOfLongerRide')}
+              </span>
             )}
           </div>
           {(ride.noSmoking || ride.alcoholFreeRide || ride.noBicycles || ride.childSeatAvailable) && (
@@ -244,6 +255,11 @@ function RideResultCard({ ride }: { ride: SearchRideResult }) {
           <div className="text-right">
             <p className="text-xl font-bold text-primary-500">{ride.currency} {price.toFixed(2)}</p>
             <p className="text-xs text-deliivo-gray">{t('ride.perSeat')}</p>
+            {serviceFeePerSeat > 0 && (
+              <p className="text-[11px] text-deliivo-gray">
+                {t('search.includesServiceFee', { amount: `${ride.currency} ${serviceFeePerSeat.toFixed(2)}` })}
+              </p>
+            )}
           </div>
           <Link href={`/rides/${ride.id}${ride.segmentId ? `?segmentId=${ride.segmentId}` : ''}`} className="btn-primary py-2 px-5 text-sm">{t('ride.view')}</Link>
         </div>

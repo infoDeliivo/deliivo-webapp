@@ -42,6 +42,8 @@ import {
   PlacePrediction,
   RouteOption,
   PriceRecommendation,
+  PriceQuote,
+  StopoverRecommendedPrice,
   LocationInput,
   Vehicle,
   ConnectStatus,
@@ -89,6 +91,14 @@ interface WizardState {
   // Step 4 — Price
   basePricePerSeat: number;
   recommendation: PriceRecommendation | null;
+  /** Backend-computed amounts for the current candidate price. Never derived locally. */
+  quote: PriceQuote | null;
+  /**
+   * Fares the driver set for individual stopovers, keyed by placeId. A stop missing from here is
+   * sold at the backend's distance-derived fare; the backend clamps whatever is sent to the
+   * allowed range for that stop.
+   */
+  stopoverPrices: Record<string, number>;
   // Step 5 — Notes
   notes: string;
 }
@@ -97,9 +107,6 @@ interface WizardState {
 
 const TOTAL_STEPS = 6;
 const PUBLISH_STEP_NAMES = ['route', 'stopovers', 'datetime', 'seats', 'price', 'confirm'] as const;
-const DEFAULT_PLATFORM_FEE_PERCENT = 20;
-const PLATFORM_FEE_PERCENT_RAW = Number(process.env.NEXT_PUBLIC_PLATFORM_FEE_PERCENT || String(DEFAULT_PLATFORM_FEE_PERCENT));
-const PLATFORM_FEE_PERCENT = Number.isFinite(PLATFORM_FEE_PERCENT_RAW) ? Math.max(0, PLATFORM_FEE_PERCENT_RAW) : 0;
 const ESTONIA_MAP_CENTER = { lat: 58.5953, lng: 25.0136 };
 const MINIMUM_PUBLISH_LEAD_MS = 3 * 60 * 60 * 1000;
 
@@ -684,17 +691,67 @@ function StepPrice({
 }) {
   const { t } = useTranslation();
   const rec = state.recommendation;
-  const currency = rec?.currency || 'EUR';
-  const grossFullRideFare = state.basePricePerSeat * state.seats;
-  const platformFeeRate = PLATFORM_FEE_PERCENT / 100;
-  const estimatedServiceFeePerSeat = Math.round(state.basePricePerSeat * platformFeeRate * 100) / 100;
-  const estimatedRiderTotalPerSeat = state.basePricePerSeat + estimatedServiceFeePerSeat;
-  const estimatedFullRideServiceFees = estimatedServiceFeePerSeat * state.seats;
-  const estimatedFullRideRiderTotal = estimatedRiderTotalPerSeat * state.seats;
+  // Every amount below comes from the backend. Deriving any of them here is what caused the old
+  // drift: this screen multiplied a hardcoded 20% while the backend charged something else.
+  const quote = state.quote;
+  const currency = quote?.currency || rec?.currency || 'EUR';
   const priceAboveSuggestedRange = Boolean(rec && state.basePricePerSeat > rec.maxPrice);
+
+  // Re-quote from the backend whenever the driver changes the price. The frontend cannot compute
+  // the fee itself, so the amounts have to be fetched. Debounced, and the in-flight request is
+  // aborted so a slow earlier response cannot overwrite a newer one.
+  const quotedPrice = state.quote?.basePricePerSeat;
+  useEffect(() => {
+    const price = state.basePricePerSeat;
+    if (!price || price <= 0) return;
+    if (quotedPrice !== undefined && Math.abs(quotedPrice - price) < 0.005) return;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      publishRideApi
+        .getRecommendedPrice({ basePricePerSeat: price }, { signal: controller.signal })
+        .then(res => {
+          if (controller.signal.aborted) return;
+          // Keep the previous quote on screen rather than blanking the tiles mid-edit. The whole
+          // recommendation is replaced, not just the quote, so the per-stopover fares below stay in
+          // step with the backend instead of being recomputed here.
+          if (res.data?.quote) onChange({ quote: res.data.quote, recommendation: res.data });
+        })
+        .catch(() => {
+          // Leave the last good quote in place; never substitute a locally computed estimate.
+        });
+    }, 400);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [state.basePricePerSeat, quotedPrice, onChange]);
   const recommendationAdjusted = Boolean(
     rec && Math.abs(rec.breakdown.estimatedRouteCost - rec.recommendedPrice) >= 0.01
   );
+  // The distance-derived fare and the allowed range both come from the backend; this screen only
+  // decides which value sits in the box. Same rule as the tiles above — nothing priced locally.
+  const stopoverFares = rec?.stopoverPricing ?? [];
+
+  const setStopoverPrice = (placeId: string, value: number | null) => {
+    const next = { ...state.stopoverPrices };
+    if (value === null) {
+      delete next[placeId];
+    } else {
+      next[placeId] = value;
+    }
+    onChange({ stopoverPrices: next });
+  };
+
+  // Pull an edited fare back inside the range once the driver leaves the field. The backend clamps
+  // too, so this is about showing them the number that will actually be saved.
+  const commitStopoverPrice = (stop: StopoverRecommendedPrice) => {
+    const current = state.stopoverPrices[stop.placeId];
+    if (current === undefined) return;
+    const clamped = Math.round(Math.min(Math.max(current, stop.minPrice), stop.maxPrice) * 100) / 100;
+    if (Math.abs(clamped - current) >= 0.005) setStopoverPrice(stop.placeId, clamped);
+  };
 
   return (
     <div className="space-y-6">
@@ -787,27 +844,116 @@ function StepPrice({
         <div className="mt-4 grid gap-3 border-t border-gray-100 pt-4 text-sm sm:grid-cols-2">
           <div className="rounded-xl bg-gray-50 px-3 py-3">
             <p className="text-xs font-medium text-deliivo-gray">{t('publish.driverReceivesPerSeat')}</p>
-            <p className="mt-1 text-base font-semibold text-deliivo-dark">{currency} {state.basePricePerSeat.toFixed(2)}</p>
+            <p className="mt-1 text-base font-semibold text-deliivo-dark">
+              {quote ? `${currency} ${quote.perSeat.driverNet.toFixed(2)}` : t('publish.quoteUnavailable')}
+            </p>
           </div>
           <div className="rounded-xl bg-orange-50 px-3 py-3">
             <p className="text-xs font-medium text-deliivo-gray">{t('publish.riderPaysPerSeat')}</p>
-            <p className="mt-1 text-base font-semibold text-deliivo-orange">{currency} {estimatedRiderTotalPerSeat.toFixed(2)}</p>
-            <p className="mt-1 text-[11px] text-deliivo-gray">{t('publish.includesServiceFee', { amount: `${currency} ${estimatedServiceFeePerSeat.toFixed(2)}` })}</p>
+            <p className="mt-1 text-base font-semibold text-deliivo-orange">
+              {quote ? `${currency} ${quote.perSeat.riderTotal.toFixed(2)}` : t('publish.quoteUnavailable')}
+            </p>
+            {quote && (
+              <p className="mt-1 text-[11px] text-deliivo-gray">
+                {t('publish.includesServiceFee', { amount: `${currency} ${quote.perSeat.serviceFee.toFixed(2)}` })}
+              </p>
+            )}
           </div>
           <div className="rounded-xl bg-gray-50 px-3 py-3">
             <p className="text-xs font-medium text-deliivo-gray">{t('publish.fullRideGrossFare', { seats: state.seats })}</p>
-            <p className="mt-1 text-base font-semibold text-deliivo-dark">{currency} {grossFullRideFare.toFixed(2)}</p>
+            <p className="mt-1 text-base font-semibold text-deliivo-dark">
+              {quote ? `${currency} ${quote.fullRide.driverNet.toFixed(2)}` : t('publish.quoteUnavailable')}
+            </p>
           </div>
           <div className="rounded-xl bg-gray-50 px-3 py-3">
             <p className="text-xs font-medium text-deliivo-gray">{t('publish.fullRideRiderTotal', { seats: state.seats })}</p>
-            <p className="mt-1 text-base font-semibold text-deliivo-dark">{currency} {estimatedFullRideRiderTotal.toFixed(2)}</p>
-            <p className="mt-1 text-[11px] text-deliivo-gray">{t('publish.includesServiceFee', { amount: `${currency} ${estimatedFullRideServiceFees.toFixed(2)}` })}</p>
+            <p className="mt-1 text-base font-semibold text-deliivo-dark">
+              {quote ? `${currency} ${quote.fullRide.riderTotal.toFixed(2)}` : t('publish.quoteUnavailable')}
+            </p>
+            {quote && (
+              <p className="mt-1 text-[11px] text-deliivo-gray">
+                {t('publish.includesServiceFee', { amount: `${currency} ${quote.fullRide.serviceFee.toFixed(2)}` })}
+              </p>
+            )}
           </div>
         </div>
         <p className="mt-3 text-xs leading-5 text-deliivo-gray">
-          {t('publish.grossFareNotice')} {t('publish.stripeFeeNotice')}
+          {quote && quote.serviceFeeFlat === 0
+            ? t('publish.serviceFeePercentNote', { percent: quote.serviceFeePercent })
+            : t('publish.grossFareNotice')}
         </p>
       </div>
+
+      {/* Per-stopover fares */}
+      {state.stopovers.length > 0 && (
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+          <div className="flex items-start gap-2">
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-deliivo-orange" />
+            <div>
+              <p className="text-sm font-semibold text-deliivo-dark">{t('publish.stopoverFares')}</p>
+              <p className="mt-1 text-xs leading-5 text-deliivo-gray">{t('publish.stopoverFaresCopy')}</p>
+            </div>
+          </div>
+          {stopoverFares.length > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {stopoverFares.map((stop) => {
+                const override = state.stopoverPrices[stop.placeId];
+                const shownPrice = override ?? stop.recommendedPrice;
+                return (
+                  <li key={stop.placeId} className="rounded-xl bg-gray-50 px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-deliivo-dark">{stop.address}</p>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-deliivo-gray">
+                          <span>{t('publish.stopoverFareFromOrigin', { km: stop.distanceFromOriginKm.toFixed(1) })}</span>
+                          {stop.estimatedArrivalTime && (
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {t('publish.stopoverFareArrival', { time: stop.estimatedArrivalTime })}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span className="text-xs font-medium text-deliivo-gray">{currency}</span>
+                        <input
+                          type="number"
+                          min={stop.minPrice}
+                          max={stop.maxPrice}
+                          step={0.5}
+                          value={shownPrice}
+                          onChange={(e) => setStopoverPrice(stop.placeId, parseFloat(e.target.value) || 0)}
+                          onBlur={() => commitStopoverPrice(stop)}
+                          className="w-24 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-center text-sm font-semibold text-deliivo-orange focus:border-deliivo-orange focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-deliivo-gray">
+                      <span>
+                        {t('publish.stopoverFareRange', {
+                          min: `${currency} ${stop.minPrice.toFixed(2)}`,
+                          max: `${currency} ${stop.maxPrice.toFixed(2)}`,
+                        })}
+                      </span>
+                      {override !== undefined && (
+                        <button
+                          type="button"
+                          onClick={() => setStopoverPrice(stop.placeId, null)}
+                          className="font-semibold text-deliivo-orange hover:underline"
+                        >
+                          {t('publish.stopoverFareUseRecommended', { price: `${currency} ${stop.recommendedPrice.toFixed(2)}` })}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="mt-3 text-xs text-deliivo-gray">{t('publish.stopoverFaresUnavailable')}</p>
+          )}
+        </div>
+      )}
 
       {/* Notes */}
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
@@ -866,8 +1012,16 @@ function StepConfirm({
     { icon: <Clock className="h-4 w-4 text-deliivo-orange" />, label: t('publish.time'), value: timeLabel },
     { icon: <Users className="h-4 w-4 text-deliivo-orange" />, label: t('publish.seats'), value: `${state.seats} ${t('publish.passengerWord', { count: state.seats })}` },
     { icon: <Luggage className="h-4 w-4 text-deliivo-orange" />, label: t('publish.luggage'), value: t('publish.maxLuggageValue', { max: state.maxLuggage }) },
-    { icon: <Euro className="h-4 w-4 text-deliivo-orange" />, label: t('publish.pricePerSeatLabel'), value: state.basePricePerSeat > 0 ? `${state.recommendation?.currency || 'EUR'} ${state.basePricePerSeat.toFixed(2)}` : t('publish.free') },
+    { icon: <Euro className="h-4 w-4 text-deliivo-orange" />, label: t('publish.pricePerSeatLabel'), value: state.basePricePerSeat > 0 ? `${state.quote?.currency || state.recommendation?.currency || 'EUR'} ${state.basePricePerSeat.toFixed(2)}` : t('publish.free') },
   ];
+
+  const confirmCurrency = state.quote?.currency || state.recommendation?.currency || 'EUR';
+  // Whatever the driver settled on for each stop: their own fare when they set one, otherwise the
+  // backend's. Not recomputed here.
+  const confirmStopoverFares = (state.recommendation?.stopoverPricing ?? []).map((stop) => ({
+    ...stop,
+    finalPrice: state.stopoverPrices[stop.placeId] ?? stop.recommendedPrice,
+  }));
 
   return (
     <div className="space-y-6">
@@ -893,6 +1047,22 @@ function StepConfirm({
             </li>
           ))}
         </ul>
+
+        {confirmStopoverFares.length > 0 && (
+          <div className="border-t border-gray-50 px-5 py-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">{t('publish.stopoverFares')}</p>
+            <ul className="space-y-1.5">
+              {confirmStopoverFares.map((stop) => (
+                <li key={stop.placeId} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate text-sm text-deliivo-dark">{stop.address}</span>
+                  <span className="shrink-0 text-sm font-semibold text-deliivo-orange">
+                    {confirmCurrency} {stop.finalPrice.toFixed(2)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {(state.femaleOnly || state.noSmoking || state.alcoholFreeRide || state.childSeatAvailable || state.noBicycles) && (
           <div className="flex flex-wrap gap-2 px-5 py-3 border-t border-gray-50">
@@ -1031,6 +1201,8 @@ const INITIAL_STATE: WizardState = {
   vehicleId: '',
   basePricePerSeat: 0,
   recommendation: null,
+  quote: null,
+  stopoverPrices: {},
   notes: "",
 };
 
@@ -1251,10 +1423,12 @@ function PublishRideWizard() {
   const [gateError, setGateError] = useState('');
   const publishGuide = getPublishGuide(step);
 
-  function patch(update: Partial<WizardState>) {
+  // Stable identity: StepPrice debounces its re-quote in an effect that depends on this callback,
+  // so a fresh function each render would restart the timer on every unrelated re-render.
+  const patch = useCallback((update: Partial<WizardState>) => {
     setState((prev) => ({ ...prev, ...update }));
     setError('');
-  }
+  }, []);
 
   useEffect(() => {
     loadPayoutStatus();
@@ -1450,11 +1624,24 @@ function PublishRideWizard() {
           const priceRes = await publishRideApi.getRecommendedPrice();
           const rec = priceRes.data;
           pushEvent('price_recommendation_viewed', { recommended_price: rec.recommendedPrice });
-          setState(prev => ({
-            ...prev,
-            recommendation: rec,
-            basePricePerSeat: prev.basePricePerSeat || rec.recommendedPrice,
-          }));
+          setState(prev => {
+            // Seed the per-stopover boxes from fares the driver set on an earlier visit to this
+            // draft, and drop entries for stops that are no longer on the route. Boxes edited in
+            // this session win, since this fetch happens before the driver reaches the price step.
+            const stopoverPrices: Record<string, number> = {};
+            for (const stop of rec.stopoverPricing ?? []) {
+              const existing = prev.stopoverPrices[stop.placeId] ?? stop.driverPricePerSeat;
+              if (existing !== undefined) stopoverPrices[stop.placeId] = existing;
+            }
+
+            return {
+              ...prev,
+              recommendation: rec,
+              quote: rec.quote ?? null,
+              basePricePerSeat: prev.basePricePerSeat || rec.recommendedPrice,
+              stopoverPrices,
+            };
+          });
         } catch {
           // Price recommendation is optional; user can still set manually
         }
@@ -1527,8 +1714,18 @@ function PublishRideWizard() {
         childSeatAvailable: state.childSeatAvailable,
       });
 
-      // Save pricing
-      await publishRideApi.updatePricing(state.basePricePerSeat);
+      // Save pricing. Only stops the driver actually priced are sent; the rest keep the backend's
+      // distance-derived fare, and the backend clamps each one to that stop's allowed range.
+      const stopoverPricing = state.stopovers
+        .filter((stopover) => state.stopoverPrices[stopover.placeId] !== undefined)
+        .map((stopover) => ({
+          placeId: stopover.placeId,
+          pricePerSeat: state.stopoverPrices[stopover.placeId],
+        }));
+      await publishRideApi.updatePricing(
+        state.basePricePerSeat,
+        stopoverPricing.length > 0 ? stopoverPricing : undefined,
+      );
 
       // Save notes if any
       if (state.notes || state.femaleOnly) {

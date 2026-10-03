@@ -9,6 +9,8 @@ import { useTranslation } from '@/lib/i18n-context';
 import { getSafeReturnTo } from '@/lib/auth-redirect';
 import { isOnboardingComplete } from '@/lib/onboarding';
 import { pushEvent } from '@/lib/analytics';
+import type { ContactMethod } from '@/lib/api';
+import ContactVerifyForm from '@/components/contact/ContactVerifyForm';
 
 const MINIMUM_BOOKING_AGE_YEARS = 8;
 const PERSON_NAME_PATTERN = /^(?=.*\p{L})[\p{L}\p{M} .'-]+$/u;
@@ -23,6 +25,9 @@ function getLatestAllowedDob() {
 export default function OnboardingPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
+  // Adding the second contact is optional; skipping only lasts for this visit, the profile page
+  // offers it again later.
+  const [contactSkipped, setContactSkipped] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -49,8 +54,46 @@ export default function OnboardingPage() {
     );
   }
 
+  // Email and Google signups are asked for a phone; phone signups for an email.
+  const missingContact: ContactMethod | null = !user.phone ? 'phone' : !user.email ? 'email' : null;
+  if (missingContact && !contactSkipped) {
+    return <ContactStep method={missingContact} onSkip={() => setContactSkipped(true)} />;
+  }
+
   return (
     <OnboardingForm />
+  );
+}
+
+function ContactStep({ method, onSkip }: { method: ContactMethod; onSkip: () => void }) {
+  const { refreshUser } = useAuth();
+  const { t } = useTranslation();
+  const titleKey = method === 'phone' ? 'onboarding.addPhoneTitle' : 'onboarding.addEmailTitle';
+  const copyKey = method === 'phone' ? 'onboarding.addPhoneCopy' : 'onboarding.addEmailCopy';
+
+  return (
+    <div className="min-h-screen bg-deliivo-cream px-4 py-8 sm:px-6 sm:py-12">
+      <div className="mx-auto w-full max-w-md">
+        <div className="mb-6 text-center">
+          <BrandLogo size={30} className="mx-auto h-auto w-auto" />
+          <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-deliivo-gray">
+            {t('onboarding.stepOf', { step: 1, total: 2 })}
+          </p>
+          <h1 className="mt-1 text-2xl font-bold text-deliivo-dark">{t(titleKey)}</h1>
+          <p className="mt-1 text-sm text-deliivo-gray">{t(copyKey)}</p>
+        </div>
+        <div className="rounded-[2rem] bg-white p-6 shadow-sm ring-1 ring-black/5 sm:p-8">
+          <ContactVerifyForm
+            method={method}
+            onVerified={async () => {
+              await refreshUser();
+            }}
+            onDismiss={onSkip}
+            dismissLabel={t('onboarding.skipForNow')}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 

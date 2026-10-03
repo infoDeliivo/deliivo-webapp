@@ -23,12 +23,13 @@ import {
   ShieldCheck,
   ExternalLink,
   Info,
+  Route,
 } from 'lucide-react';
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import EmergencySosButton from '@/components/EmergencySosButton';
 import SupportOverrideCard from '@/components/SupportOverrideCard';
 import FlowGuide, { FlowGuideStep } from '@/components/FlowGuide';
-import { authApi, searchRidesApi, bookingsApi, rideOpsApi, ratingsApi, trackingApi, disputesApi, paymentMethodsApi, RideDetails, PricePreview, Booking, TrackingLink, Dispute, PaymentMethod, formatBookingReference, getApiErrorMessage } from '@/lib/api';
+import { authApi, searchRidesApi, bookingsApi, rideOpsApi, ratingsApi, trackingApi, disputesApi, paymentMethodsApi, RideDetails, PricePreview, Booking, TrackingLink, Dispute, PaymentMethod, OVERRIDE_REASON_MIN_LENGTH, formatBookingReference, getApiErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { emitSocketEvent, getSocket, onSocketEvent, LocationUpdate, NotificationPayload, BookingUpdatedPayload, RideUpdatedPayload } from '@/lib/socket';
 import { isStripeConfigured, StripeProvider } from '@/lib/stripe';
@@ -107,6 +108,30 @@ function buildRiderPointOptions(ride: RideDetails): RiderPointOption[] {
       estimatedArrivalTime: null,
     },
   ];
+}
+
+/** Statuses a booking never leaves. A booking in one of these is history, not a live seat. */
+const TERMINAL_BOOKING_STATUSES = ['CANCELLED', 'PAYMENT_FAILED', 'RIDE_FULL_REFUNDED', 'REJECTED', 'EXPIRED'];
+
+/**
+ * A rider may book a ride again after cancelling it themselves.
+ *
+ * Deliberately narrow: a driver's cancellation or rejection, and the automated ones, leave the
+ * booking CANCELLED too, and re-requesting a seat from a driver who just turned you down is a loop,
+ * not a feature. The role comes from the backend — the webapp cannot infer it from the status.
+ */
+function isRiderCancelledBooking(booking: Booking | null) {
+  return Boolean(booking && booking.status === 'CANCELLED' && booking.cancelledByRole === 'PASSENGER');
+}
+
+/**
+ * Seats to start a re-booking from: what the rider had, capped at what is left on the ride.
+ *
+ * Clamped so the prefilled form is always one they can submit — seats may have gone to other
+ * riders between the cancellation and the re-book.
+ */
+function rebookSeats(ride: RideDetails, booking: Booking) {
+  return Math.max(1, Math.min(booking.seatsBooked, ride.availableSeats));
 }
 
 function waypointForId(ride: RideDetails, waypointId?: string | null) {
@@ -273,6 +298,9 @@ function RideDetailContent() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const segmentId = searchParams.get('segmentId') || undefined;
+  // Set by the Book again link on the trips list, so arriving from there opens the booking form
+  // straight away instead of landing the rider back on the cancelled-booking panel.
+  const rebookFromLink = searchParams.get('rebook') === '1';
   const rideReturnTo = `/rides/${id}${segmentId ? `?segmentId=${encodeURIComponent(segmentId)}` : ''}`;
   const { user, refreshUser } = useAuth();
   const { t, locale } = useTranslation();
@@ -302,6 +330,9 @@ function RideDetailContent() {
   const [bringingOwnChildSeat, setBringingOwnChildSeat] = useState(false);
   const [selectedPickupValue, setSelectedPickupValue] = useState('origin');
   const [selectedDropoffValue, setSelectedDropoffValue] = useState('destination');
+  // Set when the rider asks to book a ride they cancelled. Until then the cancelled booking panel
+  // stays put, so the page does not silently look as if the cancellation never happened.
+  const [rebookRequested, setRebookRequested] = useState(false);
 
   // Rider's existing booking for this ride
   const [myBooking, setMyBooking] = useState<Booking | null>(null);
@@ -340,7 +371,8 @@ function RideDetailContent() {
     { value: 'TWENTY_FOUR_HOURS', label: t('rideDetail.expiryTwentyFourHours') },
     { value: 'BEFORE_DEPARTURE', label: t('rideDetail.expiryBeforeDeparture') },
   ] as const;
-  const allowManualOverride = process.env.NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE === 'true';
+  // The API only accepts a forced step while the ride is actually running.
+  const overrideAvailable = ride?.status === 'IN_PROGRESS';
   const childSeatControlsEnabled = Boolean(ride?.childSeatAvailable);
 
   useEffect(() => {
@@ -361,6 +393,18 @@ function RideDetailContent() {
   useEffect(() => {
     setRatingSubmitted(Boolean(myBooking?.ratingByViewer));
   }, [myBooking?.id, myBooking?.ratingByViewer?.id]);
+
+  // Arriving from the trips list's Book again link. Runs once both the ride and the rider's
+  // booking are loaded, and only for the rider's own cancellation — the link is not a bypass for
+  // a driver's cancellation, and anyone can type the query parameter. The pickup and drop-off are
+  // restored by the effect above, which already seeds the selects from myBooking.
+  useEffect(() => {
+    if (!rebookFromLink || rebookRequested) return;
+    if (!ride || !isRiderCancelledBooking(myBooking) || ride.availableSeats <= 0) return;
+
+    setSeats(rebookSeats(ride, myBooking!));
+    setRebookRequested(true);
+  }, [rebookFromLink, rebookRequested, ride, myBooking]);
 
   useEffect(() => {
     if (!id) return;
@@ -523,7 +567,13 @@ function RideDetailContent() {
         'DRIVER_MISSED_PICKUP',
         'DISPUTED',
       ], 1, 50);
-      const match = (res.data.bookings || []).find((b: Booking) => b.rideId === id);
+      // A rider can hold several bookings on one ride over time — cancel, then book again — so
+      // picking the first row that matches the id can hand the page a dead booking and hide the
+      // live one. Newest first, and a live booking always wins over a finished one.
+      const mine = (res.data.bookings || [])
+        .filter((b: Booking) => b.rideId === id)
+        .sort((a: Booking, b: Booking) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const match = mine.find((b: Booking) => !TERMINAL_BOOKING_STATUSES.includes(b.status)) ?? mine[0];
       if (!match) {
         setMyBooking(null);
         return;
@@ -770,11 +820,27 @@ function RideDetailContent() {
     }
   }
 
+  /**
+   * Returns a reason the API will accept, or null when the rider backs out. The
+   * server refuses a forced action without at least a few words.
+   */
   function promptManualOverride(title: string, body: string) {
     if (typeof window === 'undefined') return null;
-    const reason = window.prompt(`${title}\n${body}\n\nEnter a short reason for the override:`, '');
-    if (reason === null) return null;
-    return reason.trim();
+
+    let prefill = '';
+    for (;;) {
+      const answer = window.prompt(
+        `${title}\n${body}\n\nEnter a reason for the override (at least ${OVERRIDE_REASON_MIN_LENGTH} characters):`,
+        prefill,
+      );
+      if (answer === null) return null;
+
+      const reason = answer.trim();
+      if (reason.length >= OVERRIDE_REASON_MIN_LENGTH) return reason;
+
+      prefill = reason;
+      window.alert(`Please write at least ${OVERRIDE_REASON_MIN_LENGTH} characters so the override can be reviewed.`);
+    }
   }
 
   async function handleManualRideReview(reason: string) {
@@ -1003,15 +1069,35 @@ function RideDetailContent() {
       }
     } catch (err: unknown) {
       const message = getApiErrorMessage(err, t('rideDetail.bookingFailed'));
-      setBookError(message.includes('TOS_NOT_ACCEPTED')
-        ? t('rideDetail.mustAcceptTerms')
-        : message);
+      const readable = bookingErrorMessage(message, t('rideDetail.bookingFailed'));
+      setBookError(readable);
       setPaymentMessage('');
       pushEvent('payment_failed', { error_message: message, stage: 'book' });
-      showError(t('rideDetail.bookingFailed'), message);
+      showError(t('rideDetail.bookingFailed'), readable);
     } finally {
       setBooking(false);
     }
+  }
+
+  /**
+   * Turns a booking-payment error code into something a rider can act on.
+   *
+   * The backend answers the payment endpoints with typed codes rather than prose, so anything not
+   * translated here would surface to the rider as raw upper-case text.
+   */
+  function bookingErrorMessage(message: string, fallback: string) {
+    if (message.includes('TOS_NOT_ACCEPTED')) return t('rideDetail.mustAcceptTerms');
+    if (message.includes('BOOKING_PRICE_CHANGED')) return t('rideDetail.priceChangedRetry');
+    if (message.includes('PAYMENT_VERIFICATION_UNAVAILABLE')) return t('rideDetail.paymentVerificationUnavailable');
+    if (message.includes('BOOKING_ALREADY_EXISTS')) return t('rideDetail.bookingAlreadyExists');
+    if (message.includes('PAYMENT_CANCELLED')) return t('rideDetail.paymentCancelledRebook');
+    if (message.includes('BOOKING_NOT_PAYABLE') || message.includes('PAYMENT_NOT_INITIALIZED')) {
+      return t('rideDetail.bookingNotPayable');
+    }
+    if (message.includes('INSUFFICIENT_SEATS') || message.includes('RIDE_FULL')) {
+      return t('rideDetail.rideFilledUpRefund');
+    }
+    return message || fallback;
   }
 
   async function handleRetryPayment() {
@@ -1020,17 +1106,35 @@ function RideDetailContent() {
     setBookError('');
     setPaymentMessage('');
     try {
-      const confirmedBooking = await confirmStripeBookingPayment(myBooking);
+      // The client secret only comes back when the booking is created, so after a reload this
+      // booking has none. Resume asks the backend for a payable one and restarts the payment window.
+      let payable = myBooking;
+      if (!payable.payment?.clientSecret) {
+        setPaymentMessage(t('rideDetail.resumingPayment'));
+        const resumed = await bookingsApi.resumePayment(payable.id);
+        payable = resumed.data;
+        setMyBooking(payable);
+      }
+
+      if (!payable.payment?.clientSecret) {
+        // Already settled while the rider was away: nothing left to pay.
+        await loadMyBooking();
+        showSuccess(t('rideDetail.paymentConfirmed'), t('rideDetail.requestWaitingDriverConfirmation'));
+        return;
+      }
+
+      const confirmedBooking = await confirmStripeBookingPayment(payable);
       setMyBooking(confirmedBooking);
       pushEvent('payment_retry', { outcome: 'success' });
       showSuccess(t('rideDetail.paymentConfirmed'), t('rideDetail.requestWaitingDriverConfirmation'));
     } catch (err: unknown) {
       const message = getApiErrorMessage(err, t('rideDetail.paymentFailed'));
-      setBookError(message);
+      const readable = bookingErrorMessage(message, t('rideDetail.paymentFailed'));
+      setBookError(readable);
       setPaymentMessage('');
       pushEvent('payment_retry', { outcome: 'failure' });
       pushEvent('payment_failed', { error_message: message, stage: 'retry' });
-      showError(t('rideDetail.paymentFailed'), message);
+      showError(t('rideDetail.paymentFailed'), readable);
     } finally {
       setBooking(false);
     }
@@ -1119,8 +1223,11 @@ function RideDetailContent() {
   const durationLabel = formatDurationHhMm(ride.routeDurationSeconds);
   const distanceKm = ride.routeDistanceMeters ? (ride.routeDistanceMeters / 1000).toFixed(1) : null;
   const previewBreakdown = preview?.priceBreakdown;
-  const displaySeatPrice = previewBreakdown?.basePricePerSeat ?? ride.segment?.segmentFare ?? ride.basePricePerSeat;
+  // Header price is the all-in figure the rider pays, matching what search advertised. The itemised
+  // breakdown below still shows fare and fee separately. Backend-supplied; never derived here.
+  const displaySeatPrice = ride.riderTotalPerSeat ?? ride.segment?.segmentFare ?? ride.basePricePerSeat;
   const displaySeatCurrency = previewBreakdown?.currency ?? ride.currency;
+  const displaySeatServiceFee = ride.serviceFeePerSeat ?? 0;
   const bookedBreakdown = myBooking?.priceBreakdown;
   const previewSeatFareLabel = previewBreakdown
     ? `${previewBreakdown.currency} ${previewBreakdown.basePricePerSeat.toFixed(2)}${t('rideDetail.perSeatShort')}`
@@ -1169,7 +1276,17 @@ function RideDetailContent() {
   const canUseRideChat = Boolean(myBooking && ride.status === 'IN_PROGRESS' && ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'].includes(myBooking.status));
   const cancellationWindowClosed = isWithinConfirmedCancellationWindow(ride, myBooking);
   const bookingWindowClosed = isBookingWindowClosed(ride);
-  const canStartBooking = Boolean(user && !isOwnRide && !myBooking && ride.availableSeats > 0 && !bookingWindowClosed);
+  // A booking the rider cancelled themselves no longer counts as "already booked" — once they ask
+  // to rebook, the ordinary booking form comes back with every other condition unchanged.
+  const isRebookable = isRiderCancelledBooking(myBooking);
+  const canRebook = Boolean(isRebookable && ride.availableSeats > 0 && !bookingWindowClosed);
+  const canStartBooking = Boolean(
+    user
+    && !isOwnRide
+    && (!myBooking || (isRebookable && rebookRequested))
+    && ride.availableSeats > 0
+    && !bookingWindowClosed
+  );
 
   function pointKindLabel(kind: RiderPointKind) {
     if (kind === 'origin') return t('rideDetail.mainDeparture');
@@ -1205,6 +1322,19 @@ function RideDetailContent() {
     }
   }
 
+  /**
+   * Reopen the booking form for a ride the rider cancelled.
+   *
+   * Their old pickup and drop-off are already in the selects — the effect that seeds them reads
+   * myBooking, cancelled or not — so only the seat count has to be carried over here.
+   */
+  function handleRebook() {
+    if (!ride || !myBooking) return;
+
+    setSeats(rebookSeats(ride, myBooking));
+    setRebookRequested(true);
+  }
+
   return (
     <div className="min-h-screen min-w-0 overflow-x-clip bg-deliivo-cream">
       {/* Header */}
@@ -1227,6 +1357,14 @@ function RideDetailContent() {
             <p className="text-lg font-bold text-white mt-0.5">
               {ride.originAddress.split(',')[0]} → {ride.destinationAddress.split(',')[0]}
             </p>
+            {/* Everything on this page — the stops, the meta row, the price — describes the
+                rider's leg, not the driver's whole route. Say so rather than let the shorter
+                distance read as a mistake. */}
+            {ride.isSegmentView && (
+              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-xs font-medium text-white">
+                <Route size={12} /> {t('rideDetail.partOfLongerRide')}
+              </span>
+            )}
           </div>
 
           <div className="p-5 space-y-4">
@@ -1256,6 +1394,9 @@ function RideDetailContent() {
               {durationLabel && <span className="flex items-center gap-1"><Clock size={13} /> {durationLabel}</span>}
               {distanceKm && <span className="flex items-center gap-1"><MapPin size={13} /> {distanceKm} km</span>}
             </div>
+            {ride.isSegmentView && (
+              <p className="text-xs leading-5 text-deliivo-gray">{t('rideDetail.partOfLongerRideCopy')}</p>
+            )}
           </div>
         </div>
 
@@ -1328,6 +1469,11 @@ function RideDetailContent() {
             <div className="rounded-xl bg-gray-50 px-4 py-2.5">
               <p className="text-xs font-semibold uppercase text-deliivo-gray">Price</p>
               <p className="mt-1"><span className="text-lg font-bold text-primary-500">{displaySeatCurrency} {displaySeatPrice.toFixed(2)}</span><span className="ml-1 text-deliivo-gray">{t('rideDetail.perSeatShort')}</span></p>
+              {displaySeatServiceFee > 0 && (
+                <p className="text-[11px] text-deliivo-gray">
+                  {t('search.includesServiceFee', { amount: `${displaySeatCurrency} ${displaySeatServiceFee.toFixed(2)}` })}
+                </p>
+              )}
             </div>
           </div>
           {ride.notes && (
@@ -1821,9 +1967,9 @@ function RideDetailContent() {
                     <p className="mt-1 text-xs text-amber-900">
                       Use these when the booking is blocked but the ride should continue. Each action carries a reason into the dispute evidence.
                     </p>
-                    {!allowManualOverride && (
-                      <p className="mt-1 break-all text-[11px] font-medium text-amber-800">
-                        Manual override is disabled until `NEXT_PUBLIC_ALLOW_RIDE_MANUAL_OVERRIDE=true`.
+                    {!overrideAvailable && (
+                      <p className="mt-1 text-[11px] font-medium text-amber-800">
+                        The drop-off override is available once the ride is in progress.
                       </p>
                     )}
                   </div>
@@ -1832,7 +1978,6 @@ function RideDetailContent() {
                   <button
                     type="button"
                     onClick={() => handleManualRideReview('OTP_ISSUE')}
-                    disabled={!allowManualOverride}
                     className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
                   >
                     Report OTP issue
@@ -1848,7 +1993,7 @@ function RideDetailContent() {
                       if (reason === null) return;
                       setRiderActionLoading(true);
                       try {
-                        await rideOpsApi.riderConfirmDropoff(myBooking.id, reason || undefined);
+                        await rideOpsApi.riderConfirmDropoff(myBooking.id, reason);
                         await loadMyBooking();
                         await loadRide();
                       } catch (err: unknown) {
@@ -1857,7 +2002,7 @@ function RideDetailContent() {
                         setRiderActionLoading(false);
                       }
                     }}
-                    disabled={!allowManualOverride}
+                    disabled={!overrideAvailable || riderActionLoading}
                     className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
                   >
                     Manual drop-off confirm
@@ -2075,7 +2220,7 @@ function RideDetailContent() {
                     {t('rideDetail.paymentNeedsConfirmationCopy')}
                   </p>
                 </div>
-                {myBooking.payment?.clientSecret && isStripeConfigured() && paymentMethods.length > 0 && (
+                {isStripeConfigured() && paymentMethods.length > 0 && (
                   <div className="space-y-2">
                     <select
                       value={selectedPaymentMethodId}
@@ -2098,7 +2243,7 @@ function RideDetailContent() {
                     </button>
                   </div>
                 )}
-                {myBooking.payment?.clientSecret && isStripeConfigured() && paymentMethods.length === 0 && (
+                {isStripeConfigured() && paymentMethods.length === 0 && (
                   <RideAddPaymentMethodForm
                     onSaved={(method) => {
                       loadPaymentMethods(method.id);
@@ -2232,7 +2377,7 @@ function RideDetailContent() {
             )}
 
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm">
-              <p className="mb-3 text-xs font-bold uppercase text-deliivo-gray">Fare summary</p>
+              <p className="mb-3 text-xs font-bold uppercase text-deliivo-gray">{t('rideDetail.fareSummary')}</p>
               <div className="space-y-2">
               {bookedBreakdown && (
                 <>
@@ -2305,6 +2450,26 @@ function RideDetailContent() {
                 >
                   {riderActionLoading ? t('common.working') : t('rideDetail.cancelBooking')}
                 </button>
+              </div>
+            )}
+
+            {/* Book again after the rider's own cancellation */}
+            {isRebookable && !rebookRequested && (
+              <div className="space-y-2">
+                <p className="text-xs leading-5 text-deliivo-gray">{t('rideDetail.bookAgainCopy')}</p>
+                {canRebook ? (
+                  <button
+                    type="button"
+                    onClick={handleRebook}
+                    className="w-full rounded-xl bg-deliivo-orange px-4 py-2.5 text-sm font-semibold text-white hover:bg-deliivo-orange-dark"
+                  >
+                    {t('rideDetail.bookAgain')}
+                  </button>
+                ) : (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    {ride.availableSeats > 0 ? t('rideDetail.bookAgainClosed') : t('rideDetail.bookAgainNoSeats')}
+                  </p>
+                )}
               </div>
             )}
 

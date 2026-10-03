@@ -19,6 +19,7 @@ const STATUS_LABEL_KEYS: Record<string, string> = {
   COMPLETION_PENDING: 'rides.completionPending',
   COMPLETED: 'rides.completed',
   PAYMENT_FAILED: 'rides.paymentFailed',
+  RIDE_FULL_REFUNDED: 'rides.rideFullRefunded',
   CANCELLED: 'rides.cancelled',
   NO_SHOW: 'rides.noShow',
   DRIVER_MISSED_PICKUP: 'rides.missedPickup',

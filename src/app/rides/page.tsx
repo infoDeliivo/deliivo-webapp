@@ -34,6 +34,7 @@ const STATUS_CONFIG: Record<string, { labelKey: string; className: string }> = {
   CONFIRMED: { labelKey: 'rides.confirmed', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   PAYMENT_PENDING: { labelKey: 'rides.pending', className: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
   PAYMENT_FAILED: { labelKey: 'rides.paymentFailed', className: 'bg-red-50 text-red-700 border border-red-200' },
+  RIDE_FULL_REFUNDED: { labelKey: 'rides.rideFullRefunded', className: 'bg-red-50 text-red-700 border border-red-200' },
   DRIVER_PENDING: { labelKey: 'rides.pending', className: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
   PUBLISHED: { labelKey: 'rides.upcoming', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   SCHEDULED: { labelKey: 'rides.upcoming', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
@@ -63,7 +64,7 @@ const BOOKING_VIEW_FILTERS: Array<{
   { id: 'active', labelKey: 'rides.active', statuses: ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'] },
   { id: 'pending', labelKey: 'rides.pending', statuses: ['PAYMENT_PENDING', 'DRIVER_PENDING'] },
   { id: 'completed', labelKey: 'rides.completed', statuses: ['COMPLETED'] },
-  { id: 'cancelled', labelKey: 'rides.cancelled', statuses: ['CANCELLED', 'PAYMENT_FAILED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DISPUTED'] },
+  { id: 'cancelled', labelKey: 'rides.cancelled', statuses: ['CANCELLED', 'PAYMENT_FAILED', 'RIDE_FULL_REFUNDED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DISPUTED'] },
 ];
 
 const PUBLISHED_VIEW_FILTERS: Array<{
@@ -166,6 +167,9 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
 
   const canWithdraw = ['PAYMENT_PENDING', 'DRIVER_PENDING'].includes(booking.status);
   const canCancel = booking.status === 'CONFIRMED';
+  // Only the rider's own cancellation reopens booking. A driver's cancellation or rejection leaves
+  // the booking CANCELLED too, and re-requesting a seat there would just loop.
+  const canRebook = booking.status === 'CANCELLED' && booking.cancelledByRole === 'PASSENGER';
 
   async function handleWithdraw(e: React.MouseEvent) {
     e.preventDefault();
@@ -272,6 +276,15 @@ function BookingCard({ booking, onAction }: { booking: Booking; onAction: () => 
           <ArrowRight className="w-3.5 h-3.5" />
         </Link>
 
+        {canRebook && (
+          <Link
+            href={`/rides/${booking.rideId}?rebook=1`}
+            className="inline-flex flex-1 items-center justify-center rounded-xl border border-deliivo-orange px-4 py-2 text-xs font-semibold text-deliivo-orange hover:bg-orange-50 transition-colors"
+          >
+            {t('rides.bookAgain')}
+          </Link>
+        )}
+
         {(canWithdraw || canCancel) && (
           <>
             {canWithdraw && (
@@ -341,7 +354,7 @@ function PublishedRideCard({ ride }: { ride: PublishedRide }) {
 
       <div className="flex items-center justify-between pt-3 border-t border-gray-50 gap-3">
         <span className="flex items-center gap-1 text-xs text-gray-500">
-          <Users className="w-3.5 h-3.5" /> {t('ride.seatsBooked', { booked: ride.totalSeats - ride.availableSeats, total: ride.totalSeats })}
+          <Users className="w-3.5 h-3.5" /> {t('ride.seatsBooked', { booked: ride.bookedSeats ?? (ride.totalSeats - ride.availableSeats), total: ride.totalSeats })}
         </span>
         <span className="text-sm font-bold text-deliivo-orange">
           {ride.currency} {ride.basePricePerSeat.toFixed(2)}/seat

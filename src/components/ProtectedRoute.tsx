@@ -20,6 +20,10 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
       return;
     }
 
+    // Admins do not use the rider/driver onboarding flow, so they must not be
+    // redirected back into it even when their profile is incomplete.
+    if (user.role === 'ADMIN') return;
+
     if (!isOnboardingComplete(user) && !isOnboardingRoute) {
       const returnTo = `${window.location.pathname}${window.location.search}`;
       router.replace(`/onboarding?returnTo=${encodeURIComponent(returnTo)}`);
@@ -35,6 +39,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   }
 
   if (!user) return null;
+  if (user.role === 'ADMIN') return <>{children}</>;
   if (!isOnboardingComplete(user) && !isOnboardingRoute) return null;
 
   return <>{children}</>;

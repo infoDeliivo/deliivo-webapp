@@ -15,9 +15,12 @@ import {
   Activity,
   BadgeCheck,
   IdCard,
+  Gift,
+  ClipboardList,
   X,
 } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
+import { featureFlags } from '@/lib/features'
 import { rideRequestsEnabled } from '@/lib/ride-requests'
 
 const navItems = [
@@ -31,8 +34,10 @@ const navItems = [
   { label: 'Disputes', href: '/admin/reports', icon: Flag },
   { label: 'Payouts', href: '/admin/payouts', icon: Banknote },
   { label: 'Revenue', href: '/admin/revenue', icon: Euro },
+  ...(featureFlags.rewards ? [{ label: 'Rewards', href: '/admin/rewards', icon: Gift }] : []),
   { label: 'Pricing', href: '/admin/pricing', icon: Euro },
   { label: 'Monitoring', href: '/admin/monitoring', icon: Activity },
+  { label: 'Tracker', href: '/admin/tracker', icon: ClipboardList },
   { label: 'Content', href: '/admin/content', icon: Newspaper },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ]
