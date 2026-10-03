@@ -10,6 +10,9 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   const router = useRouter();
   const pathname = usePathname();
   const isOnboardingRoute = pathname === '/onboarding' || pathname.startsWith('/onboarding/');
+  // Admins skip onboarding, matching resolvePostLoginPath: the seeded admin has no
+  // rider details and would otherwise be bounced off every protected admin page.
+  const needsOnboarding = !!user && user.role !== 'ADMIN' && !isOnboardingComplete(user) && !isOnboardingRoute;
 
   useEffect(() => {
     if (loading) return;
@@ -20,15 +23,11 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
       return;
     }
 
-    // Admins do not use the rider/driver onboarding flow, so they must not be
-    // redirected back into it even when their profile is incomplete.
-    if (user.role === 'ADMIN') return;
-
-    if (!isOnboardingComplete(user) && !isOnboardingRoute) {
+    if (needsOnboarding) {
       const returnTo = `${window.location.pathname}${window.location.search}`;
       router.replace(`/onboarding?returnTo=${encodeURIComponent(returnTo)}`);
     }
-  }, [isOnboardingRoute, user, loading, router]);
+  }, [needsOnboarding, user, loading, router]);
 
   if (loading) {
     return (
@@ -39,8 +38,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   }
 
   if (!user) return null;
-  if (user.role === 'ADMIN') return <>{children}</>;
-  if (!isOnboardingComplete(user) && !isOnboardingRoute) return null;
+  if (needsOnboarding) return null;
 
   return <>{children}</>;
 }

@@ -28,4 +28,6 @@ external traffic blocked. These checks do not validate live backend persistence.
 
 The backend's `docs/main-develop-sync.md` records additional release gates. The
 combined staging code includes a 20-percent service-fee migration that is not
-controlled by this flag; it must not reach production without pricing approval.
+controlled by this flag. Adoption of staging's pricing model was approved on
+2026-10-03; migration rehearsal and deployed staging validation remain separate
+release gates. Existing stored ride fee snapshots are not repriced to 20 percent.
