@@ -125,15 +125,29 @@ async function parseApiResponse(res: Response): Promise<{ json: unknown; rawText
 
 function getResponseMessage(json: unknown, rawText: string, status: number): string {
   if (json && typeof json === 'object') {
-    const body = json as { message?: string; error?: string; errors?: Array<{ field?: string; message?: string }> };
+    const body = json as {
+      message?: string;
+      error?: string | { type?: unknown; message?: unknown };
+      errors?: Array<{ field?: string; message?: string }>;
+    };
     const firstFieldError = Array.isArray(body.errors) ? body.errors.find((item) => item?.message) : undefined;
     if (body.message && firstFieldError?.message) {
       return firstFieldError.field
         ? `${body.message}: ${firstFieldError.field} - ${firstFieldError.message}`
         : `${body.message}: ${firstFieldError.message}`;
     }
+    // Payment endpoints echo Stripe's rejection under `error` ("individual[dob][year]: Must be at
+    // least 13 years of age"). Without it the driver sees only a generic failure and nobody can
+    // tell from a screenshot what Stripe refused.
+    const stripeReason =
+      body.error && typeof body.error === 'object'
+      && typeof body.error.type === 'string' && body.error.type.startsWith('Stripe')
+      && typeof body.error.message === 'string'
+        ? body.error.message
+        : undefined;
+    if (body.message && stripeReason) return `${body.message}: ${stripeReason}`;
     if (body.message) return body.message;
-    if (body.error) return body.error;
+    if (typeof body.error === 'string' && body.error) return body.error;
   }
 
   const trimmed = rawText.trim();
@@ -2702,7 +2716,8 @@ export interface ConnectRequirements {
 export interface ConnectDetailsPayload {
   firstName: string;
   lastName: string;
-  email: string;
+  // Optional: drivers can sign up with a phone number alone.
+  email?: string | null;
   phone?: string | null;
   // YYYY-MM-DD.
   dob: string;

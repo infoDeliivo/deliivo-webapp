@@ -310,6 +310,8 @@ function PayoutSetupContent() {
     () => Array.from(new Set([...(requirements?.currentlyDue ?? []), ...(requirements?.pastDue ?? [])])),
     [requirements]
   );
+  // Drivers can sign up with a phone number alone, so email is only mandatory when Stripe asks.
+  const emailRequired = dueRequirements.some((entry) => entry === 'email' || entry === 'individual.email');
   const pendingRequirements = requirements?.pendingVerification ?? [];
   const dueRequirementLabels = useMemo(() => uniqueRequirementLabels(dueRequirements), [dueRequirements]);
   const pendingRequirementLabels = useMemo(() => uniqueRequirementLabels(pendingRequirements), [pendingRequirements]);
@@ -369,7 +371,7 @@ function PayoutSetupContent() {
           const res = await paymentsApi.connectSaveDetails({
             firstName,
             lastName,
-            email,
+            email: email.trim() ? email.trim() : null,
             phone: phone.trim() ? phone.trim() : null,
             dob,
             address: {
@@ -840,12 +842,12 @@ function PayoutSetupContent() {
                 htmlFor="email"
                 className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-deliivo-gray"
               >
-                {t('payout.email')} *
+                {t('payout.email')}{emailRequired && ' *'}
               </label>
               <input
                 id="email"
                 type="email"
-                required
+                required={emailRequired}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input-field"
