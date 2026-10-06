@@ -1287,6 +1287,11 @@ function RideDetailContent() {
   const activeTrackingUrl = latestTrackingLink ? trackingUrlFor(latestTrackingLink) : null;
   const rateableBookingStatuses = ['COMPLETED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP'];
   const disputeEligibleStatuses = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED', 'DISPUTED'];
+  // Once the ride has ended, a rider whose booking stopped short (e.g. never confirmed as dropped
+  // off) can still rate and report. The backend applies the same rule (isBookingRateable).
+  const rideEndedWithMe = Boolean(myBooking && ride.status === 'COMPLETED' && ACCEPTED_BOOKING_STATUSES.includes(myBooking.status));
+  const canRateThisRide = Boolean(myBooking && (rateableBookingStatuses.includes(myBooking.status) || rideEndedWithMe));
+  const canReportThisRide = Boolean(myBooking && (disputeEligibleStatuses.includes(myBooking.status) || rideEndedWithMe));
   // The disputes list also carries reports the driver raised on this booking. Each side may have
   // one open report of its own, so only the rider's own open report locks the form; the driver's
   // is shown as a notice.
@@ -2532,7 +2537,7 @@ function RideDetailContent() {
               </div>
             )}
 
-            {disputeEligibleStatuses.includes(myBooking.status) && (
+            {canReportThisRide && (
               <div className="pt-3 border-t border-gray-100 space-y-3">
                 <div>
                   <h4 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.reportIssue')}</h4>
@@ -2591,7 +2596,7 @@ function RideDetailContent() {
             )}
 
             {/* Rating form — after ride completed */}
-            {rateableBookingStatuses.includes(myBooking.status) && !ratingSubmitted && (
+            {canRateThisRide && !ratingSubmitted && (
               <div className="pt-3 border-t border-gray-100">
                 <h4 className="text-sm font-semibold text-deliivo-dark mb-2">{t('rideDetail.rateRide')}</h4>
                 <div className="flex gap-1 mb-3">
@@ -2717,6 +2722,9 @@ function RideAddPaymentMethodForm({ onSaved }: { onSaved: (method: PaymentMethod
     </form>
   );
 }
+
+/** Bookings the driver accepted that have not reached an end state (mirrors the backend list). */
+const ACCEPTED_BOOKING_STATUSES = ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED', 'DISPUTED'];
 
 /** Dispute statuses that are still being handled (mirrors OPEN_DISPUTE_STATUSES in the backend). */
 const OPEN_DISPUTE_STATUSES = ['OPEN', 'EVIDENCE_COLLECTED', 'NEEDS_MANUAL_REVIEW', 'WAITING_FOR_USER_RESPONSE', 'ESCALATED'];

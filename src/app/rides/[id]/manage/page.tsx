@@ -42,6 +42,19 @@ import { withReturnTo } from '@/lib/auth-redirect';
 
 type RidePhase = 'loading' | 'published' | 'in_progress' | 'completed' | 'cancelled' | 'error';
 
+/** Bookings the driver accepted that have not reached an end state (mirrors the backend list). */
+const ACCEPTED_BOOKING_STATUSES = [
+  'CONFIRMED',
+  'WAITING_FOR_PICKUP',
+  'DRIVER_ARRIVED',
+  'OTP_PENDING',
+  'IN_PROGRESS',
+  'ONBOARD',
+  'DROP_PENDING',
+  'DRIVER_DROPPED',
+  'DISPUTED',
+];
+
 function ManageRideContent() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -622,13 +635,11 @@ const [error, setError] = useState('');
 
   const dateLabel = new Date(ride.departureDate).toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' });
   const pendingBookings = bookings.filter(b => b.status === 'PENDING' || b.status === 'DRIVER_PENDING');
+  // Every rider the driver accepted, at whatever step they are (or stopped at). Leaving a status
+  // out hides that rider entirely, so they could not be rated or reported after the ride.
   const confirmedBookings = bookings.filter(b => [
-    'CONFIRMED',
     'ACCEPTED',
-    'WAITING_FOR_PICKUP',
-    'DRIVER_ARRIVED',
-    'ONBOARD',
-    'DROP_PENDING',
+    ...ACCEPTED_BOOKING_STATUSES,
     'NO_SHOW',
     'DRIVER_MISSED_PICKUP',
     'COMPLETED',
@@ -1428,7 +1439,10 @@ function PassengerCard({
     return () => clearInterval(timer);
   }, [noShowAvailableAtMs]);
   const noShowSecondsLeft = noShowAvailableAtMs == null ? 0 : Math.max(0, Math.ceil((noShowAvailableAtMs - nowMs) / 1000));
-  const canRatePassenger = ['COMPLETED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP'].includes(booking.status);
+  // Once the ride has ended the driver can rate and report every rider they accepted, including
+  // one they never marked as dropped off. The backend applies the same rule (isBookingRateable).
+  const rideEndedWithRider = ridePhase === 'completed' && ACCEPTED_BOOKING_STATUSES.includes(booking.status);
+  const canRatePassenger = ['COMPLETED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP'].includes(booking.status) || rideEndedWithRider;
   const statusLabel: Record<string, string> = {
     CONFIRMED: t('rides.confirmed'),
     ACCEPTED: t('rides.accepted'),
@@ -1449,7 +1463,7 @@ function PassengerCard({
   const canMessagePassenger = ridePhase === 'in_progress' && ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'].includes(booking.status);
   // DISPUTED included: the rider (or support) having opened a dispute must not stop the driver
   // from filing their own. The backend still refuses a second open report from the driver.
-  const showReportAction = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED', 'DISPUTED'].includes(booking.status);
+  const showReportAction = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED', 'DISPUTED'].includes(booking.status) || rideEndedWithRider;
   const statusClass = booking.status === 'ONBOARD' || booking.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border border-green-200'
     : booking.status === 'NO_SHOW' || booking.status === 'DRIVER_MISSED_PICKUP' ? 'bg-red-50 text-red-700 border border-red-200'
       : booking.status === 'DROP_PENDING' ? 'bg-purple-50 text-purple-700 border border-purple-200'
