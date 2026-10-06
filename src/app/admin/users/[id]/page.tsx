@@ -393,6 +393,9 @@ export default function AdminUserDetailsPage() {
   const legacyIdentityMismatch = latestVeriffRecord?.status === 'IDENTITY_MISMATCH';
   const historyRecords = details.dlVerifications.filter((record) => record.id !== manualRecord?.id && record.id !== latestVeriffRecord?.id);
   const canOverrideManual = Boolean(manualRecord && manualRecord.status !== 'SUPERSEDED');
+  // Approving an approved licence used to re-notify the driver each time; the backend now
+  // ignores it, and the button is not offered.
+  const canApproveManual = canOverrideManual && manualRecord?.status !== 'APPROVED';
   const verificationSteps = [
     {
       label: '1. Onboarding complete',
@@ -647,14 +650,16 @@ export default function AdminUserDetailsPage() {
                       )}
                       {canOverrideManual && (
                         <>
-                          <button
-                            onClick={approveManualOverride}
-                            disabled={verificationAction !== null}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
-                          >
-                            {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                            Approve
-                          </button>
+                          {canApproveManual && (
+                            <button
+                              onClick={approveManualOverride}
+                              disabled={verificationAction !== null}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
+                            >
+                              {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                              Approve
+                            </button>
+                          )}
                           <button
                             onClick={declineManualOverride}
                             disabled={verificationAction !== null}
@@ -688,14 +693,16 @@ export default function AdminUserDetailsPage() {
                     <div className="flex flex-wrap gap-2">
                       {canOverrideManual && (
                         <>
-                          <button
-                            onClick={approveManualOverride}
-                            disabled={verificationAction !== null}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
-                          >
-                            {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                            Approve
-                          </button>
+                          {canApproveManual && (
+                            <button
+                              onClick={approveManualOverride}
+                              disabled={verificationAction !== null}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
+                            >
+                              {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                              Approve
+                            </button>
+                          )}
                           <button
                             onClick={declineManualOverride}
                             disabled={verificationAction !== null}
@@ -727,14 +734,16 @@ export default function AdminUserDetailsPage() {
                     <div className="flex flex-wrap gap-2">
                       {canOverrideManual && (
                         <>
-                          <button
-                            onClick={approveManualOverride}
-                            disabled={verificationAction !== null}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
-                          >
-                            {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                            Approve
-                          </button>
+                          {canApproveManual && (
+                            <button
+                              onClick={approveManualOverride}
+                              disabled={verificationAction !== null}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 disabled:opacity-50"
+                            >
+                              {verificationAction === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                              Approve
+                            </button>
+                          )}
                           <button
                             onClick={declineManualOverride}
                             disabled={verificationAction !== null}

@@ -51,7 +51,7 @@ function StarRating({ rating }: { rating: number }) {
 
 export default function RideCard({ ride }: RideCardProps) {
   const { t, locale } = useTranslation();
-  const seatsLeft = ride.availableSeats ?? Math.max(0, ride.seatsTotal - ride.seatsBooked);
+  const seatsLeft = Math.min(ride.seatsTotal, Math.max(0, ride.availableSeats ?? ride.seatsTotal - ride.seatsBooked));
   const bookedSeats = Math.max(0, ride.seatsTotal - seatsLeft);
 
   return (

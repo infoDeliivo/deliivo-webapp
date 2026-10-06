@@ -1999,9 +1999,12 @@ export const adminApi = {
     );
   },
   // Disputes
-  getDisputes(params?: { status?: string; page?: number; limit?: number }) {
+  // Newest first. `search` matches reason, description, route cities, the raiser's
+  // name/email/phone, and (for a UUID) the dispute, booking or ride id.
+  getDisputes(params?: { status?: string; search?: string; page?: number; limit?: number }) {
     const query = new URLSearchParams();
     if (params?.status) query.set('status', params.status);
+    if (params?.search) query.set('search', params.search);
     if (params?.page) query.set('page', String(params.page));
     if (params?.limit) query.set('limit', String(params.limit));
     return apiFetch<{ data: { disputes: AdminDispute[]; pagination: Pagination } }>(`/api/v1/admin/disputes?${query}`);
@@ -2556,6 +2559,8 @@ export interface AdminDispute {
   updatedAt: string;
   booking?: { id: string; passengerId: string; totalPrice: number; status: string; payment?: { id: string; status: string; amountTotal: number; fareAmount: number; currency: string } | null };
   ride?: { id: string; driverId: string; originAddress: string; destinationAddress: string; departureDate?: string; departureTime?: string };
+  /** Who opened it; returned by the admin list. Null when the account no longer exists. */
+  raisedByUser?: { id: string; firstName: string | null; lastName: string | null; email: string | null; role: string } | null;
 }
 
 export interface AdminEmergencyAlert {
@@ -2911,7 +2916,8 @@ export interface Dispute {
   id: string;
   rideId: string;
   bookingId: string;
-  raisedBy?: string;
+  /** Who opened it. The rider and the driver can each have one open dispute on a booking. */
+  raisedBy: string;
   reason: string;
   description?: string;
   status: string;
@@ -3473,6 +3479,15 @@ export interface PublishedRide {
   childSeatAvailable?: boolean;
 }
 
+export interface DriverBookingStop {
+  address: string;
+  placeId: string | null;
+  lat: number | null;
+  lng: number | null;
+  estimatedArrivalTime: string | null;
+  isFullRoute?: boolean;
+}
+
 export interface DriverRideBooking {
   id: string;
   bookingReference?: string;
@@ -3485,6 +3500,11 @@ export interface DriverRideBooking {
   totalPrice: number;
   status: string;
   displayStatus?: string;
+  /**
+   * Set while DRIVER_ARRIVED: when the driver may mark the rider a no-show (the rider gets a
+   * fixed wait after the driver arrives). The backend enforces the same instant.
+   */
+  noShowAvailableAt?: string | null;
   decisionDeadline?: {
     deadlineAt: string;
     timeRemainingMs: number;
@@ -3500,8 +3520,17 @@ export interface DriverRideBooking {
   dropoffWaypointId: string | null;
   hasDriverRatedPassenger?: boolean;
   driverRatedPassengerAt?: string | null;
-  pickupLocation?: { address: string; placeId: string; lat?: number; lng?: number; estimatedArrivalTime?: string | null };
-  dropoffLocation?: { address: string; placeId: string; lat?: number; lng?: number; estimatedArrivalTime?: string | null };
+  /**
+   * Where the rider gets on and off: their booked addresses. Coordinates are null when the stop
+   * is not a known route point. `isFullRoute` is true at the ride's start/end (or a meeting
+   * point there) and false at a stopover, i.e. the rider joins part of the route.
+   */
+  pickupLocation?: DriverBookingStop;
+  dropoffLocation?: DriverBookingStop;
+  /** Snapshot of the rider's booked addresses and per-seat fare, taken at booking time. */
+  pickupAddress?: string | null;
+  dropoffAddress?: string | null;
+  segmentFare?: number | null;
   createdAt?: string;
   /** Currency of the amounts below — do not assume EUR. */
   currency?: string;

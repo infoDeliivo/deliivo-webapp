@@ -234,7 +234,9 @@ export default function AdminRidesPage() {
         ) : (
           <div className="divide-y divide-gray-100">
             {rides.map((ride) => {
-              const bookedSeats = ride.bookings.reduce((sum, booking) => sum + booking.seatsBooked, 0);
+              // Seats are counted for the whole ride, so seats held = totalSeats - availableSeats.
+              // Summing booking rows would also count cancelled, refunded and unpaid bookings.
+              const bookedSeats = Math.max(0, ride.totalSeats - ride.availableSeats);
               const paidAmount = ride.bookings.reduce((sum, booking) => sum + (booking.paymentAmount || 0), 0);
               return (
                 <div key={ride.id} className="p-5">

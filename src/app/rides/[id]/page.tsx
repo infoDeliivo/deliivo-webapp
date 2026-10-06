@@ -384,6 +384,14 @@ function RideDetailContent() {
     setSelectedDropoffValue(myBooking?.dropoffWaypointId || ride.bookingContext?.dropoffWaypointId || concreteDropoff?.value || 'destination');
   }, [ride?.id, ride?.bookingContext?.pickupWaypointId, ride?.bookingContext?.dropoffWaypointId, myBooking?.id, myBooking?.pickupWaypointId, myBooking?.dropoffWaypointId]);
 
+  // Seats are counted for the whole ride, so availableSeats is the limit for every leg. Keep the
+  // selection inside it whenever it changes (a reload after another rider booked, or a failed
+  // booking), so the stepper can never ask for seats the ride no longer has.
+  useEffect(() => {
+    if (!ride) return;
+    setSeats((current) => Math.max(1, Math.min(current, ride.availableSeats)));
+  }, [ride?.availableSeats]);
+
   useEffect(() => {
     if (childSeatControlsEnabled) return;
     setTravelingWithChildUnderTwo(false);
@@ -1018,6 +1026,10 @@ function RideDetailContent() {
       setBookError(t('rideDetail.selectPaymentCardBeforeBooking'));
       return;
     }
+    if (ride.availableSeats <= 0 || seats > ride.availableSeats) {
+      setBookError(t('rideDetail.notEnoughSeats'));
+      return;
+    }
     if (hasConcretePickupOptions && selectedPickupOption.kind === 'origin') {
       setBookError('Choose a pickup point for this ride.');
       return;
@@ -1074,6 +1086,9 @@ function RideDetailContent() {
       setPaymentMessage('');
       pushEvent('payment_failed', { error_message: message, stage: 'book' });
       showError(t('rideDetail.bookingFailed'), readable);
+      // Another rider took the seats: refresh so the page shows what is actually left (or that
+      // the ride is full), and the stepper is clamped by the effect above.
+      if (isSeatShortageError(message)) void loadRide();
     } finally {
       setBooking(false);
     }
@@ -1094,9 +1109,10 @@ function RideDetailContent() {
     if (message.includes('BOOKING_NOT_PAYABLE') || message.includes('PAYMENT_NOT_INITIALIZED')) {
       return t('rideDetail.bookingNotPayable');
     }
-    if (message.includes('INSUFFICIENT_SEATS') || message.includes('RIDE_FULL')) {
-      return t('rideDetail.rideFilledUpRefund');
-    }
+    // Refused before any payment: nothing was charged, so no refund wording.
+    if (isSeatShortageError(message)) return t('rideDetail.notEnoughSeats');
+    // RIDE_FULL comes back after a payment landed on a ride that had just filled up.
+    if (message.includes('RIDE_FULL')) return t('rideDetail.rideFilledUpRefund');
     return message || fallback;
   }
 
@@ -1271,7 +1287,17 @@ function RideDetailContent() {
   const activeTrackingUrl = latestTrackingLink ? trackingUrlFor(latestTrackingLink) : null;
   const rateableBookingStatuses = ['COMPLETED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP'];
   const disputeEligibleStatuses = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED', 'DISPUTED'];
-  const openDispute = myDisputes.find((dispute) => ['OPEN', 'EVIDENCE_COLLECTED', 'NEEDS_MANUAL_REVIEW', 'WAITING_FOR_USER_RESPONSE', 'ESCALATED'].includes(dispute.status));
+  // Once the ride has ended, a rider whose booking stopped short (e.g. never confirmed as dropped
+  // off) can still rate and report. The backend applies the same rule (isBookingRateable).
+  const rideEndedWithMe = Boolean(myBooking && ride.status === 'COMPLETED' && ACCEPTED_BOOKING_STATUSES.includes(myBooking.status));
+  const canRateThisRide = Boolean(myBooking && (rateableBookingStatuses.includes(myBooking.status) || rideEndedWithMe));
+  const canReportThisRide = Boolean(myBooking && (disputeEligibleStatuses.includes(myBooking.status) || rideEndedWithMe));
+  // The disputes list also carries reports the driver raised on this booking. Each side may have
+  // one open report of its own, so only the rider's own open report locks the form; the driver's
+  // is shown as a notice.
+  const openDisputes = myDisputes.filter((dispute) => OPEN_DISPUTE_STATUSES.includes(dispute.status));
+  const openDispute = openDisputes.find((dispute) => dispute.raisedBy === user?.id);
+  const otherPartyOpenDispute = openDisputes.find((dispute) => dispute.raisedBy !== user?.id);
   const isDriverConfirmedBooking = Boolean(myBooking && !['PENDING', 'PAYMENT_PENDING', 'DRIVER_PENDING', 'PAYMENT_FAILED', 'REJECTED', 'CANCELLED'].includes(myBooking.status));
   const canUseRideChat = Boolean(myBooking && ride.status === 'IN_PROGRESS' && ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'].includes(myBooking.status));
   const cancellationWindowClosed = isWithinConfirmedCancellationWindow(ride, myBooking);
@@ -1518,6 +1544,13 @@ function RideDetailContent() {
           </div>
         )}
       </div>
+
+        {!isOwnRide && (!myBooking || isRebookable) && ride.availableSeats <= 0 && (
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-sm lg:hidden">
+            <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.rideFullTitle')}</h3>
+            <p className="mt-2 text-sm text-deliivo-gray">{t('rideDetail.rideFullCopy', { total: ride.totalSeats })}</p>
+          </div>
+        )}
 
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm lg:hidden">
@@ -1913,7 +1946,7 @@ function RideDetailContent() {
                     }, { seats });
                     void handleBook();
                   }}
-                  disabled={booking || paymentMethodsLoading || (isStripeConfigured() && (!selectedPaymentMethodId || showAddPaymentMethod)) || (needsTosAcceptance && !tosAcceptedForBooking) || (childSeatControlsEnabled && travelingWithChildUnderTwo && !bringingOwnChildSeat)}
+                  disabled={booking || seats > ride.availableSeats || paymentMethodsLoading || (isStripeConfigured() && (!selectedPaymentMethodId || showAddPaymentMethod)) || (needsTosAcceptance && !tosAcceptedForBooking) || (childSeatControlsEnabled && travelingWithChildUnderTwo && !bringingOwnChildSeat)}
                   className="btn-primary w-full py-3.5 text-base gap-2 disabled:opacity-60"
                 >
                   {booking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-5 w-5" />}
@@ -2018,6 +2051,13 @@ function RideDetailContent() {
           <aside className="order-2 space-y-5 lg:order-none lg:contents">
 
         {/* Booking section */}
+        {!isOwnRide && (!myBooking || isRebookable) && ride.availableSeats <= 0 && (
+          <div className="hidden rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-sm lg:block lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
+            <h3 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.rideFullTitle')}</h3>
+            <p className="mt-2 text-sm text-deliivo-gray">{t('rideDetail.rideFullCopy', { total: ride.totalSeats })}</p>
+          </div>
+        )}
+
         {!isOwnRide && !myBooking && ride.availableSeats > 0 && bookingWindowClosed && (
           <div className="hidden rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm lg:block lg:col-start-2 lg:row-start-1 lg:sticky lg:top-20">
             <h3 className="text-sm font-semibold text-amber-950">Booking closed for this departure</h3>
@@ -2497,7 +2537,7 @@ function RideDetailContent() {
               </div>
             )}
 
-            {disputeEligibleStatuses.includes(myBooking.status) && (
+            {canReportThisRide && (
               <div className="pt-3 border-t border-gray-100 space-y-3">
                 <div>
                   <h4 className="text-sm font-semibold text-deliivo-dark">{t('rideDetail.reportIssue')}</h4>
@@ -2505,6 +2545,15 @@ function RideDetailContent() {
                     {t('rideDetail.reportIssueCopy')}
                   </p>
                 </div>
+                {otherPartyOpenDispute && (
+                  <div className="rounded-xl border border-blue-100 bg-blue-50 px-3.5 py-3">
+                    <p className="text-xs font-semibold text-blue-900">
+                      {t('rideDetail.otherPartyDisputeNotice', { status: otherPartyOpenDispute.status.replace(/_/g, ' ') })}
+                    </p>
+                    <p className="mt-1 text-xs text-blue-800">{otherPartyOpenDispute.reason.replace(/_/g, ' ')}</p>
+                    <p className="mt-1 text-xs text-blue-800">{t('rideDetail.otherPartyDisputeCanReport')}</p>
+                  </div>
+                )}
                 {openDispute && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
                     <p className="text-xs font-semibold text-amber-900">{t('rideDetail.existingReport', { status: openDispute.status.replace(/_/g, ' ') })}</p>
@@ -2547,7 +2596,7 @@ function RideDetailContent() {
             )}
 
             {/* Rating form — after ride completed */}
-            {rateableBookingStatuses.includes(myBooking.status) && !ratingSubmitted && (
+            {canRateThisRide && !ratingSubmitted && (
               <div className="pt-3 border-t border-gray-100">
                 <h4 className="text-sm font-semibold text-deliivo-dark mb-2">{t('rideDetail.rateRide')}</h4>
                 <div className="flex gap-1 mb-3">
@@ -2672,6 +2721,17 @@ function RideAddPaymentMethodForm({ onSaved }: { onSaved: (method: PaymentMethod
       </button>
     </form>
   );
+}
+
+/** Bookings the driver accepted that have not reached an end state (mirrors the backend list). */
+const ACCEPTED_BOOKING_STATUSES = ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED', 'DISPUTED'];
+
+/** Dispute statuses that are still being handled (mirrors OPEN_DISPUTE_STATUSES in the backend). */
+const OPEN_DISPUTE_STATUSES = ['OPEN', 'EVIDENCE_COLLECTED', 'NEEDS_MANUAL_REVIEW', 'WAITING_FOR_USER_RESPONSE', 'ESCALATED'];
+
+/** The backend refuses a booking for lack of seats with INSUFFICIENT_SEATS ("Not enough seats available"). */
+function isSeatShortageError(message: string) {
+  return message.includes('INSUFFICIENT_SEATS') || /not enough seats/i.test(message);
 }
 
 export default function RideDetailPage() {
