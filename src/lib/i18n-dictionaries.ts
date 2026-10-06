@@ -1462,6 +1462,9 @@ export const dictionaries: Record<string, Record<string, string>> = {
     "rideDetail.paymentCancelledRebook": "This payment was cancelled. Book the ride again to start a new one.",
     "rideDetail.bookingNotPayable": "This booking can no longer be paid for.",
     "rideDetail.rideFilledUpRefund": "This ride filled up before your payment went through. You have not been charged, or any charge is being refunded.",
+    "rideDetail.notEnoughSeats": "Not enough seats left on this ride. You have not been charged.",
+    "rideDetail.rideFullTitle": "This ride is full",
+    "rideDetail.rideFullCopy": "All {total} seats are booked. Search for another ride on this route.",
     "rideDetail.paymentNeedsConfirmationCopy":
       "Confirm the card payment to send this request to the driver.",
     "rideDetail.confirming": "Confirming...",
@@ -1505,6 +1508,8 @@ export const dictionaries: Record<string, Record<string, string>> = {
     "rideDetail.reportIssueCopy":
       "Add context for support. The backend links this report to ride events, location history, and booking evidence.",
     "rideDetail.existingReport": "Existing report: {status}",
+    "rideDetail.otherPartyDisputeNotice": "The driver reported an issue on this booking ({status})",
+    "rideDetail.otherPartyDisputeCanReport": "You can still send your own report below.",
     "rideDetail.resolution": "Resolution: {resolution}",
     "rideDetail.disputeNoShow": "Passenger or driver no-show",
     "rideDetail.disputeDriverMissedPickup": "Driver missed pickup",
@@ -2577,6 +2582,9 @@ export const dictionaries: Record<string, Record<string, string>> = {
     "rideDetail.paymentCancelledRebook": "See makse tühistati. Broneeri sõit uuesti, et alustada uut makset.",
     "rideDetail.bookingNotPayable": "Selle broneeringu eest ei saa enam maksta.",
     "rideDetail.rideFilledUpRefund": "See sõit sai täis enne, kui sinu makse jõudis kohale. Sinult ei võetud raha või makstakse see tagasi.",
+    "rideDetail.notEnoughSeats": "Sellel sõidul pole piisavalt vabu kohti. Sinult ei võetud raha.",
+    "rideDetail.rideFullTitle": "See sõit on täis",
+    "rideDetail.rideFullCopy": "Kõik {total} kohta on broneeritud. Otsi sellele marsruudile teine sõit.",
     "rideDetail.paymentNeedsConfirmationCopy":
       "Kinnita kaardimakse, et päring juhile saata.",
     "rideDetail.confirming": "Kinnitan...",
@@ -2621,6 +2629,8 @@ export const dictionaries: Record<string, Record<string, string>> = {
     "rideDetail.reportIssueCopy":
       "Lisa toe jaoks kontekst. Backend seob raporti sõidusündmuste, asukohaajaloo ja broneeringu tõenditega.",
     "rideDetail.existingReport": "Olemasolev raport: {status}",
+    "rideDetail.otherPartyDisputeNotice": "Juht teatas selle broneeringu kohta probleemist ({status})",
+    "rideDetail.otherPartyDisputeCanReport": "Saad allpool siiski oma raporti saata.",
     "rideDetail.resolution": "Lahendus: {resolution}",
     "rideDetail.disputeNoShow": "Reisija või juht ei ilmunud",
     "rideDetail.disputeDriverMissedPickup": "Juht ei tulnud pealevõtule",

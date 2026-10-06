@@ -2850,7 +2850,8 @@ export interface Dispute {
   id: string;
   rideId: string;
   bookingId: string;
-  raisedBy?: string;
+  /** Who opened it. The rider and the driver can each have one open dispute on a booking. */
+  raisedBy: string;
   reason: string;
   description?: string;
   status: string;

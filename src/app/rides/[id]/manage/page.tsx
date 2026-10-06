@@ -476,7 +476,9 @@ const [error, setError] = useState('');
       await loadData();
       showSuccess(t('manageRide.issueReported'), t('manageRide.issueReportedCopy'));
     } catch (err: unknown) {
-      const message = getApiErrorMessage(err, t('manageRide.failedReportIssue'));
+      const raw = getApiErrorMessage(err, t('manageRide.failedReportIssue'));
+      // The backend answers a second open report from the same person with a bare code.
+      const message = raw.includes('DISPUTE_ALREADY_EXISTS') ? t('rideDetail.reportAlreadyOpen') : raw;
       setError(message);
       showError(t('manageRide.couldNotReportIssue'), message);
     } finally {
@@ -600,11 +602,9 @@ const [error, setError] = useState('');
   ].includes(b.status));
   const pickupOtpBookings = confirmedBookings.filter(b => ['WAITING_FOR_PICKUP', 'DRIVER_ARRIVED'].includes(b.status));
   const requestCount = pendingBookings.length;
-  // Seats sold, not rows and not totalSeats - availableSeats: availableSeats is peak
-  // occupancy across the ride's segments, so a segment booking on a quieter leg never
-  // moves it. The backend sends the sum; the reduce is the fallback for an older API.
-  const bookedSeatCount = ride.bookedSeats
-    ?? bookings.reduce((total, b) => total + (b.seatsReservedAt ? (b.seatsBooked ?? 0) : 0), 0);
+  // Seats sold. Every booking holds its seats for the whole ride, so this equals
+  // totalSeats - availableSeats; the backend sends it as bookedSeats.
+  const bookedSeatCount = ride.bookedSeats ?? Math.max(0, ride.totalSeats - ride.availableSeats);
   const departureDate = new Date(ride.departureDate);
   const [departureHour, departureMinute] = ride.departureTime.split(':').map(Number);
   const departureAt = Date.UTC(
@@ -1346,7 +1346,9 @@ function PassengerCard({
   const showPickupActions = ridePhase === 'in_progress' && ['WAITING_FOR_PICKUP', 'DRIVER_ARRIVED'].includes(booking.status);
   const showOnboardActions = ridePhase === 'in_progress' && booking.status === 'ONBOARD';
   const canMessagePassenger = ridePhase === 'in_progress' && ['CONFIRMED', 'WAITING_FOR_PICKUP', 'DRIVER_ARRIVED', 'OTP_PENDING', 'IN_PROGRESS', 'ONBOARD', 'DROP_PENDING', 'DRIVER_DROPPED'].includes(booking.status);
-  const showReportAction = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED'].includes(booking.status);
+  // DISPUTED included: the rider (or support) having opened a dispute must not stop the driver
+  // from filing their own. The backend still refuses a second open report from the driver.
+  const showReportAction = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DROP_PENDING', 'COMPLETED', 'DISPUTED'].includes(booking.status);
   const statusClass = booking.status === 'ONBOARD' || booking.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border border-green-200'
     : booking.status === 'NO_SHOW' || booking.status === 'DRIVER_MISSED_PICKUP' ? 'bg-red-50 text-red-700 border border-red-200'
       : booking.status === 'DROP_PENDING' ? 'bg-purple-50 text-purple-700 border border-purple-200'
