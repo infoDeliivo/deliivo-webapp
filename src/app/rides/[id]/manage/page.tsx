@@ -389,6 +389,35 @@ const [error, setError] = useState('');
     )) ?? null;
   }
 
+  /**
+   * Finish from the dialog: first confirm the drop-off of every rider the driver ticked, then
+   * finish the ride. Riders not yet completed (including dropped-off riders still to confirm
+   * themselves) block a normal finish, so the reason, when given, makes it an override.
+   */
+  async function finishWithDropoffs(droppedOffIds: string[], overrideReason: string | null) {
+    for (const bookingId of droppedOffIds) {
+      const booking = bookings.find((b) => b.id === bookingId);
+      if (!booking) continue;
+      setActionLoading(`finish-dropoff-${bookingId}`);
+      try {
+        const point = getBookingPoint(booking, 'dropoff');
+        // Only a rider in the car can be dropped off normally; any other step needs the override.
+        const needsForce = !['ONBOARD', 'IN_PROGRESS'].includes(booking.status);
+        await rideOpsApi.confirmDropoff(bookingId, point?.lat, point?.lng, needsForce ? (overrideReason ?? undefined) : undefined);
+      } catch (err: unknown) {
+        const name = booking.passenger?.firstName || t('manageRide.passenger');
+        const message = getApiErrorMessage(err, t('manageRide.failedConfirmDropoff'));
+        setActionLoading('');
+        setError(message);
+        showError(t('manageRide.finishDropoffFailed', { name }), message);
+        await loadData();
+        return;
+      }
+    }
+    setConfirmRideAction(null);
+    await performFinishRide(overrideReason ?? undefined);
+  }
+
   async function confirmRideLifecycleAction() {
     if (confirmRideAction === 'start') {
       setConfirmRideAction(null);
@@ -876,6 +905,14 @@ const [error, setError] = useState('');
               <h3 className="flex items-center gap-2 text-base font-bold text-deliivo-dark">
                 <UserCheck size={16} className="text-green-500" /> {t('manageRide.passengerCount', { count: confirmedBookings.length })}
               </h3>
+              {phase === 'in_progress' && (
+                <p className="mt-1 text-xs text-deliivo-gray">
+                  {t('manageRide.droppedOffSummary', {
+                    dropped: confirmedBookings.filter((b) => DROPPED_OFF_STATUSES.includes(b.status)).length,
+                    total: confirmedBookings.filter((b) => !CLOSED_WITHOUT_TRIP_STATUSES.includes(b.status)).length,
+                  })}
+                </p>
+              )}
             </div>
             <div className="space-y-4">
               {confirmedBookings.map(booking => (
@@ -1143,7 +1180,16 @@ const [error, setError] = useState('');
             </div>
           </details>
 
-          {confirmRideAction && (
+          {confirmRideAction === 'finish' && (
+            <FinishRideDialog
+              bookings={confirmedBookings}
+              busy={actionLoading === 'finish' || actionLoading.startsWith('finish-dropoff')}
+              onCancel={() => setConfirmRideAction(null)}
+              onConfirm={finishWithDropoffs}
+            />
+          )}
+
+          {confirmRideAction === 'start' && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
               <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
                 <h3 className="text-base font-semibold text-deliivo-dark">
@@ -1734,6 +1780,166 @@ function promptManualOverride(title: string, body: string) {
     prefill = reason;
     window.alert(`Please write at least ${OVERRIDE_REASON_MIN_LENGTH} characters so the override can be reviewed.`);
   }
+}
+
+// ─── Finish Ride Dialog ───────────────────────────────────────────────────────
+
+/** The driver has confirmed the drop-off (the rider may still have to confirm it). */
+const DROPPED_OFF_STATUSES = ['DROP_PENDING', 'DRIVER_DROPPED', 'COMPLETED'];
+/** The rider never travelled, or the booking is with support. Nothing to drop off. */
+const CLOSED_WITHOUT_TRIP_STATUSES = ['NO_SHOW', 'DRIVER_MISSED_PICKUP', 'DISPUTED', 'CANCELLED'];
+
+/**
+ * Before finishing, show the driver who has been dropped off and who has not, and let them tick
+ * the riders they did drop off. With riders still open the finish is an override ("Continue
+ * anyway"), which needs a written reason; only riders left unticked are flagged for review.
+ */
+function FinishRideDialog({
+  bookings,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  bookings: DriverRideBooking[];
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (droppedOffIds: string[], overrideReason: string | null) => void;
+}) {
+  const { t } = useTranslation();
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [reason, setReason] = useState('');
+
+  const droppedOff = bookings.filter((b) => DROPPED_OFF_STATUSES.includes(b.status));
+  const closedWithoutTrip = bookings.filter((b) => CLOSED_WITHOUT_TRIP_STATUSES.includes(b.status));
+  const notDroppedOff = bookings.filter(
+    (b) => !DROPPED_OFF_STATUSES.includes(b.status) && !CLOSED_WITHOUT_TRIP_STATUSES.includes(b.status)
+  );
+  // Anything not COMPLETED / closed blocks a normal finish, including riders the driver dropped
+  // off who have not confirmed it themselves yet.
+  const needsOverride = notDroppedOff.length > 0 || droppedOff.some((b) => b.status !== 'COMPLETED');
+  const leftOpen = notDroppedOff.filter((b) => !selected.has(b.id));
+  const reasonOk = !needsOverride || reason.trim().length >= OVERRIDE_REASON_MIN_LENGTH;
+
+  const toggle = (id: string) => setSelected((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+
+  const riderLabel = (b: DriverRideBooking) =>
+    `${b.passenger?.firstName || t('manageRide.passenger')} · ${formatBookingReference(b)}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" role="dialog" aria-modal="true">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
+        <h3 className="text-base font-semibold text-deliivo-dark">{t('manageRide.finishDialogTitle')}</h3>
+        <p className="mt-1 text-sm text-deliivo-gray">{t('manageRide.finishDialogCopy')}</p>
+
+        {notDroppedOff.length > 0 && (
+          <section className="mt-4">
+            <h4 className="text-xs font-semibold uppercase text-amber-700">{t('manageRide.finishNotDroppedOff', { count: notDroppedOff.length })}</h4>
+            <p className="mt-0.5 text-xs text-deliivo-gray">{t('manageRide.finishTickDropped')}</p>
+            <ul className="mt-2 space-y-2">
+              {notDroppedOff.map((b) => (
+                <li key={b.id}>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(b.id)}
+                      onChange={() => toggle(b.id)}
+                      disabled={busy}
+                      className="h-4 w-4 accent-deliivo-orange"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-deliivo-dark">{riderLabel(b)}</span>
+                      <span className="block text-xs text-deliivo-gray">
+                        {getRideStatusLabel(b.status, t)}
+                        {b.dropoffLocation?.address ? ` · ${b.dropoffLocation.address}` : ''}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold text-amber-800">
+                      {selected.has(b.id) ? t('manageRide.finishMarkDropped') : t('manageRide.finishStillOpen')}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {droppedOff.length > 0 && (
+          <section className="mt-4">
+            <h4 className="text-xs font-semibold uppercase text-green-700">{t('manageRide.finishDroppedOff', { count: droppedOff.length })}</h4>
+            <ul className="mt-2 space-y-1.5">
+              {droppedOff.map((b) => (
+                <li key={b.id} className="flex items-center justify-between gap-3 rounded-xl bg-green-50 px-3 py-2 text-sm">
+                  <span className="truncate text-deliivo-dark">{riderLabel(b)}</span>
+                  <span className="shrink-0 text-xs text-green-700">
+                    {b.status === 'COMPLETED' ? t('rides.completed') : t('manageRide.finishAwaitingRider')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {closedWithoutTrip.length > 0 && (
+          <section className="mt-4">
+            <h4 className="text-xs font-semibold uppercase text-deliivo-gray">{t('manageRide.finishNoTrip', { count: closedWithoutTrip.length })}</h4>
+            <ul className="mt-2 space-y-1.5">
+              {closedWithoutTrip.map((b) => (
+                <li key={b.id} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2 text-sm">
+                  <span className="truncate text-deliivo-dark">{riderLabel(b)}</span>
+                  <span className="shrink-0 text-xs text-deliivo-gray">{getRideStatusLabel(b.status, t)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {needsOverride && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-xs text-amber-900">
+              {leftOpen.length > 0
+                ? t('manageRide.finishLeftOpenWarning', { names: leftOpen.map((b) => b.passenger?.firstName || t('manageRide.passenger')).join(', ') })
+                : t('manageRide.finishOverrideNote')}
+            </p>
+            <label htmlFor="finish-reason" className="mt-2 block text-xs font-medium text-amber-900">
+              {t('manageRide.finishReasonLabel', { min: OVERRIDE_REASON_MIN_LENGTH })}
+            </label>
+            <textarea
+              id="finish-reason"
+              rows={2}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              disabled={busy}
+              className="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-deliivo-orange/20"
+            />
+          </div>
+        )}
+
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-deliivo-dark hover:bg-gray-50 disabled:opacity-50"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm([...selected], needsOverride ? reason.trim() : null)}
+            disabled={busy || !reasonOk}
+            className="flex-1 rounded-xl bg-deliivo-orange px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : needsOverride ? t('manageRide.finishContinueAnyway') : t('manageRide.finishConfirm')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── OTP Verification Section ─────────────────────────────────────────────────

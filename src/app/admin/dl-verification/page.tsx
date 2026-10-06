@@ -269,14 +269,17 @@ export default function AdminDlVerificationPage() {
                     </p>
                   ) : (
                     <div className="mt-auto flex flex-wrap gap-2 pt-2">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => handleApprove(submission)}
-                        className="rounded-xl bg-[#F97316] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#ea6a0c] disabled:opacity-50"
-                      >
-                        {busy ? 'Processing…' : 'Approve'}
-                      </button>
+                      {/* Already approved: approving again would only re-notify the driver. */}
+                      {submission.status !== 'APPROVED' && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => handleApprove(submission)}
+                          className="rounded-xl bg-[#F97316] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#ea6a0c] disabled:opacity-50"
+                        >
+                          {busy ? 'Processing…' : 'Approve'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={busy}
