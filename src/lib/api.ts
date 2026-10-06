@@ -1755,14 +1755,32 @@ export const adminApi = {
       body: JSON.stringify(data),
     });
   },
-  getUsers(params?: { page?: number; limit?: number; search?: string; isBanned?: string; role?: string }) {
+  getUsers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: AdminUserStatusFilter;
+    isBanned?: string;
+    role?: string;
+    /** ISO 3166-1 alpha-2. */
+    country?: string;
+    dlVerified?: boolean;
+  }) {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
     if (params?.limit) query.set('limit', String(params.limit));
     if (params?.search) query.set('search', params.search);
+    if (params?.status) query.set('status', params.status);
     if (params?.isBanned) query.set('isBanned', params.isBanned);
     if (params?.role) query.set('role', params.role);
+    if (params?.country) query.set('country', params.country);
+    if (typeof params?.dlVerified === 'boolean') query.set('dlVerified', String(params.dlVerified));
     return apiFetch<{ data: { users: AdminUser[]; pagination: Pagination } }>(`/api/v1/admin/users?${query}`);
+  },
+  getUserCountries(params?: { status?: AdminUserStatusFilter }) {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    return apiFetch<{ data: { countries: AdminUserCountry[] } }>(`/api/v1/admin/users/countries?${query}`);
   },
   getUserDetails(id: string) {
     return apiFetch<{ data: AdminUserDetails }>(`/api/v1/admin/users/${encodeURIComponent(id)}`);
@@ -1851,11 +1869,24 @@ export const adminApi = {
   unbanUser(id: string) {
     return apiFetch<{ data: { id: string; isBanned: boolean } }>(`/api/v1/admin/users/${id}/unban`, { method: 'POST' });
   },
-  deleteUser(id: string, data: { confirm: true; mode: 'soft' | 'hard' }) {
-    return apiFetch<{ data: { deleted: boolean; hardDeleted?: boolean } }>(`/api/v1/admin/users/${id}/delete`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  // Archive is the reversible removal; purge (permanent) only works on an archived user.
+  archiveUser(id: string, data: { reason?: string }) {
+    return apiFetch<{ data: { id: string; archivedAt: string; archiveReason: string | null } }>(
+      `/api/v1/admin/users/${encodeURIComponent(id)}/archive`,
+      { method: 'POST', body: JSON.stringify(data) },
+    );
+  },
+  restoreUser(id: string) {
+    return apiFetch<{ data: { id: string; archivedAt: null; isBanned: boolean } }>(
+      `/api/v1/admin/users/${encodeURIComponent(id)}/restore`,
+      { method: 'POST' },
+    );
+  },
+  purgeUser(id: string, data: { confirmIdentifier: string }) {
+    return apiFetch<{ data: { id: string; purged: true } }>(
+      `/api/v1/admin/users/${encodeURIComponent(id)}/purge`,
+      { method: 'POST', body: JSON.stringify(data) },
+    );
   },
   requireVeriff(id: string) {
     return apiFetch<{ data: { id: string; dlVerified: boolean; requiresVeriff: boolean } }>(
@@ -2336,6 +2367,14 @@ export interface AdminVerificationEmailDraft {
   isDriverCandidate: boolean;
 }
 
+export type AdminUserStatusFilter = 'active' | 'banned' | 'archived' | 'all';
+
+export interface AdminUserCountry {
+  /** ISO 3166-1 alpha-2. */
+  code: string;
+  count: number;
+}
+
 export interface AdminUser {
   id: string;
   firstName: string | null;
@@ -2351,6 +2390,10 @@ export interface AdminUser {
   isVerified: boolean;
   dlVerified: boolean;
   onboardingStatus: string;
+  /** "City, CC" or bare "CC", from the request IP. Null when never detected. */
+  detectedCountry?: string | null;
+  /** Set while the account is archived (reversibly removed). */
+  archivedAt?: string | null;
   createdAt: string;
 }
 
@@ -2375,6 +2418,9 @@ export interface AdminUserDetails {
     privacyAcceptedAt: string | null;
     privacyVersion: string | null;
     updatedAt: string;
+    archivedAt: string | null;
+    archiveReason: string | null;
+    archivedBy: { id: string; firstName: string | null; lastName: string | null; email: string | null } | null;
     verificationFlags: {
       completeOnboardingVerified: boolean;
       veriffVerified: boolean;

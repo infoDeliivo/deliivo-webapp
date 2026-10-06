@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
   AlertCircle,
+  Archive,
   ArrowLeft,
   Ban,
   BadgeCheck,
@@ -20,8 +21,10 @@ import {
   Mail,
   Phone,
   RefreshCw,
+  RotateCcw,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   Wallet,
   User,
 } from 'lucide-react';
@@ -38,6 +41,8 @@ import {
 import type { RewardWallet } from '@/lib/api';
 import { showError, showSuccess } from '@/lib/app-feedback';
 import { featureFlags } from '@/lib/features';
+import { countryLabel } from '@/lib/country';
+import { ArchiveUserDialog, PurgeUserDialog, RestoreUserDialog } from '../_components/UserArchiveDialogs';
 
 function shortId(id: string) {
   return id.slice(0, 8);
@@ -90,32 +95,6 @@ function localeLabel(locale: string | null | undefined) {
   return localeLabels[locale] || locale.toUpperCase()
 }
 
-// Derived from the IP the user connects from, so it is where the connection appears to come from
-// rather than where the person is — a VPN or a roaming carrier moves it.
-//
-// The stored value carries city and country together, "New Delhi, IN", and falls back to a bare
-// "IN" wherever the lookup table names no city. The country is always the last segment, so it is
-// read from the end rather than by assuming a shape.
-function countryLabel(value: string | null | undefined) {
-  if (!value) return 'Not detected'
-
-  const segments = value.split(',').map((part) => part.trim()).filter(Boolean)
-  if (segments.length === 0) return 'Not detected'
-
-  const code = segments[segments.length - 1].toUpperCase()
-  const city = segments.slice(0, -1).join(', ')
-
-  let country = code
-  try {
-    const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(code)
-    if (name && name !== code) country = `${name} (${code})`
-  } catch {
-    // Intl without region data: the code on its own is still the honest answer.
-  }
-
-  return city ? `${city}, ${country}` : country
-}
-
 const genderLabels: Record<string, string> = {
   MALE: 'Male',
   FEMALE: 'Female',
@@ -160,6 +139,7 @@ export default function AdminUserDetailsPage() {
   const [rewardGrantWalletType, setRewardGrantWalletType] = useState<'RIDER' | 'DRIVER'>('DRIVER');
   const [rewardGrantReason, setRewardGrantReason] = useState('Manual wallet adjustment');
   const [rewardGrantLoading, setRewardGrantLoading] = useState(false);
+  const [archiveDialog, setArchiveDialog] = useState<'archive' | 'restore' | 'purge' | null>(null);
 
   useEffect(() => {
     loadDetails();
@@ -196,40 +176,6 @@ export default function AdminUserDetailsPage() {
       showSuccess(nextBanned ? 'User banned' : 'User unbanned', fullName(details.user));
     } catch (err: unknown) {
       showError('Action failed', getApiErrorMessage(err, 'Could not update ban status'));
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
-  async function deleteUser() {
-    if (!details || details.user.role === 'ADMIN') return;
-
-    const modePrompt = featureFlags.adminHardDeleteUsers
-      ? window.prompt('Type SOFT to anonymize the user, or HARD to permanently delete all user data.')
-      : window.prompt('Type SOFT to anonymize the user.');
-    const mode = modePrompt?.trim().toUpperCase();
-
-    if (mode !== 'SOFT' && mode !== 'HARD') return;
-    if (mode === 'HARD' && !featureFlags.adminHardDeleteUsers) {
-      showError('Hard delete disabled', 'Enable the hard delete feature flag first.');
-      return;
-    }
-
-    const confirmValue = window.prompt(
-      `Type DELETE to confirm ${mode.toLowerCase()} deletion for ${fullName(details.user)} (${details.user.email || details.user.id}).`,
-    );
-    if (confirmValue?.trim().toUpperCase() !== 'DELETE') return;
-
-    setActionLoading(true);
-    try {
-      await adminApi.deleteUser(details.user.id, { confirm: true, mode: mode.toLowerCase() as 'soft' | 'hard' });
-      showSuccess(
-        mode === 'HARD' ? 'User permanently deleted' : 'User soft-deleted',
-        fullName(details.user),
-      );
-      router.replace('/admin/users');
-    } catch (err: unknown) {
-      showError('Action failed', getApiErrorMessage(err, 'Could not delete user'));
     } finally {
       setActionLoading(false);
     }
@@ -508,7 +454,11 @@ export default function AdminUserDetailsPage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold text-gray-900">{fullName(user)}</h1>
-                <StatusBadge tone={user.isBanned ? 'danger' : 'good'}>{user.isBanned ? 'Banned' : 'Active'}</StatusBadge>
+                {user.archivedAt ? (
+                  <StatusBadge tone="neutral">Archived</StatusBadge>
+                ) : (
+                  <StatusBadge tone={user.isBanned ? 'danger' : 'good'}>{user.isBanned ? 'Banned' : 'Active'}</StatusBadge>
+                )}
                 <StatusBadge tone={user.role === 'ADMIN' ? 'info' : 'neutral'}>{user.role}</StatusBadge>
               </div>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
@@ -544,7 +494,23 @@ export default function AdminUserDetailsPage() {
               Require Veriff
             </button>
           )}
-          {user.role !== 'ADMIN' && (
+          {user.archivedAt && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setArchiveDialog('restore')}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-100"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Restore user
+              </button>
+              <button
+                onClick={() => setArchiveDialog('purge')}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete permanently
+              </button>
+            </div>
+          )}
+          {user.role !== 'ADMIN' && !user.archivedAt && (
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={toggleBan}
@@ -555,17 +521,53 @@ export default function AdminUserDetailsPage() {
                 {user.isBanned ? 'Unban user' : 'Ban user'}
               </button>
               <button
-                onClick={deleteUser}
+                onClick={() => setArchiveDialog('archive')}
                 disabled={actionLoading}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
               >
-                {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
-                Delete user
+                <Archive className="h-3.5 w-3.5" /> Archive user
               </button>
             </div>
           )}
         </div>
       </div>
+
+      {user.archivedAt && (
+        <div className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+          <Archive className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" />
+          <div className="text-sm text-gray-700">
+            <p className="font-semibold">
+              Archived {formatDate(user.archivedAt, true)}
+              {user.archivedBy && <> by {fullName(user.archivedBy)}</>}
+            </p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              {user.archiveReason ? `Reason: ${user.archiveReason}` : 'No reason given.'} The user cannot log in until restored.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {archiveDialog === 'archive' && (
+        <ArchiveUserDialog
+          user={{ id: user.id, name: fullName(user), phone: user.phone, email: user.email }}
+          onClose={() => setArchiveDialog(null)}
+          onDone={() => { setArchiveDialog(null); loadDetails(); }}
+        />
+      )}
+      {archiveDialog === 'restore' && (
+        <RestoreUserDialog
+          user={{ id: user.id, name: fullName(user), phone: user.phone, email: user.email }}
+          onClose={() => setArchiveDialog(null)}
+          onDone={() => { setArchiveDialog(null); loadDetails(); }}
+        />
+      )}
+      {archiveDialog === 'purge' && (
+        <PurgeUserDialog
+          user={{ id: user.id, name: fullName(user), phone: user.phone, email: user.email }}
+          onClose={() => setArchiveDialog(null)}
+          onDone={() => router.replace('/admin/users')}
+        />
+      )}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <Metric icon={Euro} label="Total rider payments" value={formatMoney(summary.payments.totalPaid)} hint={`${summary.payments.paymentCount} payments · ${formatMoney(summary.payments.totalRefunded)} refunded`} />
