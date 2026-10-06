@@ -3418,6 +3418,15 @@ export interface PublishedRide {
   childSeatAvailable?: boolean;
 }
 
+export interface DriverBookingStop {
+  address: string;
+  placeId: string | null;
+  lat: number | null;
+  lng: number | null;
+  estimatedArrivalTime: string | null;
+  isFullRoute?: boolean;
+}
+
 export interface DriverRideBooking {
   id: string;
   bookingReference?: string;
@@ -3450,8 +3459,17 @@ export interface DriverRideBooking {
   dropoffWaypointId: string | null;
   hasDriverRatedPassenger?: boolean;
   driverRatedPassengerAt?: string | null;
-  pickupLocation?: { address: string; placeId: string; lat?: number; lng?: number; estimatedArrivalTime?: string | null };
-  dropoffLocation?: { address: string; placeId: string; lat?: number; lng?: number; estimatedArrivalTime?: string | null };
+  /**
+   * Where the rider gets on and off: their booked addresses. Coordinates are null when the stop
+   * is not a known route point. `isFullRoute` is true at the ride's start/end (or a meeting
+   * point there) and false at a stopover, i.e. the rider joins part of the route.
+   */
+  pickupLocation?: DriverBookingStop;
+  dropoffLocation?: DriverBookingStop;
+  /** Snapshot of the rider's booked addresses and per-seat fare, taken at booking time. */
+  pickupAddress?: string | null;
+  dropoffAddress?: string | null;
+  segmentFare?: number | null;
   createdAt?: string;
   /** Currency of the amounts below — do not assume EUR. */
   currency?: string;

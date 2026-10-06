@@ -57,6 +57,36 @@ const [error, setError] = useState('');
   const [rejectCustomReason, setRejectCustomReason] = useState('');
   const [confirmRideAction, setConfirmRideAction] = useState<null | 'start' | 'finish'>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
+  // Notification links open /rides/{id}/manage?bookingId=…; that booking is scrolled to and
+  // highlighted once, so a driver with several requests lands on the right one.
+  const [highlightedBookingId, setHighlightedBookingId] = useState<string | null>(null);
+  const deepLinkHandledRef = useRef(false);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (deepLinkHandledRef.current || bookings.length === 0) return;
+    // Read from the URL directly rather than useSearchParams, which would need a Suspense
+    // boundary around this client page.
+    const targetId = new URLSearchParams(window.location.search).get('bookingId');
+    if (!targetId || !bookings.some((booking) => booking.id === targetId)) return;
+    deepLinkHandledRef.current = true;
+    // Next frame: the card is rendered by now. Not cancelled when bookings reload (which
+    // re-runs this effect), or the highlight would never clear; see the unmount cleanup below.
+    requestAnimationFrame(() => {
+      setHighlightedBookingId(targetId);
+      document.getElementById(`booking-${targetId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    highlightTimerRef.current = setTimeout(() => setHighlightedBookingId(null), 4000);
+  }, [bookings]);
+
+  useEffect(() => () => {
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+  }, []);
+
+  const bookingHighlightClass = (bookingId: string) =>
+    highlightedBookingId === bookingId
+      ? 'rounded-xl ring-2 ring-deliivo-orange ring-offset-2 transition-shadow'
+      : 'rounded-xl transition-shadow';
   const allowRideSimulation = process.env.NEXT_PUBLIC_ALLOW_RIDE_SIMULATION === 'true';
   // The API only accepts a forced step while the ride is actually running.
   const overrideAvailable = phase === 'in_progress';
@@ -492,8 +522,11 @@ const [error, setError] = useState('');
     await rideOpsApi.submitLocation(id, point.lat, point.lng);
   }
 
+  /** The rider's stop as a point, or undefined when it has no known coordinates. */
   function getBookingPoint(booking: DriverRideBooking, type: 'pickup' | 'dropoff') {
-    return type === 'pickup' ? booking.pickupLocation : booking.dropoffLocation;
+    const stop = type === 'pickup' ? booking.pickupLocation : booking.dropoffLocation;
+    if (stop?.lat == null || stop.lng == null) return undefined;
+    return { lat: stop.lat, lng: stop.lng };
   }
 
   async function handleDevDriverArrived(booking: DriverRideBooking) {
@@ -700,13 +733,15 @@ const [error, setError] = useState('');
             </div>
             <div className="space-y-3">
               {pendingBookings.map(booking => (
-                <BookingRequestCard
-                  key={booking.id}
-                  booking={booking}
-                  onAccept={() => handleAcceptBooking(booking.id)}
-                  onReject={() => openRejectDialog(booking)}
-                  loading={actionLoading === `accept-${booking.id}` || actionLoading === `reject-${booking.id}`}
-                />
+                <div key={booking.id} id={`booking-${booking.id}`} className={bookingHighlightClass(booking.id)}>
+                  <BookingRequestCard
+                    booking={booking}
+                    departureLabel={t('manageRide.dateAtTime', { date: dateLabel, time: formatRideTime(ride.departureTime, locale) })}
+                    onAccept={() => handleAcceptBooking(booking.id)}
+                    onReject={() => openRejectDialog(booking)}
+                    loading={actionLoading === `accept-${booking.id}` || actionLoading === `reject-${booking.id}`}
+                  />
+                </div>
               ))}
             </div>
           </section>
@@ -833,8 +868,8 @@ const [error, setError] = useState('');
             </div>
             <div className="space-y-4">
               {confirmedBookings.map(booking => (
+                <div key={booking.id} id={`booking-${booking.id}`} className={bookingHighlightClass(booking.id)}>
                 <PassengerCard
-                  key={booking.id}
                   booking={booking}
                   ridePhase={phase}
                   onDriverArrived={() => handleDriverArrived(booking)}
@@ -848,6 +883,7 @@ const [error, setError] = useState('');
                   reportLoading={actionLoading === `report-${booking.id}`}
                   dropoffLoading={actionLoading === `dropoff-${booking.id}`}
                 />
+                </div>
               ))}
             </div>
           </section>
@@ -1220,16 +1256,22 @@ const [error, setError] = useState('');
 
 function BookingRequestCard({
   booking,
+  departureLabel,
   onAccept,
   onReject,
   loading,
 }: {
   booking: DriverRideBooking;
+  /** The ride's departure date and time, already formatted. */
+  departureLabel: string;
   onAccept: () => void;
   onReject: () => void;
   loading: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const passengerName = booking.passenger?.firstName || t('manageRide.passengerRequest');
+  const wholeRoute = Boolean(booking.pickupLocation?.isFullRoute && booking.dropoffLocation?.isFullRoute);
+  const stopTime = (time?: string | null) => (time ? formatRideTime(time, locale) : null);
   const statusLabel = getRideStatusLabel(booking.status, t);
   const deadlineLabel = booking.decisionDeadline && !booking.decisionDeadline.isExpired
     ? formatCountdown(booking.decisionDeadline.timeRemainingSeconds, t)
@@ -1237,12 +1279,23 @@ function BookingRequestCard({
   return (
     <div className="rounded-xl border border-gray-100 p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-deliivo-dark">
-            {booking.passenger?.firstName || t('manageRide.passengerRequest')}
-          </p>
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-primary-100">
+            {booking.passenger?.avatarUrl ? (
+              <img src={booking.passenger.avatarUrl} alt={passengerName} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-sm font-bold text-primary-600">
+                {passengerName.trim().charAt(0).toUpperCase() || 'P'}
+              </div>
+            )}
+          </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-deliivo-dark">{passengerName}</p>
           <p className="text-xs text-deliivo-gray">
             {t('manageRide.seatsRequested', { count: booking.seatsBooked, plural: booking.seatsBooked > 1 ? 's' : '' })}
+            {booking.segmentFare != null && (
+              <> × {formatMoney(booking.segmentFare, booking.currency)} {t('manageRide.perSeat')}</>
+            )}
           </p>
           {booking.driverNetAmount !== undefined && (
             <p className="text-xs text-deliivo-gray">
@@ -1261,15 +1314,47 @@ function BookingRequestCard({
           )}
           <p className="text-[11px] text-deliivo-gray">{t('manageRide.bookingNumber', { id: formatBookingReference(booking) })} • {statusLabel}</p>
         </div>
+        </div>
         <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
           {t('rides.pending')}
         </span>
       </div>
-      <div className="grid gap-2 text-xs text-deliivo-gray sm:grid-cols-2">
-        <p><span className="font-medium text-deliivo-dark">{t('rideDetail.pickup')}:</span> {booking.pickupLocation?.address || t('manageRide.fullRoutePickup')}</p>
-        <p><span className="font-medium text-deliivo-dark">{t('rideDetail.dropoff')}:</span> {booking.dropoffLocation?.address || t('manageRide.fullRouteDropoff')}</p>
-        {deadlineLabel && <p className="sm:col-span-2"><span className="font-medium text-deliivo-dark">{t('manageRide.respondIn')}:</span> {deadlineLabel}</p>}
+      {/* The rider's journey: where they get on and off, and when. */}
+      <div className="rounded-xl bg-gray-50 p-3 text-xs">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-deliivo-gray">
+            <span className="font-medium text-deliivo-dark">{t('manageRide.departure')}:</span> {departureLabel}
+          </span>
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${wholeRoute ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
+            {wholeRoute ? t('manageRide.wholeRoute') : t('manageRide.partOfRoute')}
+          </span>
+        </div>
+        <ol className="space-y-2">
+          <li className="flex items-start gap-2">
+            <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-green-500" />
+            <div className="min-w-0">
+              <p className="font-medium text-deliivo-dark">
+                {t('rideDetail.pickup')}
+                {stopTime(booking.pickupLocation?.estimatedArrivalTime) && <span className="ml-1.5 font-normal text-deliivo-gray">{stopTime(booking.pickupLocation?.estimatedArrivalTime)}</span>}
+              </p>
+              <p className="break-words text-deliivo-gray">{booking.pickupLocation?.address || booking.pickupAddress || t('manageRide.fullRoutePickup')}</p>
+            </div>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+            <div className="min-w-0">
+              <p className="font-medium text-deliivo-dark">
+                {t('rideDetail.dropoff')}
+                {stopTime(booking.dropoffLocation?.estimatedArrivalTime) && <span className="ml-1.5 font-normal text-deliivo-gray">{stopTime(booking.dropoffLocation?.estimatedArrivalTime)}</span>}
+              </p>
+              <p className="break-words text-deliivo-gray">{booking.dropoffLocation?.address || booking.dropoffAddress || t('manageRide.fullRouteDropoff')}</p>
+            </div>
+          </li>
+        </ol>
       </div>
+      {deadlineLabel && (
+        <p className="text-xs text-deliivo-gray"><span className="font-medium text-deliivo-dark">{t('manageRide.respondIn')}:</span> {deadlineLabel}</p>
+      )}
       <div className="flex items-center gap-2">
         <button
           type="button"
