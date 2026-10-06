@@ -1327,6 +1327,22 @@ function PassengerCard({
   const [ratingText, setRatingText] = useState('');
   const [ratingLoading, setRatingLoading] = useState(false);
   const [ratingSubmitted, setRatingSubmitted] = useState(Boolean(booking.hasDriverRatedPassenger));
+  // The rider gets a fixed wait after the driver arrives; until then the backend refuses a
+  // no-show, so the button counts down instead of failing on click.
+  const noShowAvailableAtMs = booking.status === 'DRIVER_ARRIVED' && booking.noShowAvailableAt
+    ? Date.parse(booking.noShowAvailableAt)
+    : null;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (noShowAvailableAtMs == null || Date.now() >= noShowAvailableAtMs) return;
+    const timer = setInterval(() => {
+      const current = Date.now();
+      setNowMs(current);
+      if (current >= noShowAvailableAtMs) clearInterval(timer);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [noShowAvailableAtMs]);
+  const noShowSecondsLeft = noShowAvailableAtMs == null ? 0 : Math.max(0, Math.ceil((noShowAvailableAtMs - nowMs) / 1000));
   const canRatePassenger = ['COMPLETED', 'NO_SHOW', 'DRIVER_MISSED_PICKUP'].includes(booking.status);
   const statusLabel: Record<string, string> = {
     CONFIRMED: t('rides.confirmed'),
@@ -1424,11 +1440,14 @@ function PassengerCard({
             <button
               type="button"
               onClick={onMarkNoShow}
-              disabled={noShowLoading}
+              disabled={noShowLoading || noShowSecondsLeft > 0}
+              title={noShowSecondsLeft > 0 ? t('manageRide.noShowWaitHint') : undefined}
               className="inline-flex h-9 items-center gap-2 rounded-full border border-red-200 px-3.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
             >
               {noShowLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
-              {t('manageRide.markNoShow')}
+              {noShowSecondsLeft > 0
+                ? t('manageRide.noShowAvailableIn', { time: formatMinutesSeconds(noShowSecondsLeft) })
+                : t('manageRide.markNoShow')}
             </button>
           )}
           {showOnboardActions && (
@@ -1545,6 +1564,13 @@ function PassengerCard({
     )}
     </div>
   );
+}
+
+/** 7:05 */
+function formatMinutesSeconds(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 function formatCountdown(totalSeconds: number, t: (key: string, params?: Record<string, string | number>) => string) {

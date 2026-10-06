@@ -3430,6 +3430,11 @@ export interface DriverRideBooking {
   totalPrice: number;
   status: string;
   displayStatus?: string;
+  /**
+   * Set while DRIVER_ARRIVED: when the driver may mark the rider a no-show (the rider gets a
+   * fixed wait after the driver arrives). The backend enforces the same instant.
+   */
+  noShowAvailableAt?: string | null;
   decisionDeadline?: {
     deadlineAt: string;
     timeRemainingMs: number;
