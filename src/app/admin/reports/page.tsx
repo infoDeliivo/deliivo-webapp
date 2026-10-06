@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { Flag, ChevronDown, ChevronLeft, ChevronRight, Loader2, AlertCircle } from 'lucide-react'
+import { Flag, ChevronDown, ChevronLeft, ChevronRight, Loader2, AlertCircle, Search } from 'lucide-react'
 import { adminApi, AdminDispute, Pagination, getApiErrorMessage } from '@/lib/api'
 import { showError, showSuccess } from '@/lib/app-feedback'
 
@@ -22,6 +22,44 @@ const FILTER_STATUSES = ['All', 'OPEN', 'NEEDS_MANUAL_REVIEW', 'EVIDENCE_COLLECT
 
 const RESOLUTIONS = ['REFUND', 'PAYOUT', 'SPLIT', 'ESCALATE'] as const
 
+function formatDisputeDate(value: string) {
+  return new Date(value).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/** "5m ago", "3h ago", "2d ago" — how long the dispute has been waiting. */
+function formatAge(value: string) {
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000))
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
+}
+
+function raiserName(d: AdminDispute) {
+  const user = d.raisedByUser
+  const name = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
+  return name || user?.email || d.raisedBy.slice(0, 8)
+}
+
+/** The rider and the driver can each raise a dispute on the same booking. */
+function raiserSide(d: AdminDispute): 'Driver' | 'Rider' | 'Other' {
+  if (d.raisedBy === d.ride?.driverId) return 'Driver'
+  if (d.raisedBy === d.booking?.passengerId) return 'Rider'
+  return 'Other'
+}
+
+const raiserSideStyle = {
+  Driver: 'bg-blue-50 text-blue-700',
+  Rider: 'bg-purple-50 text-purple-700',
+  Other: 'bg-gray-100 text-gray-600',
+}
+
 export default function AdminReportsPage() {
   const [disputes, setDisputes] = useState<AdminDispute[]>([])
   const [pagination, setPagination] = useState<Pagination | null>(null)
@@ -29,20 +67,34 @@ export default function AdminReportsPage() {
   const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('All')
   const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [splitRefundPercent, setSplitRefundPercent] = useState('50')
   const [selectedDispute, setSelectedDispute] = useState<AdminDispute | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
-  useEffect(() => { loadDisputes() }, [page, statusFilter])
+  useEffect(() => { loadDisputes() }, [page, statusFilter, appliedSearch])
+
+  // Debounced so typing does not fire a request per keystroke; a new search starts at page 1.
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = setTimeout(() => {
+      setPage(1)
+      setAppliedSearch(search.trim())
+    }, 400)
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
+  }, [search])
 
   async function loadDisputes() {
     setLoading(true)
     setError('')
     try {
-      const params: { page: number; limit: number; status?: string } = { page, limit: 20 }
+      const params: { page: number; limit: number; status?: string; search?: string } = { page, limit: 20 }
       if (statusFilter !== 'All') params.status = statusFilter
+      if (appliedSearch) params.search = appliedSearch
       const res = await adminApi.getDisputes(params)
       setDisputes(res.data.disputes)
       setPagination(res.data.pagination)
@@ -124,7 +176,7 @@ export default function AdminReportsPage() {
     <div className="flex flex-col gap-5">
       <div>
         <h1 className="text-xl font-bold text-gray-900">Disputes</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{pagination?.total || 0} disputes</p>
+        <p className="text-sm text-gray-500 mt-0.5">{pagination?.total || 0} disputes · newest first</p>
       </div>
 
       {error && (
@@ -341,7 +393,18 @@ export default function AdminReportsPage() {
       )}
 
       {/* Filter */}
-      <div className="bg-white rounded-2xl shadow-sm p-4 flex gap-2 flex-wrap">
+      <div className="bg-white rounded-2xl shadow-sm p-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="search"
+            placeholder="Search by ID, reason, route, or who raised it…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+          />
+        </div>
+        <div className="flex gap-2 flex-wrap">
         {FILTER_STATUSES.map((s) => (
           <button
             key={s}
@@ -356,6 +419,7 @@ export default function AdminReportsPage() {
             {s === 'All' ? 'All' : s.replace(/_/g, ' ')}
           </button>
         ))}
+        </div>
       </div>
 
       {/* Table */}
@@ -370,7 +434,9 @@ export default function AdminReportsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-gray-400 border-b border-gray-100">
-                    <th className="text-left px-6 py-3 font-medium">ID</th>
+                    <th className="text-left px-6 py-3 font-medium">Date</th>
+                    <th className="text-left px-4 py-3 font-medium">ID</th>
+                    <th className="text-left px-4 py-3 font-medium">Raised by</th>
                     <th className="text-left px-4 py-3 font-medium">Reason</th>
                     <th className="text-left px-4 py-3 font-medium">Route</th>
                     <th className="text-left px-4 py-3 font-medium">Decision</th>
@@ -382,16 +448,23 @@ export default function AdminReportsPage() {
                 <tbody>
                   {disputes.map((d) => (
                     <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-3 text-xs">
+                      <td className="px-6 py-3 text-xs whitespace-nowrap">
+                        <p className="font-medium text-gray-700">{formatDisputeDate(d.createdAt)}</p>
+                        <p className="mt-0.5 text-[11px] text-gray-400">{formatAge(d.createdAt)}</p>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
                         <p className="font-mono text-gray-500">{d.id.slice(0, 8)}</p>
                         <p className="mt-1 font-mono text-[11px] text-gray-400">Ride {d.rideId.slice(0, 8)}</p>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <p className="font-medium text-gray-800 truncate max-w-[10rem]">{raiserName(d)}</p>
+                        <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${raiserSideStyle[raiserSide(d)]}`}>
+                          {raiserSide(d)}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-xs font-medium text-gray-800">{d.reason.replace(/_/g, ' ')}</span>
                         {d.description && <p className="text-xs text-gray-400 truncate max-w-xs mt-0.5">{d.description}</p>}
-                        <p className="text-[11px] text-gray-400 mt-1">
-                          Raised by {d.raisedBy === d.ride?.driverId ? 'driver' : d.raisedBy === d.booking?.passengerId ? 'rider' : d.raisedBy?.slice(0, 8) || '-'}
-                        </p>
                         {d.ride && (
                           <Link href={`/admin/rides?search=${encodeURIComponent(d.ride.id)}&searchBy=rideId`} className="mt-1 inline-flex text-[11px] font-medium text-[#F97316] hover:underline">
                             Open in ride history
@@ -515,7 +588,9 @@ export default function AdminReportsPage() {
             </div>
 
             {disputes.length === 0 && (
-              <div className="py-12 text-center text-gray-400 text-sm">No disputes found.</div>
+              <div className="py-12 text-center text-gray-400 text-sm">
+                {appliedSearch ? `No disputes match “${appliedSearch}”.` : 'No disputes found.'}
+              </div>
             )}
 
             {pagination && pagination.totalPages > 1 && (

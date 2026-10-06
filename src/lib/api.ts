@@ -1954,9 +1954,12 @@ export const adminApi = {
     );
   },
   // Disputes
-  getDisputes(params?: { status?: string; page?: number; limit?: number }) {
+  // Newest first. `search` matches reason, description, route cities, the raiser's
+  // name/email/phone, and (for a UUID) the dispute, booking or ride id.
+  getDisputes(params?: { status?: string; search?: string; page?: number; limit?: number }) {
     const query = new URLSearchParams();
     if (params?.status) query.set('status', params.status);
+    if (params?.search) query.set('search', params.search);
     if (params?.page) query.set('page', String(params.page));
     if (params?.limit) query.set('limit', String(params.limit));
     return apiFetch<{ data: { disputes: AdminDispute[]; pagination: Pagination } }>(`/api/v1/admin/disputes?${query}`);
@@ -2496,6 +2499,8 @@ export interface AdminDispute {
   updatedAt: string;
   booking?: { id: string; passengerId: string; totalPrice: number; status: string; payment?: { id: string; status: string; amountTotal: number; fareAmount: number; currency: string } | null };
   ride?: { id: string; driverId: string; originAddress: string; destinationAddress: string; departureDate?: string; departureTime?: string };
+  /** Who opened it; returned by the admin list. Null when the account no longer exists. */
+  raisedByUser?: { id: string; firstName: string | null; lastName: string | null; email: string | null; role: string } | null;
 }
 
 export interface AdminEmergencyAlert {
