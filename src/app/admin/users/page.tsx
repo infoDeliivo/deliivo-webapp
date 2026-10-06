@@ -2,14 +2,39 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { Search, ChevronDown, ChevronLeft, ChevronRight, CheckCircle, XCircle, Loader2, AlertCircle, Eye } from 'lucide-react'
-import { adminApi, AdminUser, Pagination } from '@/lib/api'
+import { Search, ChevronDown, ChevronLeft, ChevronRight, CheckCircle, XCircle, Loader2, AlertCircle, Eye, Archive, RotateCcw } from 'lucide-react'
+import { adminApi, AdminUser, AdminUserCountry, AdminUserStatusFilter, Pagination, getApiErrorMessage } from '@/lib/api'
+import { showError } from '@/lib/app-feedback'
+import { countryLabel, countryName } from '@/lib/country'
+import { ArchiveDialogUser, ArchiveUserDialog, RestoreUserDialog } from './_components/UserArchiveDialogs'
 
 const PAGE_SIZE = 20
 
 const statusStyle = {
   active: 'bg-green-50 text-green-700',
   banned: 'bg-red-50 text-red-500',
+  archived: 'bg-gray-200 text-gray-600',
+}
+
+// Active is the default so archived (reversibly removed) users stay out of the way.
+const STATUS_TABS: Array<{ value: AdminUserStatusFilter; label: string }> = [
+  { value: 'active', label: 'Active' },
+  { value: 'banned', label: 'Banned' },
+  { value: 'archived', label: 'Archived' },
+  { value: 'all', label: 'All' },
+]
+
+type DlFilter = 'any' | 'verified' | 'not_verified'
+
+const selectClass =
+  'py-2 pl-3 pr-8 text-xs font-medium text-gray-600 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]'
+
+function displayName(u: AdminUser) {
+  return [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || 'Unnamed user'
+}
+
+function toDialogUser(u: AdminUser): ArchiveDialogUser {
+  return { id: u.id, name: displayName(u), phone: u.phone, email: u.email }
 }
 
 const roleStyle: Record<string, string> = {
@@ -38,15 +63,28 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Banned'>('All')
+  const [statusFilter, setStatusFilter] = useState<AdminUserStatusFilter>('active')
+  const [countryFilter, setCountryFilter] = useState('')
+  const [dlFilter, setDlFilter] = useState<DlFilter>('any')
+  const [countries, setCountries] = useState<AdminUserCountry[]>([])
   const [page, setPage] = useState(1)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [archiving, setArchiving] = useState<ArchiveDialogUser | null>(null)
+  const [restoring, setRestoring] = useState<ArchiveDialogUser | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
     loadUsers()
-  }, [page, statusFilter])
+  }, [page, statusFilter, countryFilter, dlFilter])
+
+  // Offer only countries that have users in the current status, so no option leads to an empty list.
+  useEffect(() => {
+    adminApi
+      .getUserCountries({ status: statusFilter })
+      .then((res) => setCountries(res.data.countries))
+      .catch(() => setCountries([]))
+  }, [statusFilter])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -61,11 +99,14 @@ export default function AdminUsersPage() {
     setLoading(true)
     setError('')
     try {
-      const params: { page: number; limit: number; search?: string; isBanned?: string } = { page, limit: PAGE_SIZE }
-      if (search.trim()) params.search = search.trim()
-      if (statusFilter === 'Banned') params.isBanned = 'true'
-      else if (statusFilter === 'Active') params.isBanned = 'false'
-      const res = await adminApi.getUsers(params)
+      const res = await adminApi.getUsers({
+        page,
+        limit: PAGE_SIZE,
+        search: search.trim() || undefined,
+        status: statusFilter,
+        country: countryFilter || undefined,
+        dlVerified: dlFilter === 'any' ? undefined : dlFilter === 'verified',
+      })
       setUsers(res.data.users)
       setPagination(res.data.pagination)
     } catch (err: unknown) {
@@ -80,7 +121,9 @@ export default function AdminUsersPage() {
     try {
       await adminApi.banUser(userId)
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, isBanned: true } : u))
-    } catch { /* ignore */ }
+    } catch (err) {
+      showError('Could not ban user', getApiErrorMessage(err, 'Failed to ban user'))
+    }
     finally { setActionLoading(null); setOpenMenu(null) }
   }
 
@@ -89,8 +132,17 @@ export default function AdminUsersPage() {
     try {
       await adminApi.unbanUser(userId)
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, isBanned: false } : u))
-    } catch { /* ignore */ }
+    } catch (err) {
+      showError('Could not unban user', getApiErrorMessage(err, 'Failed to unban user'))
+    }
     finally { setActionLoading(null); setOpenMenu(null) }
+  }
+
+  // Archive and restore move the user to another tab, so the page is reloaded rather than patched.
+  function afterArchiveChange() {
+    setArchiving(null)
+    setRestoring(null)
+    loadUsers()
   }
 
   // Driving licences are reviewed in /admin/dl-verification, where the admin can see
@@ -104,7 +156,9 @@ export default function AdminUsersPage() {
     <div className="flex flex-col gap-5">
       <div>
         <h1 className="text-xl font-bold text-gray-900">Users Management</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{pagination?.total || 0} total users</p>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {pagination?.total || 0} {STATUS_TABS.find((t) => t.value === statusFilter)?.label.toLowerCase()} users
+        </p>
       </div>
 
       {error && (
@@ -126,21 +180,48 @@ export default function AdminUsersPage() {
             className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
           />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          {(['All', 'Active', 'Banned'] as const).map((s) => (
+        <div className="flex gap-2 flex-wrap items-center">
+          {STATUS_TABS.map((tab) => (
             <button
-              key={s}
+              key={tab.value}
               type="button"
-              onClick={() => { setStatusFilter(s); setPage(1) }}
+              onClick={() => { setStatusFilter(tab.value); setPage(1) }}
               className={`px-3 py-2 text-xs font-medium rounded-xl border transition-colors ${
-                statusFilter === s
+                statusFilter === tab.value
                   ? 'bg-[#F97316] text-white border-[#F97316]'
                   : 'bg-white text-gray-600 border-gray-200 hover:border-[#F97316] hover:text-[#F97316]'
               }`}
             >
-              {s}
+              {tab.label}
             </button>
           ))}
+          <select
+            aria-label="Filter by country"
+            value={countryFilter}
+            onChange={(e) => { setCountryFilter(e.target.value); setPage(1) }}
+            className={selectClass}
+          >
+            <option value="">All countries</option>
+            {/* Keep a selected country visible even if it has no users in this tab. */}
+            {countryFilter && !countries.some((c) => c.code === countryFilter) && (
+              <option value={countryFilter}>{countryName(countryFilter)}</option>
+            )}
+            {countries.map((c) => (
+              <option key={c.code} value={c.code}>
+                {countryName(c.code)} · {c.count}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Filter by driving licence"
+            value={dlFilter}
+            onChange={(e) => { setDlFilter(e.target.value as DlFilter); setPage(1) }}
+            className={selectClass}
+          >
+            <option value="any">DL: any</option>
+            <option value="verified">DL verified</option>
+            <option value="not_verified">DL not verified</option>
+          </select>
         </div>
       </div>
 
@@ -159,6 +240,7 @@ export default function AdminUsersPage() {
                     <th className="text-left px-6 py-3 font-medium">User</th>
                     <th className="text-left px-4 py-3 font-medium">Phone</th>
                     <th className="text-left px-4 py-3 font-medium">Language</th>
+                    <th className="text-left px-4 py-3 font-medium">Country</th>
                     <th className="text-left px-4 py-3 font-medium">Status</th>
                     <th className="text-left px-4 py-3 font-medium">Verified</th>
                     <th className="text-left px-4 py-3 font-medium">DL</th>
@@ -178,7 +260,7 @@ export default function AdminUsersPage() {
                               {initials}
                             </div>
                             <div>
-                              <p className="font-medium text-gray-900">{u.firstName || 'Unnamed'}</p>
+                              <p className="font-medium text-gray-900">{[u.firstName, u.lastName].filter(Boolean).join(' ') || 'Unnamed'}</p>
                               <p className="text-xs text-gray-400">{u.email || '-'}</p>
                             </div>
                           </Link>
@@ -193,9 +275,20 @@ export default function AdminUsersPage() {
                             <span className="text-xs text-gray-300" title="Not detected at signup">—</span>
                           )}
                         </td>
+                        <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                          {u.detectedCountry ? (
+                            countryLabel(u.detectedCountry)
+                          ) : (
+                            <span className="text-gray-300" title="Not detected">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
-                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${u.isBanned ? statusStyle.banned : statusStyle.active}`}>
-                            {u.isBanned ? 'Banned' : 'Active'}
+                          <span
+                            className={`text-xs font-medium px-2 py-1 rounded-full ${
+                              u.archivedAt ? statusStyle.archived : u.isBanned ? statusStyle.banned : statusStyle.active
+                            }`}
+                          >
+                            {u.archivedAt ? 'Archived' : u.isBanned ? 'Banned' : 'Active'}
                           </span>
                         </td>
                         <td className="px-4 py-3">
@@ -232,7 +325,7 @@ export default function AdminUsersPage() {
                               Actions <ChevronDown className="w-3 h-3" />
                             </button>
                             {openMenu === u.id && (
-                              <div className="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
+                              <div className="absolute right-0 mt-1 w-40 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
                                 <button
                                   type="button"
                                   className="w-full text-left px-4 py-2.5 text-xs text-gray-600 hover:bg-gray-50"
@@ -242,14 +335,33 @@ export default function AdminUsersPage() {
                                 >
                                   <span className="inline-flex items-center gap-1.5"><Eye className="h-3 w-3" /> View details</span>
                                 </button>
-                                <button
-                                  type="button"
-                                  className="w-full text-left px-4 py-2.5 text-xs text-yellow-600 hover:bg-yellow-50 disabled:opacity-50"
-                                  disabled={actionLoading === u.id}
-                                  onClick={() => u.isBanned ? handleUnban(u.id) : handleBan(u.id)}
-                                >
-                                  {actionLoading === u.id ? 'Processing...' : u.isBanned ? 'Unban user' : 'Ban user'}
-                                </button>
+                                {u.archivedAt ? (
+                                  <button
+                                    type="button"
+                                    className="w-full text-left px-4 py-2.5 text-xs text-green-700 hover:bg-green-50"
+                                    onClick={() => { setRestoring(toDialogUser(u)); setOpenMenu(null) }}
+                                  >
+                                    <span className="inline-flex items-center gap-1.5"><RotateCcw className="h-3 w-3" /> Restore user</span>
+                                  </button>
+                                ) : u.role !== 'ADMIN' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="w-full text-left px-4 py-2.5 text-xs text-yellow-600 hover:bg-yellow-50 disabled:opacity-50"
+                                      disabled={actionLoading === u.id}
+                                      onClick={() => u.isBanned ? handleUnban(u.id) : handleBan(u.id)}
+                                    >
+                                      {actionLoading === u.id ? 'Processing...' : u.isBanned ? 'Unban user' : 'Ban user'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="w-full text-left px-4 py-2.5 text-xs text-red-600 hover:bg-red-50"
+                                      onClick={() => { setArchiving(toDialogUser(u)); setOpenMenu(null) }}
+                                    >
+                                      <span className="inline-flex items-center gap-1.5"><Archive className="h-3 w-3" /> Archive user</span>
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             )}
                           </div>
@@ -294,6 +406,13 @@ export default function AdminUsersPage() {
           </>
         )}
       </div>
+
+      {archiving && (
+        <ArchiveUserDialog user={archiving} onClose={() => setArchiving(null)} onDone={afterArchiveChange} />
+      )}
+      {restoring && (
+        <RestoreUserDialog user={restoring} onClose={() => setRestoring(null)} onDone={afterArchiveChange} />
+      )}
     </div>
   )
 }
