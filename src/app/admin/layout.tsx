@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import AdminShell from './_components/AdminShell'
+import AdminQueryProvider from './_components/AdminQueryProvider'
 
 export const metadata: Metadata = {
   title: 'Admin — Deliivo',
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return <AdminShell>{children}</AdminShell>
+  return (
+    <AdminQueryProvider>
+      <AdminShell>{children}</AdminShell>
+    </AdminQueryProvider>
+  )
 }
