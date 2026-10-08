@@ -1779,6 +1779,21 @@ export const adminApi = {
     /** ISO 3166-1 alpha-2. */
     country?: string;
     dlVerified?: boolean;
+    /** Only users with a DL upload or vehicle awaiting admin review. */
+    pending?: boolean;
+    /** Per-column filters. */
+    name?: string;
+    email?: string;
+    phone?: string;
+    /** A locale code, or `none` for never detected. */
+    language?: string;
+    /** ISO date-time bounds on the signup date. */
+    joinedFrom?: string;
+    joinedTo?: string;
+    vehicleState?: AdminVehicleState;
+    payoutState?: AdminPayoutState;
+    sortBy?: AdminUserSortField;
+    sortDir?: 'asc' | 'desc';
   }) {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
@@ -1789,7 +1804,18 @@ export const adminApi = {
     if (params?.role) query.set('role', params.role);
     if (params?.country) query.set('country', params.country);
     if (typeof params?.dlVerified === 'boolean') query.set('dlVerified', String(params.dlVerified));
-    return apiFetch<{ data: { users: AdminUser[]; pagination: Pagination } }>(`/api/v1/admin/users?${query}`);
+    if (params?.pending) query.set('pending', 'true');
+    if (params?.name) query.set('name', params.name);
+    if (params?.email) query.set('email', params.email);
+    if (params?.phone) query.set('phone', params.phone);
+    if (params?.language) query.set('language', params.language);
+    if (params?.joinedFrom) query.set('joinedFrom', params.joinedFrom);
+    if (params?.joinedTo) query.set('joinedTo', params.joinedTo);
+    if (params?.vehicleState) query.set('vehicleState', params.vehicleState);
+    if (params?.payoutState) query.set('payoutState', params.payoutState);
+    if (params?.sortBy) query.set('sortBy', params.sortBy);
+    if (params?.sortDir) query.set('sortDir', params.sortDir);
+    return apiFetch<{ data: { users: AdminUserListItem[]; pagination: Pagination } }>(`/api/v1/admin/users?${query}`);
   },
   getUserCountries(params?: { status?: AdminUserStatusFilter }) {
     const query = new URLSearchParams();
@@ -2409,6 +2435,41 @@ export interface AdminUser {
   /** Set while the account is archived (reversibly removed). */
   archivedAt?: string | null;
   createdAt: string;
+}
+
+export type AdminUserSortField = 'createdAt' | 'firstName' | 'email';
+
+/** Latest non-superseded driving-licence verification status, or NONE. */
+export type AdminDlState =
+  | 'NONE'
+  | 'PENDING'
+  | 'APPROVED'
+  | 'DECLINED'
+  | 'RESUBMISSION_REQUESTED'
+  | 'EXPIRED'
+  | 'IDENTITY_MISMATCH';
+export type AdminVehicleState = 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
+export type AdminPayoutState = 'NOT_STARTED' | 'INCOMPLETE' | 'READY';
+
+export interface AdminPendingItem {
+  kind: 'DL_REVIEW' | 'VEHICLE_REVIEW';
+  count: number;
+}
+
+export interface AdminUserVerificationSummary {
+  dl: AdminDlState;
+  vehicle: { state: AdminVehicleState; pending: number; approved: number; rejected: number };
+  /** `mismatch`: Stripe's name or date of birth differs from the profile. */
+  payout: { state: AdminPayoutState; mismatch: boolean };
+  /** Items waiting on an admin decision; empty when nothing needs review. */
+  pending: AdminPendingItem[];
+}
+
+/** A row of the admin users list. */
+export interface AdminUserListItem extends AdminUser {
+  /** Public profile picture URL; null when the user never uploaded one. */
+  avatarUrl: string | null;
+  verification: AdminUserVerificationSummary;
 }
 
 export interface AdminUserDetails {

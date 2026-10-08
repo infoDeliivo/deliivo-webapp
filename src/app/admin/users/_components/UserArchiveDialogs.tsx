@@ -17,7 +17,7 @@ export type ArchiveDialogUser = {
   email: string | null
 }
 
-function DialogFrame({
+export function DialogFrame({
   title,
   subtitle,
   onClose,
@@ -46,9 +46,9 @@ function DialogFrame({
   )
 }
 
-const cancelButtonClass =
+export const cancelButtonClass =
   'rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50'
-const inputClass =
+export const inputClass =
   'mt-1 w-full rounded-xl border border-gray-200 p-3 text-sm focus:border-[#F97316] focus:ring-2 focus:ring-[#F97316]/30 focus:outline-none'
 
 export function ArchiveUserDialog({
